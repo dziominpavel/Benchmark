@@ -1,5 +1,6 @@
 # OpenSpec / IDE
 .windsurf/cache/
+# NOTE: .windsurf/skills/ коммитится с репо (skills для workflow)
 .devin/cache/
 .devin/config.local.json
 .idea/
@@ -27,6 +28,21 @@ tools/venv/
 runs/**/*.tmp
 runs/**/*.bak
 runs/**/*.diff.patch
+
+# Изоляция (isolate.py)
+.isolation-stash/
+.isolation-stash-verdicts/
+.anon-copies/
+
+# Stale report (check_stale.py)
+stale-report.md
+
+# Чеклисты (generate_checklist.py — генерируются, не коммитятся)
+checklist-phase-*.md
+
+# Черновики генераторов (не коммитятся)
+tasks/_drafts/*/
+!tasks/_drafts/_TEMPLATE.md
 
 # Логи
 *.log

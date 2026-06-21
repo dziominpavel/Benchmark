@@ -4,6 +4,9 @@
 # category — feature | bugfix | refactor | review
 # difficulty — 1 (простая) | 2 (средняя) | 3 (сложная)
 # project — gymprogress | voicemind | wishlot | multi | none
+# baseline_commit — SHA коммита проекта, на котором задача актуальна.
+#                   Участник делает git checkout <baseline_commit>.
+#                   Никаких git-тегов в проектах не требуется.
 # estimated_minutes — грубая оценка для человека (необязательно)
 # tags — свободные теги для фильтрации (например: compose, room, parser, ui, alarm)
 
@@ -11,7 +14,8 @@ id: F-NNN-<slug>
 title: "<Краткое название задачи>"
 category: feature
 difficulty: 2
-project: voicemind
+project: voicemind  # ИЛИ projects: [voicemind, gymprogress] для multi-project
+baseline_commit: <40-символьный SHA из git rev-parse HEAD>
 estimated_minutes: 60
 tags: [compose, ui]
 ---
