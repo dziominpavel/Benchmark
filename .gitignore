@@ -1,0 +1,27 @@
+# OpenSpec / IDE
+.windsurf/cache/
+.devin/cache/
+.devin/config.local.json
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Скрипты: виртуальные окружения и кэш
+tools/__pycache__/
+tools/.venv/
+tools/venv/
+*.pyc
+
+# Временные файлы прогонов (если появятся)
+runs/**/*.tmp
+runs/**/*.bak
+
+# Логи
+*.log
