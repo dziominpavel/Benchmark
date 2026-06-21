@@ -8,26 +8,13 @@
 #     released: <YYYY-MM-DD>  # дата выхода (если известна)
 #     notes: <строка>     # необязательные заметки
 #
-# При добавлении новой модели просто допиши запись в конец списка.
+# Добавляй модели через tools/register_model.py:
+#   python tools/register_model.py --id <slug> --name "<name>" --provider <org> --version <ver> [--released <YYYY-MM-DD>]
+# Или через саморегистрацию (--auto, provider/version опциональны):
+#   python tools/register_model.py --auto --id <slug> --name "<name>"
+#
 # id должен быть уникальным и стабильным — на него ссылаются файлы в runs/.
 # Если у модели выходит новая версия (например, claude-sonnet-4.5 → 4.6),
 # создавай новый id, не перезаписывай старый — иначе история прогонов смешается.
 
-models: []
-  # Примеры (раскомментируй и заполни при первом прогоне):
-  # - id: claude-sonnet-4.5
-  #   name: Claude Sonnet 4.5
-  #   provider: Anthropic
-  #   version: sonnet-4.5
-  #   released: 2025-09-29
-  #   notes: Использовался в Windsurf IDE
-  # - id: gpt-5
-  #   name: GPT-5
-  #   provider: OpenAI
-  #   version: gpt-5
-  #   released: 2025-08-07
-  # - id: glm-4.6
-  #   name: GLM-4.6
-  #   provider: Zhipu
-  #   version: glm-4.6
-  #   released: 2025-09-30
+models:

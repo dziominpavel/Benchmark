@@ -1,0 +1,13 @@
+# Глобальная карта анонимизации
+#
+# Создаётся assign_judges.py --init из models.yaml.
+# ДОСТУПНО ТОЛЬКО aggregate.py. MUST NOT передаваться судьям.
+#
+# Формат:
+#   mapping:
+#     <model-id>: "Участник A"
+#     <model-id>: "Участник B"
+#
+# Новые модели добавляются через assign_judges.py --add-runs --participant <model-id>.
+
+mapping: []
