@@ -39,7 +39,7 @@ HTML = """<!DOCTYPE html>
 <title>ELO Benchmark — Leaderboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 1000px; margin: 0 auto; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 1200px; margin: 0 auto; }
   h1 { margin-bottom: 10px; color: #1a1a2e; }
   .stats { color: #666; font-size: 0.9em; margin-bottom: 20px; }
   .controls { margin-bottom: 20px; }
@@ -52,10 +52,16 @@ HTML = """<!DOCTYPE html>
   .rank { font-weight: bold; color: #666; }
   .elo { font-weight: bold; font-size: 1.1em; }
 
-  .main-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: start; }
+  .main-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr); gap: 20px; align-items: start; }
   .main-column { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
   .right-panel { display: flex; flex-direction: column; gap: 16px; }
   .note-card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+  .table-wrap { overflow-x: auto; }
+  .table-wrap table { min-width: 100%; }
+  th, td { white-space: nowrap; }
+  td:first-child, th:first-child { padding-left: 16px; }
+  td:last-child, th:last-child { padding-right: 16px; }
   .note-card h2 { font-size: 1.1rem; margin-bottom: 10px; color: #1a1a2e; }
   .note-card p { margin-bottom: 8px; font-size: 0.9rem; color: #555; }
   .note-card code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
@@ -121,23 +127,25 @@ HTML = """<!DOCTYPE html>
         Показывать архивные
       </label>
     </div>
-    <table id="leaderboard">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Модель</th>
-          <th>Провайдер</th>
-          <th>ELO</th>
-          <th>W</th>
-          <th>L</th>
-          <th>D</th>
-          <th>Игры</th>
-        </tr>
-      </thead>
-      <tbody>
+    <div class="table-wrap">
+      <table id="leaderboard">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Модель</th>
+            <th>Провайдер</th>
+            <th>ELO</th>
+            <th>W</th>
+            <th>L</th>
+            <th>D</th>
+            <th>Игры</th>
+          </tr>
+        </thead>
+        <tbody>
 {rows}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="main-column right-panel">

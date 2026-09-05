@@ -237,7 +237,7 @@ CSS = """
     background: #0f172a;
     color: #e2e8f0;
     padding: 24px;
-    max-width: 920px;
+    max-width: 1200px;
     margin: 0 auto;
     line-height: 1.5;
   }
@@ -529,14 +529,32 @@ CSS = """
   /* Main 2-column layout */
   .main-layout {
     display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
     gap: 24px;
     align-items: start;
   }
-  .main-column { min-width: 0; }
+  .main-column { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
   .main-column .card { margin-bottom: 0; }
   .right-panel { display: flex; flex-direction: column; gap: 20px; }
   .right-panel .card { margin-bottom: 0; }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 0 -24px;
+    padding: 0 24px;
+  }
+  .table-wrap table {
+    min-width: 100%;
+  }
+  th, td {
+    white-space: nowrap;
+  }
+  td:first-child, th:first-child {
+    padding-left: 24px;
+  }
+  td:last-child, th:last-child {
+    padding-right: 24px;
+  }
 
   /* Collapsible history */
   .history-details summary {
@@ -637,35 +655,37 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
     <div class="card">
       <h2>Рейтинг</h2>
       {% if models_sorted %}
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Модель</th>
-            <th>ELO</th>
-            <th>Побед</th>
-            <th>Поражений</th>
-            <th>Ничьих</th>
-            <th>Всего</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in models_sorted %}
-          <tr class="{{ 'archived' if m.status == 'archived' }}">
-            <td class="rank">{{ loop.index }}</td>
-            <td>
-              <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
-              {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
-            </td>
-            <td>{{ m.elo }}</td>
-            <td class="wld w">{{ m.wins }}</td>
-            <td class="wld l">{{ m.losses }}</td>
-            <td class="wld d">{{ m.draws }}</td>
-            <td>{{ m.games }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Модель</th>
+              <th>ELO</th>
+              <th>Побед</th>
+              <th>Поражений</th>
+              <th>Ничьих</th>
+              <th>Всего</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in models_sorted %}
+            <tr class="{{ 'archived' if m.status == 'archived' }}">
+              <td class="rank">{{ loop.index }}</td>
+              <td>
+                <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+              </td>
+              <td>{{ m.elo }}</td>
+              <td class="wld w">{{ m.wins }}</td>
+              <td class="wld l">{{ m.losses }}</td>
+              <td class="wld d">{{ m.draws }}</td>
+              <td>{{ m.games }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% else %}
       <div class="empty-state">
         {% if filter == 'active' %}
