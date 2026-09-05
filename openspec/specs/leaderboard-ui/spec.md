@@ -34,7 +34,7 @@
 ### Requirement: Главная страница (layout)
 
 Главная страница leaderboard SHALL использовать единый `.page` контейнер:
-`width: 100%`, `max-width: 1400px`, `margin: 0 auto`, горизонтальный padding
+`width: 100%`, `max-width: 100%`, `margin: 0 auto`, горизонтальный padding 4%
 24–32px. Контент НЕ SHALL прижиматься к левому краю; на широких мониторах
 контейнер должен использовать значительно больше горизонтального пространства,
 оставаясь центрированным.
@@ -45,8 +45,8 @@ Controls SHALL содержать строку статистики и филь�
 относительно основного content-зазора.
 
 `.content-grid` SHALL использовать CSS Grid:
-`grid-template-columns: minmax(0, 1fr) 320px;`, `gap: 24px;`,
-`align-items: stretch;`. При доступной ширине около 1400px основная колонка
+`grid-template-columns: minmax(0, 1fr) 380px;`, `gap: 24px;`,
+`align-items: stretch;`. При доступной ширине основная колонка
 SHOULD занимать примерно 1000px, sidebar — около 320px. Sidebar SHALL состоять
 из двух карточек, расположенных вертикально с gap 16px, и выравниваться по
 высоте с карточкой рейтинга. Основная колонка SHALL содержать `.rating-card` и

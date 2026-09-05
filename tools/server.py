@@ -240,9 +240,9 @@ CSS = """
   }
   .page {
     width: 100%;
-    max-width: 1400px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 24px;
+    padding: 24px 4%;
   }
   .header {
     display: flex;
@@ -347,9 +347,9 @@ CSS = """
     box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
   }
   .verdict-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     margin-bottom: 16px;
   }
   .verdict-actions {
@@ -357,7 +357,7 @@ CSS = """
     gap: 12px;
     flex-wrap: wrap;
   }
-  .verdict-actions .btn { flex: 1; min-width: 120px; text-align: center; padding: 12px; }
+  .verdict-actions .btn { flex: 1 1 0; min-width: 0; text-align: center; padding: 12px; }
   .alert {
     padding: 12px 16px;
     border-radius: 8px;
@@ -419,6 +419,7 @@ CSS = """
     justify-content: space-between;
     gap: 12px;
     padding: 12px 0 4px;
+    flex-wrap: wrap;
   }
   .rec-pair {
     display: flex;
@@ -538,7 +539,7 @@ CSS = """
   /* Content grid */
   .content-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 380px;
     grid-template-areas: "rating sidebar" "history .";
     row-gap: 16px;
     column-gap: 24px;

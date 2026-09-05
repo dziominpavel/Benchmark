@@ -40,7 +40,7 @@ HTML = """<!DOCTYPE html>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-  .page { width: 100%; max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .page { width: 100%; max-width: 100%; margin: 0 auto; padding: 24px 4%; }
   h1 { margin-bottom: 24px; color: #1a1a2e; }
   .stats { color: #666; font-size: 0.9em; margin-bottom: 12px; }
   .controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
@@ -55,7 +55,7 @@ HTML = """<!DOCTYPE html>
 
   .content-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 380px;
     grid-template-areas: "rating sidebar" "history .";
     row-gap: 16px;
     column-gap: 24px;
