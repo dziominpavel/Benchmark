@@ -29,8 +29,23 @@ models:
     provider: 
     version: 
     status: active
+  - id: cursor-fable-5-1-1m-max
+    name: "Cursor Fable 5.1 1M Max"
+    provider: 
+    version: 
+    status: active
+  - id: cursor-gemini-3-8-flash-high
+    name: "Cursor Gemini 3.8 Flash High"
+    provider: 
+    version: 
+    status: active
   - id: cursor-grok-4-6
-    name: "Cursor Grok 4.6"
+    name: "Cursor Grok 4.6 Extra High"
+    provider: 
+    version: 
+    status: active
+  - id: cursor-kimi-k3-max
+    name: "Cursor Kimi K3 Max"
     provider: 
     version: 
     status: active
@@ -53,7 +68,7 @@ models:
     name: "Devin Kimi K3 Max"
     provider: 
     version: 
-    status: active
+    status: archived
   - id: devin-swe-1-7-max
     name: "Devin SWE-1.7 Max"
     provider: 
