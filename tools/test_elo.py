@@ -123,7 +123,7 @@ def test_void():
 def test_unknown_models_warn():
     """Неразрешённые модели — громкий warning, не тихий skip."""
     matchups = [
-        {"task": "T-001", "model_a": "modelA", "model_b": "modelB", "winner": "a",
+        {"task": "T-001", "model_a": "unknown-X", "model_b": "unknown-Y", "winner": "a",
          "date": "2026-09-05", "seq": 1, "_matchup_id": "T-001/001"},
     ]
     result = recalculate(matchups, ["A", "B"])

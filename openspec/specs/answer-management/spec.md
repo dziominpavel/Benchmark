@@ -13,19 +13,23 @@
 Каждый ответ SHALL храниться в `answers/<task-id>/<name>.md`, где `<name>` —
 `modelA` / `modelB` для skills прогонов либо `<model-id>` из `models.yaml`
 для ручных прогонов. Файл SHALL содержать YAML front matter (`task`, `model`,
-`date`) и тело ответа.
+`date`) и тело ответа. Файл ответа участника skill-прогона MUST NOT содержать
+реальный `model-id`; связь слота с реальным `id` устанавливается координатором
+при записи вердикта.
 
 #### Scenario: Ответ skill прогона
 
 - **WHEN** `@benchmark-run-a T-001` завершает работу
 - **THEN** создаётся `answers/T-001/modelA.md`
 - **AND** front matter: `{task: "T-001", model: "modelA", date: "YYYY-MM-DD"}`
+- **AND** `answers/T-001/slots.json` не создаётся
 
 #### Scenario: Ответ произвольной модели вручную
 
 - **WHEN** модель `opencode-mimo-v2-5-free` отвечает на T-001 вручную
 - **THEN** создаётся `answers/T-001/opencode-mimo-v2-5-free.md`
 - **AND** front matter: `{task: "T-001", model: "opencode-mimo-v2-5-free", date: "YYYY-MM-DD"}`
+- **AND** `answers/T-001/slots.json` не создаётся
 
 ### Requirement: Содержание ответа
 
@@ -87,3 +91,22 @@ Skills прогонов используют собственный (более 
 
 - **WHEN** у моделей нет ответов, но обе есть в реестре
 - **THEN** сервер записывает вердикт без ошибок
+
+### Requirement: Анонимность ответа участника
+
+Файл ответа участника skill-прогона SHALL содержать только слот `modelA` или `modelB` в поле `model` front matter. Участник MUST NOT записывать свой реальный `model-id` внутрь ответа, во вспомогательные файлы рядом с ответом (например, `slots.json`) или в имя файла ответа, если это skill-прогон. Связь слота с реальным `id` устанавливается координатором позже, при записи вердикта.
+
+#### Scenario: Ответ участника A
+
+- **WHEN** `@benchmark-run-a T-001` завершает работу
+- **THEN** создаётся `answers/T-001/modelA.md`
+- **AND** front matter содержит `model: modelA`
+- **AND** в `answers/T-001/` не создаётся `slots.json`
+- **AND** участник не знает и не записывает реальный `id`
+
+#### Scenario: Ответ участника B
+
+- **WHEN** `@benchmark-run-b T-001` завершает работу
+- **THEN** создаётся `answers/T-001/modelB.md`
+- **AND** front matter содержит `model: modelB`
+- **AND** файл `answers/T-001/slots.json` отсутствует

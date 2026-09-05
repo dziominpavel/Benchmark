@@ -17,8 +17,8 @@
 │  │  tasks/     │   │  answers/   │   │  matchups/   │       │
 │  │  task.md    │   │  modelA.md  │   │  T-NNN/      │       │
 │  │  (вручную   │   │  modelB.md  │   │  general/    │       │
-│  │  из шаблона)│   │  slots.json │   │  NNN.json    │       │
-│  │             │   │ (слот→id)   │   │  state.json  │       │
+│  │  из шаблона)│   │             │   │  NNN.json    │       │
+│  │             │   │             │   │  state.json  │       │
 │  └──────┬──────┘   └──────┬──────┘   └──────┬───────┘       │
 │         │                 │                  │               │
 │         │     ┌───────────┴──────────┐       │               │
@@ -35,7 +35,7 @@
 │         │     │  tools/record_verdict.py │                   │
 │         │     │  (единая точка записи)   │                   │
 │         │     │  - seq + recorded_at     │                   │
-│         │     │  - слот → реальный id    │                   │
+│         │     │  - реальные id моделей   │                   │
 │         │     │  - ELO-снэпшот в вердикт │                   │
 │         │     │  - --void (tombstone)    │                   │
 │         │     └───────────┬──────────────┘                   │
@@ -66,9 +66,9 @@
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │  Skills (.opencode/skills/, зеркала в .cursor/      │    │
 │  │  и .devin/skills/)                                  │    │
-│  │  - benchmark-run-a      (ответ + slots.json)        │    │
-│  │  - benchmark-run-b      (ответ + slots.json)        │    │
-│  │  - benchmark-judge      (судья → record_verdict.py) │    │
+│  │  - benchmark-run-a      (ответ modelA.md)           │    │
+│  │  - benchmark-run-b      (ответ modelB.md)           │    │
+│  │  - benchmark-judge      (оценка → winner)           │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
@@ -81,23 +81,22 @@
    tasks/_TEMPLATE.md → tasks/T-NNN-<slug>/task.md
 
 ② ПРОГОН МОДЕЛИ (skills)
-   @benchmark-run-a T-001 → answers/T-001/modelA.md + slots.json (modelA→id)
-   @benchmark-run-b T-001 → answers/T-001/modelB.md + slots.json (modelB→id)
-   (каждый skill сам делает checkout baseline_commit и очистку после,
-    и записывает свой реальный model-id в answers/T-001/slots.json)
+   @benchmark-run-a T-001 → answers/T-001/modelA.md
+   @benchmark-run-b T-001 → answers/T-001/modelB.md
+   (каждый skill сам делает checkout baseline_commit и очистку после;
+    участник не записывает свой реальный id)
 
 ③ СУДЬЯ
    Путь 1 (skill): @benchmark-judge T-001
      → читает task.md + оба ответа, оценивает 5 критериев (/50)
-     → python tools/record_verdict.py --task T-001 --winner <a|b|draw>
-     → вердикт получает seq + recorded_at + resolved ids + ELO-снэпшот
+     → объявляет победителя <a|b|draw>
    Путь 2 (вручную): чат с LLM по docs/judge-prompt.md
-     → судья отвечает в чате → пользователь переносит итог в веб-форму
+     → судья отвечает в чате → координатор переносит итог в веб-форму
 
 ④ ЗАПИСЬ ВЕРДИКТА
     Единая точка записи — elo.record_verdict():
-    - skill судьи:  python tools/record_verdict.py --task T-001 --winner b
-                    (слоты разрешаются через answers/T-001/slots.json)
+    - skill путь:   python tools/record_verdict.py --task T-001 \
+                    --model-a <id> --model-b <id> --winner b
     - веб-UI:       localhost:5000 → форма → POST /verdict
                     (task всегда "general", id из формы — уже реальные)
     - CLI вручную:  python tools/record_verdict.py --task general \
@@ -119,8 +118,6 @@
 - `tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `tasks/_TEMPLATE.md`)
 - `answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
   `answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
-- `answers/T-NNN/slots.json` — маппинг слот→реальный model-id
-  (пишут run-скиллы; судья НЕ читает — анонимность)
 - `matchups/T-NNN/NNN.json`, `matchups/general/NNN.json` — журнал вердиктов
   (append-only; поля: version, seq, task, model_a/b, model_a_id/b_id,
   winner, date, recorded_at, elo-снэпшот; tombstone — поле void_of)

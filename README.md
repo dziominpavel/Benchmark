@@ -26,8 +26,8 @@
 ② Прогнать модели         @benchmark-run-a T-001, @benchmark-run-b T-001
 ③ Судья                   @benchmark-judge T-001 (или вручную по docs/judge-prompt.md)
                           → только выбор победителя
-④ Записать вердикт        tools/record_verdict.py (skill-путь → matchups/T-NNN/NNN.json;
-                          ручной → веб-UI localhost:5000 или CLI → matchups/general/NNN.json)
+④ Записать вердикт        координатор: веб-UI localhost:5000 или record_verdict.py
+                          с явными --model-a/--model-b → matchups/T-NNN/NNN.json или general/NNN.json
 ⑤ Leaderboard             веб-UI (localhost:5000) или leaderboard.html
 ```
 
@@ -39,7 +39,7 @@
 |-------|-----------|
 | `@benchmark-run-a T-NNN` | Прогон слота A: читает task.md, изучает код, пишет `answers/T-NNN/modelA.md` |
 | `@benchmark-run-b T-NNN` | Прогон слота B: то же самое → `answers/T-NNN/modelB.md` |
-| `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; `record_verdict.py` пишет `matchups/T-NNN/NNN.json` и пересчитывает ELO |
+| `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; не вызывает `record_verdict.py` |
 
 Skills продублированы для трёх сред: `.opencode/skills/`, `.cursor/skills/`, `.devin/skills/`.
 Ручное судейство без skill — по шаблону [docs/judge-prompt.md](docs/judge-prompt.md),

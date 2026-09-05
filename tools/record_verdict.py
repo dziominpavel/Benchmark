@@ -3,11 +3,12 @@
 record_verdict.py — единственная точка записи вердиктов в журнал.
 
 Использование:
-    # Вердикт судьи для задачи (слоты modelA/modelB разрешаются
-    # через answers/<task>/slots.json — судья не знает реальные модели):
-    python tools/record_verdict.py --task T-001 --winner b
+    # Вердикт с явными реальными id моделей:
+    python tools/record_verdict.py --task T-001 \
+        --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
+        --winner b
 
-    # Явные модели (ручной прогон / веб-форма):
+    # Ручной прогон / веб-форма (корзина general):
     python tools/record_verdict.py --task general \
         --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
         --winner a
@@ -16,7 +17,9 @@ record_verdict.py — единственная точка записи верд�
     python tools/record_verdict.py --void T-001/001 --reason "ошибка записи"
 
     # Без регенерации index.json (для пакетной записи):
-    python tools/record_verdict.py --task T-001 --winner b --no-index
+    python tools/record_verdict.py --task T-001 \
+        --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
+        --winner b --no-index
 
 Зависимости: только stdlib + elo.py.
 """
@@ -42,12 +45,10 @@ def main() -> int:
         description="Запись вердикта в журнал matchups/"
     )
     parser.add_argument("--task", help="ID задачи (T-001) или 'general'")
-    parser.add_argument("--model-a", dest="model_a", default="modelA",
-                        help="Модель A: id из models.yaml или слот modelA "
-                             "(по умолчанию — слот)")
-    parser.add_argument("--model-b", dest="model_b", default="modelB",
-                        help="Модель B: id из models.yaml или слот modelB "
-                             "(по умолчанию — слот)")
+    parser.add_argument("--model-a", dest="model_a",
+                        help="Модель A: реальный id из models.yaml")
+    parser.add_argument("--model-b", dest="model_b",
+                        help="Модель B: реальный id из models.yaml")
     parser.add_argument("--winner", choices=["a", "b", "draw"],
                         help="Победитель: a | b | draw")
     parser.add_argument("--void", metavar="MATCHUP_ID",
@@ -65,6 +66,8 @@ def main() -> int:
 
         if not args.task:
             parser.error("--task обязателен для записи вердикта")
+        if not args.model_a or not args.model_b:
+            parser.error("--model-a и --model-b обязательны для записи вердикта")
         if not args.winner:
             parser.error("--winner обязателен для записи вердикта")
 

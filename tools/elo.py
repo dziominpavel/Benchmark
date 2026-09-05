@@ -48,7 +48,6 @@ STATE_PATH = MATCHUPS_DIR / "state.json"
 
 DEFAULT_ELO = 1200
 VERDICT_VERSION = 2
-SLOT_NAMES = ("modelA", "modelB")
 
 TASK_ID_RE = re.compile(r"^(T-\d+)")
 
@@ -154,19 +153,7 @@ def matchups_digest() -> str:
     return h.hexdigest()
 
 
-# ─── Slot resolution ────────────────────────────────────────────────
-
-
-def load_slots_map(task_id: str) -> dict:
-    """Читает answers/<task_id>/slots.json → {modelA: <id>, modelB: <id>}."""
-    path = ANSWERS_DIR / task_id / "slots.json"
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return data.get("slots", {}) if isinstance(data, dict) else {}
+# ─── Model resolution ───────────────────────────────────────────────
 
 
 def resolve_matchup_models(mu: dict, model_ids: set[str]) -> tuple[str | None, str | None]:
@@ -175,11 +162,8 @@ def resolve_matchup_models(mu: dict, model_ids: set[str]) -> tuple[str | None, s
     Приоритет:
       1. model_a_id / model_b_id (записано инструментом при создании)
       2. model_a / model_b, если это уже id из реестра
-      3. слот (modelA/modelB) → answers/<task>/slots.json (легаси-вердикты)
     Возвращает (id_a, id_b); неразрешённый — None.
     """
-    slots_cache = {}
-
     def resolve(side: str) -> str | None:
         rid = mu.get(f"model_{side}_id")
         if rid:
@@ -187,13 +171,6 @@ def resolve_matchup_models(mu: dict, model_ids: set[str]) -> tuple[str | None, s
         raw = mu.get(f"model_{side}")
         if raw in model_ids:
             return raw
-        if raw in SLOT_NAMES:
-            task = mu.get("task", "")
-            if task not in slots_cache:
-                slots_cache[task] = load_slots_map(task)
-            rid = slots_cache[task].get(raw)
-            if rid and rid in model_ids:
-                return rid
         return None
 
     return resolve("a"), resolve("b")
@@ -281,7 +258,7 @@ def record_verdict(
 ) -> dict:
     """Записывает вердикт в журнал — ЕДИНСТВЕННАЯ точка записи.
 
-    - Разрешает слоты modelA/modelB через answers/<task>/slots.json.
+    - model_a/model_b SHALL быть реальными id из models.yaml.
     - Назначает глобальный seq и штампует recorded_at системным временем.
     - Вычисляет и записывает снэпшот ELO (before/after/delta) — делает
       подмену или вставку задним числом детектируемой через --check.
@@ -298,21 +275,18 @@ def record_verdict(
 
     model_ids = {m["id"] for m in load_models_yaml()}
 
-    # Разрешение слотов в реальные id
-    slots = load_slots_map(task)
-    id_a = model_a if model_a in model_ids else slots.get(model_a)
-    id_b = model_b if model_b in model_ids else slots.get(model_b)
-    if not id_a or id_a not in model_ids:
+    # model_a/model_b SHALL быть реальными id из models.yaml
+    id_a = model_a if model_a in model_ids else None
+    id_b = model_b if model_b in model_ids else None
+    if not id_a:
         raise ValueError(
             f"Модель A не разрешена: '{model_a}'. "
-            f"Либо это не id из models.yaml, либо нет записи в "
-            f"answers/{task}/slots.json"
+            f"Укажи реальный id из models.yaml."
         )
-    if not id_b or id_b not in model_ids:
+    if not id_b:
         raise ValueError(
             f"Модель B не разрешена: '{model_b}'. "
-            f"Либо это не id из models.yaml, либо нет записи в "
-            f"answers/{task}/slots.json"
+            f"Укажи реальный id из models.yaml."
         )
 
     # Снэпшот: состояние до вердикта
