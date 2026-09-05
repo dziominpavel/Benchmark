@@ -87,6 +87,7 @@ def format_model(m: dict) -> str:
     lines.append(f"    version: {m.get('version', '')}")
     if m.get("released"):
         lines.append(f"    released: {m['released']}")
+    lines.append(f"    status: {m.get('status', 'active')}")
     if m.get("notes"):
         lines.append(f"    notes: \"{m['notes']}\"")
     return "\n".join(lines)
@@ -143,6 +144,7 @@ def main() -> int:
         "provider": args.provider,
         "version": args.version,
         "released": args.released,
+        "status": "active",
         "notes": args.notes,
     }
     models.append(new_model)
