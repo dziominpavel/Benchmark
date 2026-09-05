@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "seq": 5,
+  "task": "general",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "devin-glm-5-3-flash-max",
+  "winner": "b",
+  "date": "2026-09-05"
+}

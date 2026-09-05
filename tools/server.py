@@ -3,9 +3,10 @@
 server.py — локальный веб-сервер для бенчмарка LLM-моделей.
 
 Предоставляет:
-  - Leaderboard (таблица ELO-рейтинга с фильтром архивных)
-  - Форму записи вердикта (попарное сравнение)
-  - Блок рекомендации следующей пары (pairing algorithm)
+  - Leaderboard (таблица ELO-рейтинга)
+  - Форму записи вердикта (попарное сравнение: A vs B → победитель)
+  - Отдельную страницу добавления модели (одно поле — название)
+  - Историю изменений рейтинга
 
 Запуск:
     python tools/server.py
@@ -17,8 +18,8 @@ server.py — локальный веб-сервер для бенчмарка L
 from __future__ import annotations
 
 import json
+import re
 import sys
-from datetime import date
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -31,8 +32,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
-    is_index_stale, DEFAULT_ELO, REPO_ROOT,
+    is_index_stale, record_verdict, resolve_matchup_models,
+    DEFAULT_ELO, REPO_ROOT,
 )
+
+from register_model import parse_existing, format_model
 
 from flask import Flask, request, redirect, url_for, render_template_string
 
@@ -42,139 +46,10 @@ ANSWERS_DIR = REPO_ROOT / "answers"
 MATCHUPS_DIR = REPO_ROOT / "matchups"
 TASKS_DIR = REPO_ROOT / "tasks"
 
-
-# ─── Pairing algorithm (tasks 4.1-4.4) ──────────────────────────────
-
-
-def get_answers_for_task(task_id: str) -> list[str]:
-    """Возвращает список model_id, у которых есть ответ на задачу."""
-    task_answers = ANSWERS_DIR / task_id
-    if not task_answers.exists():
-        return []
-    return sorted(
-        f.stem for f in task_answers.glob("*.md")
-        if not f.name.startswith("_")
-    )
+DEFAULT_TASK = "general"
 
 
-def get_existing_matchups_for_task(task_id: str) -> set[tuple[str, str]]:
-    """Возвращает множество уже оценённых пар (frozenset{a, b}) для задачи."""
-    task_matchups = MATCHUPS_DIR / task_id
-    if not task_matchups.exists():
-        return set()
-    pairs = set()
-    for f in task_matchups.glob("*.json"):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            a, b = data.get("model_a"), data.get("model_b")
-            if a and b:
-                pairs.add(frozenset({a, b}))
-        except (json.JSONDecodeError, OSError):
-            continue
-    return pairs
-
-
-def get_active_models() -> dict[str, dict]:
-    """Возвращает {id: model_dict} только active-моделей."""
-    models = load_models_yaml()
-    return {
-        m["id"]: m for m in models
-        if m.get("status", "active") == "active"
-    }
-
-
-def get_model_games(index_data: dict) -> dict[str, int]:
-    """Возвращает {model_id: games_count} из index.json."""
-    models = index_data.get("models", {})
-    return {mid: info.get("games", 0) for mid, info in models.items()}
-
-
-def get_model_elo(index_data: dict) -> dict[str, int]:
-    """Возвращает {model_id: elo} из index.json."""
-    models = index_data.get("models", {})
-    return {mid: info.get("elo", DEFAULT_ELO) for mid, info in models.items()}
-
-
-def collect_pair_candidates(index_data: dict) -> list[dict]:
-    """Собирает все неоценённые пары для всех задач с ≥2 active-ответами.
-
-    Task 4.1: источник пар
-    Task 4.2: фильтрация архивных и уже оценённых
-    """
-    active = get_active_models()
-    elo_map = get_model_elo(index_data)
-    games_map = get_model_games(index_data)
-
-    candidates = []
-
-    # Сканируем задачи
-    if not TASKS_DIR.exists():
-        return candidates
-
-    for task_dir in sorted(TASKS_DIR.iterdir()):
-        if not task_dir.is_dir() or task_dir.name.startswith("_"):
-            continue
-        task_id = task_dir.name.split("-")[0]  # T-001-slug → T-001
-
-        answers = get_answers_for_task(task_id)
-        # Фильтр: только active-модели (task 4.2)
-        active_answers = [a for a in answers if a in active]
-        if len(active_answers) < 2:
-            continue
-
-        existing_pairs = get_existing_matchups_for_task(task_id)
-
-        # Генерируем все неоценённые пары
-        for i in range(len(active_answers)):
-            for j in range(i + 1, len(active_answers)):
-                a, b = active_answers[i], active_answers[j]
-                pair_key = frozenset({a, b})
-                if pair_key in existing_pairs:
-                    continue  # task 4.2: уже оценена
-
-                elo_a = elo_map.get(a, DEFAULT_ELO)
-                elo_b = elo_map.get(b, DEFAULT_ELO)
-                games_a = games_map.get(a, 0)
-                games_b = games_map.get(b, 0)
-
-                # Композитный score (task 4.3)
-                undersampled = 1.0 / (1.0 + min(games_a, games_b))
-                elo_diff = abs(elo_a - elo_b)
-                close_elo = 1.0 / (1.0 + elo_diff / 100.0)
-                few_games = 1.0 / (1.0 + min(games_a, games_b) / 10.0)
-
-                score = 0.5 * undersampled + 0.3 * close_elo + 0.2 * few_games
-
-                # Определение причины (task 4.4)
-                if min(games_a, games_b) < 3:
-                    reason = "новая модель (калибровка)"
-                elif elo_diff < 50:
-                    reason = f"близкий ELO (разница {elo_diff})"
-                else:
-                    reason = f"мало голосов (всего {min(games_a, games_b)})"
-
-                candidates.append({
-                    "task": task_id,
-                    "model_a": a,
-                    "model_b": b,
-                    "elo_a": elo_a,
-                    "elo_b": elo_b,
-                    "score": score,
-                    "reason": reason,
-                })
-
-    # Сортировка по score (убывание)
-    candidates.sort(key=lambda c: c["score"], reverse=True)
-    return candidates
-
-
-def best_pair_recommendation(index_data: dict) -> dict | None:
-    """Возвращает лучшую пару для сравнения или None."""
-    candidates = collect_pair_candidates(index_data)
-    return candidates[0] if candidates else None
-
-
-# ─── Data loading ───────────────────────────────────────────────────
+# ─── Helpers ────────────────────────────────────────────────────────
 
 
 def ensure_index() -> dict:
@@ -186,228 +61,791 @@ def ensure_index() -> dict:
     return json.loads((REPO_ROOT / "index.json").read_text(encoding="utf-8"))
 
 
-def get_tasks_with_answers() -> list[tuple[str, str]]:
-    """Возвращает [(task_id, display_name)] для задач с ≥1 ответом."""
-    result = []
-    if not TASKS_DIR.exists():
-        return result
-    for d in sorted(TASKS_DIR.iterdir()):
-        if not d.is_dir() or d.name.startswith("_"):
+def slugify(name: str, existing_ids: list[str]) -> str:
+    """Превращает имя модели в slug. Если пусто — model-N. Если занят — суффикс."""
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip().lower()).strip("-")
+    if not slug:
+        slug = f"model-{len(existing_ids) + 1}"
+    base = slug
+    suffix = 2
+    while slug in existing_ids:
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    return slug
+
+
+def get_model_name_map() -> dict[str, str]:
+    """Возвращает {id: name} из models.yaml."""
+    models = load_models_yaml()
+    return {m["id"]: m.get("name", m["id"]) for m in models}
+
+
+def get_all_matchup_pairs() -> set[frozenset[str]]:
+    """Возвращает множество всех уже сравнённых пар (frozenset{id_a, id_b}).
+
+    Использует resolved ids (model_a_id/model_b_id) и пропускает
+    tombstone- и аннулированные вердикты.
+    """
+    model_ids = {m["id"] for m in load_models_yaml()}
+    pairs = set()
+    if not MATCHUPS_DIR.exists():
+        return pairs
+    matchups = load_matchups()
+    voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+    for mu in matchups:
+        if mu.get("void_of"):
             continue
-        task_id = d.name.split("-")[0]
-        answers = get_answers_for_task(task_id)
-        if len(answers) >= 2:
-            # Читаем title из task.md
-            title = task_id
-            task_file = d / "task.md"
-            if task_file.exists():
-                import re
-                text = task_file.read_text(encoding="utf-8")
-                m = re.search(r"^title:\s*(.+)$", text, re.MULTILINE)
-                if m:
-                    title = m.group(1).strip().strip('"').strip("'")
-            result.append((task_id, f"{task_id} — {title}"))
-    return result
+        if mu.get("_matchup_id") in voided:
+            continue
+        a, b = resolve_matchup_models(mu, model_ids)
+        if a and b:
+            pairs.add(frozenset({a, b}))
+    return pairs
 
 
-# ─── HTML template ──────────────────────────────────────────────────
+def is_model_active(model: dict) -> bool:
+    """Проверяет, что модель не заархивирована."""
+    return model.get("status", "active") != "archived"
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+
+def update_model(model_id: str, name: str, status: str) -> bool:
+    """Редактирует name и status модели в models.yaml и пересчитывает index."""
+    models_path = REPO_ROOT / "models.yaml"
+    if not models_path.exists():
+        return False
+
+    text = models_path.read_text(encoding="utf-8")
+    models, preamble = parse_existing(text)
+
+    found = False
+    for m in models:
+        if m["id"] == model_id:
+            m["name"] = name
+            m["status"] = status
+            found = True
+            break
+
+    if not found:
+        return False
+
+    models.sort(key=lambda m: m["id"])
+
+    out = preamble.rstrip() + "\n\nmodels:\n"
+    for m in models:
+        out += format_model(m) + "\n"
+
+    models_path.write_text(out, encoding="utf-8")
+
+    index_data = generate_index()
+    save_index(index_data)
+    return True
+
+
+def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
+    """Рекомендует пары моделей для следующего прогона.
+
+    Алгоритм (двухуровневый):
+    1. Берём все пары моделей из index.json
+    2. Исключаем пары, которые уже сравнивались
+    3. Оставшиеся раскладываем по тирам калибровки (по min_games —
+       числу игр менее игранной модели в паре):
+       - тир 0: min_games == 0 (новая модель, ещё не играла)
+       - тир 1: min_games < 3 (мало игр, нужна калибровка)
+       - тир 2: остальные
+    4. Внутри тира сортируем по близости ELO (меньше elo_diff — выше):
+       самый равный бой в тире идёт первым
+    5. Возвращаем top_n (тир 0 всегда выше любого тира 1 и 2)
+
+    Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a, elo_b, reason}
+    """
+    models = index_data.get("models", {})
+    name_map = get_model_name_map()
+
+    # Только active-модели с данными из index
+    model_ids = sorted(
+        mid for mid, info in models.items() if is_model_active(info)
+    )
+    if len(model_ids) < 2:
+        return []
+
+    # ELO и игры из index
+    elo_map = {mid: models[mid].get("elo", DEFAULT_ELO) for mid in model_ids}
+    games_map = {mid: models[mid].get("games", 0) for mid in model_ids}
+
+    compared = get_all_matchup_pairs()
+
+    candidates = []
+    for i in range(len(model_ids)):
+        for j in range(i + 1, len(model_ids)):
+            a, b = model_ids[i], model_ids[j]
+            pair_key = frozenset({a, b})
+            if pair_key in compared:
+                continue
+
+            elo_a = elo_map[a]
+            elo_b = elo_map[b]
+            elo_diff = abs(elo_a - elo_b)
+            min_games = min(games_map[a], games_map[b])
+
+            # Тир калибровки: новая модель всегда выше калибрующейся,
+            # калибрующаяся — выше сыгранных. Внутри тира — близость ELO.
+            if min_games == 0:
+                tier = 0
+                reason = "новая модель, ещё не играла"
+            elif min_games < 3:
+                tier = 1
+                reason = f"мало игр ({min_games}), нужна калибровка"
+            elif elo_diff < 50:
+                tier = 2
+                reason = f"близкий рейтинг (разница {elo_diff})"
+            elif elo_diff < 150:
+                tier = 2
+                reason = f"рейтинг различается умеренно (Δ{elo_diff})"
+            else:
+                tier = 2
+                reason = f"разный уровень (Δ{elo_diff}) — проверить апсет"
+
+            # score = близость ELO: монотонно убывает с ростом diff,
+            # внутри тира больший score идёт первым
+            closeness = 1.0 / (1.0 + elo_diff / 100.0)
+
+            candidates.append({
+                "model_a": a,
+                "model_b": b,
+                "name_a": name_map.get(a, a),
+                "name_b": name_map.get(b, b),
+                "elo_a": elo_a,
+                "elo_b": elo_b,
+                "elo_diff": elo_diff,
+                "reason": reason,
+                "tier": tier,
+                "score": closeness,
+            })
+
+    candidates.sort(key=lambda c: (c["tier"], -c["score"]))
+    return candidates[:top_n]
+
+
+# ─── HTML: shared CSS ───────────────────────────────────────────────
+
+CSS = """
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 24px;
+    max-width: 920px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-size: 1.6rem;
+    color: #f1f5f9;
+    font-weight: 700;
+  }
+  .btn {
+    display: inline-block;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .btn-primary { background: #6366f1; color: white; }
+  .btn-primary:hover { background: #818cf8; }
+  .btn-secondary { background: #334155; color: #cbd5e1; }
+  .btn-secondary:hover { background: #475569; }
+  .btn-win { background: #10b981; color: white; }
+  .btn-win:hover { background: #34d399; }
+  .btn-lose { background: #ef4444; color: white; }
+  .btn-lose:hover { background: #f87171; }
+  .btn-draw { background: #475569; color: #e2e8f0; }
+  .btn-draw:hover { background: #64748b; }
+  .btn:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    border: 1px solid #334155;
+  }
+  .card h2 {
+    font-size: 1.15rem;
+    color: #f1f5f9;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  .stats {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid #334155;
+  }
+  th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  tbody tr:hover { background: #334155; }
+  .rank { color: #64748b; font-weight: 600; }
+  .elo-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .elo-high { background: #064e3b; color: #6ee7b7; }
+  .elo-mid  { background: #78350f; color: #fcd34d; }
+  .elo-low  { background: #7f1d1d; color: #fca5a5; }
+  .wld { font-weight: 600; }
+  .w { color: #34d399; }
+  .l { color: #f87171; }
+  .d { color: #94a3b8; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+  }
+  .form-group select, .form-group input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    font-size: 1rem;
+    color: #e2e8f0;
+    background: #0f172a;
+  }
+  .form-group select:focus, .form-group input[type="text"]:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+  }
+  .verdict-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .verdict-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .verdict-actions .btn { flex: 1; min-width: 120px; text-align: center; padding: 12px; }
+  .alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .alert-error { background: #7f1d1d; color: #fca5a5; }
+  .alert-success { background: #064e3b; color: #6ee7b7; }
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #334155;
+    font-size: 0.9rem;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-model { font-weight: 600; color: #e2e8f0; min-width: 140px; }
+  .history-elo { font-weight: 700; color: #f1f5f9; white-space: nowrap; }
+  .history-elo-arrow { color: #64748b; }
+  .history-delta-up { color: #34d399; font-weight: 600; }
+  .history-delta-down { color: #f87171; font-weight: 600; }
+  .history-delta-neutral { color: #64748b; }
+  .history-date { color: #64748b; font-size: 0.8rem; margin-left: auto; }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+    font-size: 0.95rem;
+  }
+  .add-form { max-width: 420px; }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #818cf8;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .back-link:hover { text-decoration: underline; color: #a5b4fc; }
+  .hint { color: #64748b; font-size: 0.85rem; margin-top: 8px; }
+  .rec-card {
+    background: #1e1b4b;
+    border: 1px solid #4338ca;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .rec-card h2 {
+    font-size: 1.15rem;
+    color: #a5b4fc;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+  .rec-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0 4px;
+  }
+  .rec-pair {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .rec-model {
+    font-weight: 600;
+    color: #e0e7ff;
+  }
+  .rec-elo {
+    font-size: 0.8rem;
+    color: #818cf8;
+    font-weight: 600;
+  }
+  .rec-vs {
+    color: #6366f1;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .rec-reason {
+    color: #a5b4fc;
+    font-size: 0.82rem;
+    margin-top: 4px;
+  }
+  .rec-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .rec-btn {
+    padding: 8px 18px;
+    background: #6366f1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .rec-btn:hover { background: #818cf8; }
+  .rec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .rec-header h2 { margin-bottom: 0; }
+  .rec-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .rec-counter {
+    font-size: 0.8rem;
+    color: #818cf8;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .rec-next {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid #4338ca;
+    background: #312e81;
+    color: #e0e7ff;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s;
+  }
+  .rec-next:hover { background: #4338ca; }
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-bar label {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .filter-bar select {
+    padding: 8px 12px;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .edit-link {
+    color: #e2e8f0;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .edit-link:hover { color: #818cf8; text-decoration: underline; }
+  .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+  }
+  .status-active { background: #064e3b; color: #6ee7b7; }
+  .status-archived { background: #475569; color: #cbd5e1; }
+  tr.archived td { opacity: 0.6; }
+"""
+
+
+# ─── HTML: Leaderboard page ─────────────────────────────────────────
+
+INDEX_TEMPLATE = """<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ELO Benchmark — Leaderboard</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 1200px; margin: 0 auto; }
-  h1 { margin-bottom: 20px; color: #1a1a2e; }
-  h2 { margin: 30px 0 15px; color: #1a1a2e; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
-  table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; }
-  th { background: #1a1a2e; color: white; font-weight: 600; }
-  tr:hover { background: #f0f4ff; }
-  .archived { color: #999; font-style: italic; }
-  .rank { font-weight: bold; color: #666; }
-  .elo { font-weight: bold; font-size: 1.1em; }
-  .elo-high { color: #2e7d32; }
-  .elo-mid { color: #f57f17; }
-  .elo-low { color: #c62828; }
-  .controls { margin-bottom: 20px; }
-  .controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-  .recommendation { background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-  .recommendation h3 { color: #2e7d32; margin-bottom: 8px; }
-  .recommendation .pair { font-size: 1.15em; font-weight: bold; margin: 8px 0; }
-  .recommendation .reason { color: #555; font-size: 0.95em; }
-  .recommendation button { margin-top: 10px; padding: 8px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-  .recommendation button:hover { background: #388e3c; }
-  .verdict-form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-  .verdict-form select, .verdict-form input[type="radio"] { margin: 5px 0 15px; }
-  .verdict-form select { padding: 8px; font-size: 1em; width: 100%; max-width: 400px; }
-  .verdict-form .radio-group { display: flex; gap: 20px; margin: 10px 0 15px; }
-  .verdict-form .radio-group label { display: inline-flex; align-items: center; gap: 6px; }
-  .verdict-form button { padding: 10px 30px; background: #1a1a2e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-  .verdict-form button:hover { background: #2a2a4e; }
-  .verdict-form button:disabled { background: #ccc; cursor: not-allowed; }
-  .error { color: #c62828; margin: 10px 0; }
-  .success { color: #2e7d32; margin: 10px 0; }
-  .stats { color: #666; font-size: 0.9em; margin-bottom: 20px; }
-</style>
+<title>ELO Benchmark</title>
+<style>""" + CSS + """</style>
 </head>
 <body>
-<h1>ELO Benchmark — Leaderboard</h1>
+<div class="header">
+  <h1>ELO Benchmark</h1>
+  <a href="/add" class="btn btn-primary">+ Добавить модель</a>
+</div>
 
-{% if error %}
-<div class="error">{{ error }}</div>
-{% endif %}
-{% if success %}
-<div class="success">{{ success }}</div>
-{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
 <div class="stats">
-  Всего моделей: {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
+  Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
 </div>
 
-{% if recommendation %}
-<div class="recommendation" id="recommendation">
-  <h3>Рекомендуемая пара для сравнения</h3>
-  <div class="pair">Задача {{ recommendation.task }} | {{ recommendation.model_a }} (ELO {{ recommendation.elo_a }}) vs {{ recommendation.model_b }} (ELO {{ recommendation.elo_b }})</div>
-  <div class="reason">Причина: {{ recommendation.reason }}</div>
-  <button onclick="fillForm('{{ recommendation.task }}', '{{ recommendation.model_a }}', '{{ recommendation.model_b }}')">Сравнить</button>
+<form method="GET" action="/" class="filter-bar">
+  <label for="filter">Показывать</label>
+  <select name="filter" id="filter" onchange="this.form.submit()">
+    <option value="active" {% if filter == 'active' %}selected{% endif %}>Только активные</option>
+    <option value="all" {% if filter == 'all' %}selected{% endif %}>Все</option>
+    <option value="inactive" {% if filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
+  </select>
+</form>
+
+{% if recommendations %}
+<div class="rec-card">
+  <div class="rec-header">
+    <h2>Рекомендуемые модели к прогону</h2>
+    {% if recommendations|length > 1 %}
+    <div class="rec-nav">
+      <span class="rec-counter" id="recCounter">1 / {{ recommendations|length }}</span>
+      <button type="button" class="rec-next" onclick="nextRec()" title="Следующая рекомендация">→</button>
+    </div>
+    {% endif %}
+  </div>
+  {% for rec in recommendations %}
+  <div class="rec-item" data-rec-index="{{ loop.index0 }}"{% if not loop.first %} style="display:none;"{% endif %}>
+    <div class="rec-info">
+      <div class="rec-pair">
+        <span class="rec-model">{{ rec.name_a }}</span>
+        <span class="rec-elo">{{ rec.elo_a }}</span>
+        <span class="rec-vs">vs</span>
+        <span class="rec-model">{{ rec.name_b }}</span>
+        <span class="rec-elo">{{ rec.elo_b }}</span>
+      </div>
+      <div class="rec-reason">{{ rec.reason }}</div>
+    </div>
+    <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
+  </div>
+  {% endfor %}
 </div>
-{% else %}
-<div class="recommendation" style="background: #f5f5f5; border-color: #ccc;">
-  <h3 style="color: #666;">Все пары оценены</h3>
-  <div class="reason">Создайте новую задачу или добавьте модель.</div>
+{% elif models_count|int >= 2 %}
+<div class="rec-card" style="background: #1e293b; border-color: #334155;">
+  <h2 style="color: #94a3b8;">Все пары уже прогнаны</h2>
+  <div class="rec-reason" style="color: #64748b;">Все возможные пары моделей уже сравнены. Добавьте новую модель или повторите сравнение.</div>
 </div>
 {% endif %}
 
-<h2>Рейтинг моделей</h2>
-<div class="controls">
-  <label>
-    <input type="checkbox" id="showArchived" onchange="toggleArchived()">
-    Показывать архивные
-  </label>
-</div>
-<table id="leaderboard">
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Модель</th>
-      <th>Провайдер</th>
-      <th>ELO</th>
-      <th>W</th>
-      <th>L</th>
-      <th>D</th>
-      <th>Игры</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for m in models_sorted %}
-    <tr class="{{ 'archived' if m.status == 'archived' else '' }}" data-archived="{{ 'true' if m.status == 'archived' else 'false' }}">
-      <td class="rank">{{ loop.index }}</td>
-      <td>{{ m.name }}</td>
-      <td>{{ m.provider }}</td>
-      <td class="elo {{ 'elo-high' if m.elo >= 1300 else ('elo-mid' if m.elo >= 1150 else 'elo-low') }}">{{ m.elo }}</td>
-      <td>{{ m.wins }}</td>
-      <td>{{ m.losses }}</td>
-      <td>{{ m.draws }}</td>
-      <td>{{ m.games }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<h2>Записать вердикт</h2>
-<form class="verdict-form" method="POST" action="/verdict" id="verdictForm">
-  <label for="task">Задача:</label><br>
-  <select name="task" id="taskSelect" onchange="updateModelDropdowns()">
-    <option value="">— выберите задачу —</option>
-    {% for task_id, task_name in tasks_with_answers %}
-    <option value="{{ task_id }}">{{ task_name }}</option>
-    {% endfor %}
-  </select><br>
-
-  <label for="model_a">Модель A:</label><br>
-  <select name="model_a" id="modelA" disabled>
-    <option value="">— сначала выберите задачу —</option>
-  </select><br>
-
-  <label for="model_b">Модель B:</label><br>
-  <select name="model_b" id="modelB" disabled>
-    <option value="">— сначала выберите задачу —</option>
-  </select><br>
-
-  <label>Победитель:</label>
-  <div class="radio-group">
-    <label><input type="radio" name="winner" value="a" required> Модель A</label>
-    <label><input type="radio" name="winner" value="b"> Модель B</label>
-    <label><input type="radio" name="winner" value="draw"> Ничья</label>
+<div class="card">
+  <h2>Рейтинг</h2>
+  {% if models_sorted %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Модель</th>
+        <th>ELO</th>
+        <th>Побед</th>
+        <th>Поражений</th>
+        <th>Ничьих</th>
+        <th>Всего</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models_sorted %}
+      <tr class="{{ 'archived' if m.status == 'archived' }}">
+        <td class="rank">{{ loop.index }}</td>
+        <td>
+          <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+          {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+        </td>
+        <td><span class="elo-badge {{ 'elo-high' if m.elo >= 1300 else ('elo-mid' if m.elo >= 1150 else 'elo-low') }}">{{ m.elo }}</span></td>
+        <td class="wld w">{{ m.wins }}</td>
+        <td class="wld l">{{ m.losses }}</td>
+        <td class="wld d">{{ m.draws }}</td>
+        <td>{{ m.games }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    {% if filter == 'active' %}
+    Нет активных моделей. Переключите фильтр или добавьте новую модель.
+    {% elif filter == 'inactive' %}
+    Нет неактивных (архивных) моделей.
+    {% else %}
+    Нет моделей. Нажмите «+ Добавить модель», чтобы начать.
+    {% endif %}
   </div>
+  {% endif %}
+</div>
 
-  <button type="submit" id="submitBtn" disabled>Записать</button>
-</form>
+<div class="card">
+  <h2>Записать результат</h2>
+  {% if models_list|length >= 2 %}
+  <form method="POST" action="/verdict" id="verdictForm">
+    <div class="verdict-row">
+      <div class="form-group">
+        <label>Модель A</label>
+        <select name="model_a" id="modelA" onchange="validate()">
+          <option value="">— выбрать —</option>
+          {% for mid, mname in models_list %}
+          <option value="{{ mid }}">{{ mname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Модель B</label>
+        <select name="model_b" id="modelB" onchange="validate()">
+          <option value="">— выбрать —</option>
+          {% for mid, mname in models_list %}
+          <option value="{{ mid }}">{{ mname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="verdict-actions">
+      <button type="submit" name="winner" value="a" class="btn btn-win" id="btnA" disabled>Победила A</button>
+      <button type="submit" name="winner" value="b" class="btn btn-lose" id="btnB" disabled>Победила B</button>
+      <button type="submit" name="winner" value="draw" class="btn btn-draw" id="btnDraw" disabled>Ничья</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty-state">
+    Нужно минимум 2 модели, чтобы записать результат.
+  </div>
+  {% endif %}
+</div>
+
+{% if history %}
+<div class="card">
+  <h2>История</h2>
+  {% for item in history %}
+  <div class="history-item">
+    <span class="history-model">{{ item.model_name }} vs {{ item.opponent_name }}</span>
+    <span class="history-elo">{{ item.elo_before }} <span class="history-elo-arrow">→</span> {{ item.elo }}</span>
+    {% if item.delta > 0 %}
+    <span class="history-delta-up">+{{ item.delta }}</span>
+    {% elif item.delta < 0 %}
+    <span class="history-delta-down">{{ item.delta }}</span>
+    {% else %}
+    <span class="history-delta-neutral">±0</span>
+    {% endif %}
+    <span class="history-date">{{ item.date }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <script>
-// Данные для динамических dropdown
-const taskAnswers = {{ task_answers_json | safe }};
-
-function updateModelDropdowns() {
-  const task = document.getElementById('taskSelect').value;
-  const modelA = document.getElementById('modelA');
-  const modelB = document.getElementById('modelB');
-  const submitBtn = document.getElementById('submitBtn');
-
-  if (!task || !taskAnswers[task]) {
-    modelA.innerHTML = '<option value="">— сначала выберите задачу —</option>';
-    modelB.innerHTML = '<option value="">— сначала выберите задачу —</option>';
-    modelA.disabled = modelB.disabled = true;
-    submitBtn.disabled = true;
-    return;
-  }
-
-  const answers = taskAnswers[task];
-  const options = '<option value="">— выберите модель —</option>' +
-    answers.map(a => '<option value="' + a + '">' + a + '</option>').join('');
-  modelA.innerHTML = options;
-  modelB.innerHTML = options;
-  modelA.disabled = modelB.disabled = false;
-  validateForm();
+let recIndex = 0;
+function showRec(i) {
+  const items = document.querySelectorAll('.rec-item[data-rec-index]');
+  if (!items.length) return;
+  recIndex = (i + items.length) % items.length;
+  items.forEach((el) => {
+    el.style.display = (parseInt(el.dataset.recIndex, 10) === recIndex) ? '' : 'none';
+  });
+  const counter = document.getElementById('recCounter');
+  if (counter) counter.textContent = (recIndex + 1) + ' / ' + items.length;
 }
 
-function validateForm() {
+function nextRec() {
+  showRec(recIndex + 1);
+}
+
+function validate() {
   const a = document.getElementById('modelA').value;
   const b = document.getElementById('modelB').value;
-  const task = document.getElementById('taskSelect').value;
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = !(a && b && task && a !== b);
+  const ok = a && b && a !== b;
+  document.getElementById('btnA').disabled = !ok;
+  document.getElementById('btnB').disabled = !ok;
+  document.getElementById('btnDraw').disabled = !ok;
 }
 
-document.addEventListener('change', validateForm);
-
-function toggleArchived() {
-  const show = document.getElementById('showArchived').checked;
-  document.querySelectorAll('#leaderboard tbody tr').forEach(row => {
-    if (row.dataset.archived === 'true') {
-      row.style.display = show ? '' : 'none';
-    }
-  });
-}
-
-// Скрываем архивные при загрузке
-document.addEventListener('DOMContentLoaded', () => {
-  toggleArchived();
-});
-
-function fillForm(task, a, b) {
-  document.getElementById('taskSelect').value = task;
-  updateModelDropdowns();
+function usePair(a, b) {
   document.getElementById('modelA').value = a;
   document.getElementById('modelB').value = b;
-  validateForm();
+  validate();
   document.getElementById('verdictForm').scrollIntoView({ behavior: 'smooth' });
 }
 </script>
+</body>
+</html>
+"""
+
+
+# ─── HTML: Add model page ───────────────────────────────────────────
+
+ADD_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Добавить модель — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+<div class="header">
+  <h1>Добавить модель</h1>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+<div class="card add-form">
+  <form method="POST" action="/add_model">
+    <div class="form-group">
+      <label>Название модели</label>
+      <input type="text" name="name" required placeholder="Например: GPT-4o" autofocus>
+    </div>
+    <div class="hint">Стартовый ELO: {{ default_elo }}</div>
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary">Добавить</button>
+    </div>
+  </form>
+</div>
+
+{% if models_list %}
+<div class="card">
+  <h2>Уже в списке ({{ models_list|length }})</h2>
+  <table>
+    <thead><tr><th>Модель</th><th>Статус</th><th>ELO</th><th>Игр</th><th></th></tr></thead>
+    <tbody>
+      {% for mid, mname, elo, games, status in models_list %}
+      <tr class="{{ 'archived' if status == 'archived' }}">
+        <td><a href="/edit/{{ mid }}" class="edit-link">{{ mname }}</a></td>
+        <td>
+          {% if status == 'archived' %}<span class="status-pill status-archived">неактивна</span>
+          {% else %}<span class="status-pill status-active">активна</span>{% endif %}
+        </td>
+        <td><span class="elo-badge {{ 'elo-high' if elo >= 1300 else ('elo-mid' if elo >= 1150 else 'elo-low') }}">{{ elo }}</span></td>
+        <td>{{ games }}</td>
+        <td><a href="/edit/{{ mid }}" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">Изменить</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+</body>
+</html>
+"""
+
+
+# ─── HTML: Edit model page ──────────────────────────────────────────
+
+EDIT_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Редактировать модель — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+<div class="header">
+  <h1>Редактировать модель</h1>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+<div class="card add-form">
+  <form method="POST" action="/edit/{{ model.id }}">
+    <div class="form-group">
+      <label>ID модели</label>
+      <input type="text" value="{{ model.id }}" disabled>
+      <div class="hint">ID менять нельзя — он стабилен для истории.</div>
+    </div>
+    <div class="form-group">
+      <label>Название модели</label>
+      <input type="text" name="name" value="{{ model.name }}" required autofocus>
+    </div>
+    <div class="form-group">
+      <label>Статус активности</label>
+      <select name="status">
+        <option value="active" {% if model.status == 'active' %}selected{% endif %}>Активна</option>
+        <option value="archived" {% if model.status == 'archived' %}selected{% endif %}>Неактивна (архив)</option>
+      </select>
+    </div>
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+      <a href="/" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+    </div>
+  </form>
+</div>
 </body>
 </html>
 """
@@ -420,47 +858,149 @@ function fillForm(task, a, b) {
 def leaderboard():
     index_data = ensure_index()
 
-    # Сортировка моделей по ELO (убывание)
     models = index_data.get("models", {})
-    models_sorted = sorted(
-        models.values(), key=lambda m: m.get("elo", DEFAULT_ELO), reverse=True
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+
+    # Фильтр таблицы: active / all / inactive
+    filter_mode = request.args.get("filter", "active").strip().lower()
+    if filter_mode not in ("active", "all", "inactive"):
+        filter_mode = "active"
+
+    if filter_mode == "active":
+        models_sorted = [
+            info for info in models.values()
+            if is_model_active(info)
+        ]
+    elif filter_mode == "inactive":
+        models_sorted = [
+            info for info in models.values()
+            if not is_model_active(info)
+        ]
+    else:
+        models_sorted = list(models.values())
+
+    models_sorted.sort(key=lambda m: m.get("elo", DEFAULT_ELO), reverse=True)
+
+    # Для формы вердикта — только активные модели
+    active_models = {
+        mid: info for mid, info in models.items() if is_model_active(info)
+    }
+    models_list = sorted(
+        ((mid, info.get("name", mid)) for mid, info in active_models.items()),
+        key=lambda x: x[1].lower(),
     )
 
-    # Задачи с ≥2 ответами (для dropdown)
-    tasks_list = get_tasks_with_answers()
+    # Рекомендации пар
+    recommendations = get_recommendations(index_data, top_n=3)
 
-    # task_answers для JS: {task_id: [model_ids]}
-    task_answers = {}
-    for task_id, _ in tasks_list:
-        task_answers[task_id] = get_answers_for_task(task_id)
-
-    # Рекомендация пары
-    rec = best_pair_recommendation(index_data)
+    # История: последние 20 записей (новые сверху)
+    name_map = {mid: info.get("name", mid) for mid, info in models.items()}
+    raw_history = index_data.get("elo_history", [])
+    history = []
+    for item in reversed(raw_history[-20:]):
+        mid = item.get("model", "")
+        opponent = item.get("opponent", "")
+        history.append({
+            "model_name": name_map.get(mid, mid),
+            "opponent_name": name_map.get(opponent, opponent),
+            "elo_before": item.get("elo_before", DEFAULT_ELO),
+            "elo": item.get("elo", DEFAULT_ELO),
+            "delta": item.get("delta", 0),
+            # recorded_at (с временем) приоритетнее date (только дата)
+            "date": (item.get("recorded_at") or item.get("date", ""))[:19].replace("T", " "),
+        })
 
     return render_template_string(
-        HTML_TEMPLATE,
+        INDEX_TEMPLATE,
         models_sorted=models_sorted,
         models_count=len(models),
+        filtered_count=len(models_sorted),
         matchups_count=len(index_data.get("matchups_index", [])),
         updated=index_data.get("updated", ""),
-        tasks_with_answers=tasks_list,
-        task_answers_json=json.dumps(task_answers),
-        recommendation=rec,
+        models_list=models_list,
+        recommendations=recommendations,
+        history=history,
+        filter=filter_mode,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
     )
 
 
+@app.route("/add")
+def add_page():
+    index_data = ensure_index()
+    models_data = index_data.get("models", {})
+
+    # (id, name, elo, games, status) — актуальный ELO из index.json
+    models_list = []
+    for mid, info in models_data.items():
+        mname = info.get("name", mid)
+        elo = info.get("elo", DEFAULT_ELO)
+        games = info.get("games", 0)
+        status = info.get("status", "active")
+        models_list.append((mid, mname, elo, games, status))
+    models_list.sort(key=lambda x: x[1].lower())
+
+    return render_template_string(
+        ADD_TEMPLATE,
+        models_list=models_list,
+        default_elo=DEFAULT_ELO,
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
+    )
+
+
+@app.route("/add_model", methods=["POST"])
+def add_model():
+    name = request.form.get("name", "").strip()
+
+    if not name:
+        return redirect(url_for("add_page", error="Введите название модели"))
+
+    models_path = REPO_ROOT / "models.yaml"
+    if not models_path.exists():
+        return redirect(url_for("add_page", error="models.yaml не найден"))
+
+    text = models_path.read_text(encoding="utf-8")
+    models, preamble = parse_existing(text)
+
+    existing_ids = [m["id"] for m in models]
+    model_id = slugify(name, existing_ids)
+
+    new_model = {
+        "id": model_id,
+        "name": name,
+        "provider": "",
+        "version": "",
+        "released": "",
+        "status": "active",
+        "notes": "",
+    }
+    models.append(new_model)
+    models.sort(key=lambda m: m["id"])
+
+    out = preamble.rstrip() + "\n\nmodels:\n"
+    for m in models:
+        out += format_model(m) + "\n"
+
+    models_path.write_text(out, encoding="utf-8")
+
+    index_data = generate_index()
+    save_index(index_data)
+
+    return redirect(url_for("add_page", success=f"Модель «{name}» добавлена. Стартовый ELO: {DEFAULT_ELO}"))
+
+
 @app.route("/verdict", methods=["POST"])
-def record_verdict():
-    task = request.form.get("task", "").strip()
+def record_verdict_route():
     model_a = request.form.get("model_a", "").strip()
     model_b = request.form.get("model_b", "").strip()
     winner = request.form.get("winner", "").strip()
 
-    # Валидация
-    if not task or not model_a or not model_b or not winner:
-        return redirect(url_for("leaderboard", error="Все поля обязательны"))
+    if not model_a or not model_b or not winner:
+        return redirect(url_for("leaderboard", error="Выберите обе модели и победителя"))
 
     if model_a == model_b:
         return redirect(url_for("leaderboard", error="Модели должны различаться"))
@@ -468,55 +1008,72 @@ def record_verdict():
     if winner not in ("a", "b", "draw"):
         return redirect(url_for("leaderboard", error="Неверный победитель"))
 
-    # Проверка моделей в реестре
-    models = load_models_yaml()
-    model_ids = {m["id"] for m in models}
-    if model_a not in model_ids:
-        return redirect(url_for("leaderboard", error=f"Модель {model_a} не найдена в реестре"))
-    if model_b not in model_ids:
-        return redirect(url_for("leaderboard", error=f"Модель {model_b} не найдена в реестре"))
+    try:
+        result = record_verdict(
+            task=DEFAULT_TASK,
+            model_a=model_a,
+            model_b=model_b,
+            winner=winner,
+        )
+    except ValueError as e:
+        return redirect(url_for("leaderboard", error=str(e)))
 
-    # Проверка наличия ответов
-    answers = get_answers_for_task(task)
-    if model_a not in answers:
-        return redirect(url_for("leaderboard", error=f"У модели {model_a} нет ответа на задачу {task}"))
-    if model_b not in answers:
-        return redirect(url_for("leaderboard", error=f"У модели {model_b} нет ответа на задачу {task}"))
+    name_map = get_model_name_map()
+    name_a = name_map.get(model_a, model_a)
+    name_b = name_map.get(model_b, model_b)
+    winner_label = {"a": name_a, "b": name_b, "draw": "Ничья"}[winner]
 
-    # Запись вердикта
-    task_matchups_dir = MATCHUPS_DIR / task
-    task_matchups_dir.mkdir(parents=True, exist_ok=True)
+    return redirect(url_for(
+        "leaderboard",
+        success=f"Записано: {name_a} vs {name_b} → {winner_label}",
+    ))
 
-    # Определение следующего номера
-    existing = sorted(task_matchups_dir.glob("*.json"))
-    next_num = len(existing) + 1
-    matchup_file = task_matchups_dir / f"{next_num:03d}.json"
 
-    verdict = {
-        "task": task,
-        "model_a": model_a,
-        "model_b": model_b,
-        "winner": winner,
-        "date": date.today().isoformat(),
-    }
+@app.route("/edit/<model_id>")
+def edit_page(model_id: str):
+    index_data = ensure_index()
+    info = index_data.get("models", {}).get(model_id)
+    if not info:
+        return redirect(url_for("leaderboard", error="Модель не найдена"))
 
-    matchup_file.write_text(
-        json.dumps(verdict, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    return render_template_string(
+        EDIT_TEMPLATE,
+        model={
+            "id": model_id,
+            "name": info.get("name", ""),
+            "status": info.get("status", "active"),
+        },
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
     )
 
-    # Пересчёт ELO + обновление index.json
-    index_data = generate_index()
-    save_index(index_data)
 
-    return redirect(url_for("leaderboard", success=f"Вердикт записан: {model_a} vs {model_b}, победитель: {winner}"))
+@app.route("/edit/<model_id>", methods=["POST"])
+def edit_model(model_id: str):
+    name = request.form.get("name", "").strip()
+    status = request.form.get("status", "").strip()
+
+    if not name:
+        return redirect(url_for("edit_page", model_id=model_id, error="Введите название модели"))
+
+    if status not in ("active", "archived"):
+        return redirect(url_for("edit_page", model_id=model_id, error="Неверный статус"))
+
+    if not update_model(model_id, name, status):
+        return redirect(url_for("leaderboard", error="Не удалось обновить модель"))
+
+    status_label = "активна" if status == "active" else "неактивна (архив)"
+    return redirect(url_for(
+        "leaderboard",
+        filter="active",
+        success=f"Модель «{name}» обновлена, статус: {status_label}.",
+    ))
 
 
-# ─── Port handling (task 3.9) ───────────────────────────────────────
+# ─── Port handling ──────────────────────────────────────────────────
 
 
 def find_free_port(start: int = 5000, max_tries: int = 10) -> int:
-    """Находит свободный порт начиная с start."""
     import socket
     for port in range(start, start + max_tries):
         try:
@@ -525,7 +1082,7 @@ def find_free_port(start: int = 5000, max_tries: int = 10) -> int:
                 return port
         except OSError:
             continue
-    return start  # fallback
+    return start
 
 
 # ─── Main ───────────────────────────────────────────────────────────

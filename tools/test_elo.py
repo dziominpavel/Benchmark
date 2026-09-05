@@ -73,7 +73,81 @@ def test_elo_history():
     assert len(history) == 2, f"1 matchup x 2 models = 2 entries, got {len(history)}"
     for h in history:
         assert "model" in h and "elo" in h and "delta" in h and "after_matchup" in h
+        assert "elo_before" in h and "opponent" in h
     print("2.5 elo_history: OK")
+
+
+def test_seq_ordering():
+    """seq переопределяет порядок: вердикт с большим seq применяется позже,
+    даже если его дата раньше (запись задним числом идёт по времени ЗАПИСИ)."""
+    matchups = [
+        # seq=2, но date раньше — порядок реплея по seq, не по date
+        {"task": "T-001", "model_a": "A", "model_b": "B", "winner": "b",
+         "date": "2026-09-04", "seq": 2, "_matchup_id": "T-001/002"},
+        {"task": "T-001", "model_a": "A", "model_b": "B", "winner": "a",
+         "date": "2026-09-05", "seq": 1, "_matchup_id": "T-001/001"},
+    ]
+    # recalculate получает уже отсортированный список — сортируем как load_matchups
+    from elo import matchup_sort_key
+    matchups.sort(key=matchup_sort_key)
+    result = recalculate(matchups, ["A", "B"])
+    # Оба матча между равными (1200) — сначала A выигрывает (+20/-20),
+    # затем B выигрывает у 1220 — аутсайдер-B получает больше.
+    a = result["models"]["A"]["elo"]
+    b = result["models"]["B"]["elo"]
+    assert b > a, f"Seq-ordering wrong: A={a} B={b} (B должен выиграть после проигрыша)"
+    print(f"seq ordering: OK (A={a} B={b})")
+
+
+def test_void():
+    """Tombstone аннулирует вердикт — он не участвует в реплее."""
+    matchups = [
+        {"task": "T-001", "model_a": "A", "model_b": "B", "winner": "a",
+         "date": "2026-09-05", "seq": 1, "_matchup_id": "T-001/001"},
+        {"task": "T-001", "void_of": "T-001/001",
+         "date": "2026-09-05", "seq": 2, "_matchup_id": "T-001/002"},
+    ]
+    from elo import matchup_sort_key
+    matchups.sort(key=matchup_sort_key)
+    result = recalculate(matchups, ["A", "B"])
+    assert result["models"]["A"]["elo"] == 1200, "Аннулированный вердикт не должен влиять"
+    assert result["models"]["A"]["games"] == 0
+    assert "T-001/001" in result["voided"]
+    print("void/tombstone: OK")
+
+
+def test_unknown_models_warn():
+    """Неразрешённые модели — громкий warning, не тихий skip."""
+    matchups = [
+        {"task": "T-001", "model_a": "modelA", "model_b": "modelB", "winner": "a",
+         "date": "2026-09-05", "seq": 1, "_matchup_id": "T-001/001"},
+    ]
+    result = recalculate(matchups, ["A", "B"])
+    assert result["warnings"], "Должен быть warning о неразрешённых моделях"
+    assert "T-001/001" in result["skipped"]
+    print("unknown models warning: OK")
+
+
+def test_snapshot_verification():
+    """verify_snapshots детектит подделку записанного снэпшота."""
+    from elo import verify_snapshots, matchup_sort_key
+    # Вердикт с корректным снэпшотом (1200→1220 / 1200→1180)
+    matchups = [
+        {"task": "T-001", "model_a": "A", "model_b": "B", "winner": "a",
+         "date": "2026-09-05", "seq": 1, "recorded_at": "2026-09-05T10:00:00+03:00",
+         "_matchup_id": "T-001/001",
+         "elo": {"A": {"before": 1200, "after": 1220, "delta": 20},
+                 "B": {"before": 1200, "after": 1180, "delta": -20}}},
+    ]
+    matchups.sort(key=matchup_sort_key)
+    problems = verify_snapshots(matchups, ["A", "B"])
+    assert not problems, f"Корректный снэпшот не должен давать проблем: {problems}"
+
+    # Подделанный снэпшот
+    matchups[0]["elo"]["A"]["after"] = 1250
+    problems = verify_snapshots(matchups, ["A", "B"])
+    assert problems, "Подделанный снэпшот должен детектироваться"
+    print("snapshot verification: OK")
 
 
 if __name__ == "__main__":
@@ -83,4 +157,8 @@ if __name__ == "__main__":
     test_round_elo()
     test_recalculate()
     test_elo_history()
+    test_seq_ordering()
+    test_void()
+    test_unknown_models_warn()
+    test_snapshot_verification()
     print("\nALL ELO TESTS PASSED")

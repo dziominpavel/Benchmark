@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "seq": 1,
+  "task": "T-001",
+  "model_a": "modelA",
+  "model_b": "modelB",
+  "winner": "b",
+  "date": "2026-09-05"
+}

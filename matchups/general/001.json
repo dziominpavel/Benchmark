@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "seq": 2,
+  "task": "general",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "b",
+  "date": "2026-09-05"
+}

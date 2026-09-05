@@ -52,6 +52,14 @@ HTML = """<!DOCTYPE html>
   .elo-mid { color: #f57f17; }
   .elo-low { color: #c62828; }
   .note { margin-top: 20px; color: #999; font-size: 0.85em; }
+  .history-item { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; gap: 12px; font-size: 0.95em; }
+  .history-item:last-child { border-bottom: none; }
+  .history-model { font-weight: 600; min-width: 160px; }
+  .history-elo { font-weight: 600; color: #333; }
+  .history-delta-up { color: #2e7d32; font-weight: 600; }
+  .history-delta-down { color: #c62828; font-weight: 600; }
+  .history-delta-neutral { color: #999; }
+  .history-date { color: #999; font-size: 0.85em; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -82,6 +90,12 @@ HTML = """<!DOCTYPE html>
 {rows}
   </tbody>
 </table>
+
+<h2 style="margin-top: 28px;">История</h2>
+<div id="history" style="background: white; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
+{history}
+</div>
+
 <div class="note">Статичный экспорт. Для записи вердиктов запустите <code>python tools/server.py</code>.</div>
 <script>
 function toggleArchived() {{
@@ -99,6 +113,8 @@ document.addEventListener('DOMContentLoaded', toggleArchived);
 """
 
 ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td>{name}</td>\n      <td>{provider}</td>\n      <td class="elo {elo_class}">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
+
+HISTORY_ITEM_TEMPLATE = '    <div class="history-item">\n      <span class="history-model">{model_name} vs {opponent_name}</span>\n      <span class="history-elo">{elo_before} → {elo}</span>\n      <span class="{delta_class}">{delta}</span>\n      <span class="history-date">{date}</span>\n    </div>'
 
 
 def main() -> int:
@@ -135,12 +151,44 @@ def main() -> int:
             .replace("{elo_class}", elo_class)
         )
 
+    # История ELO
+    name_map = {mid: m.get("name", mid) for mid, m in models.items()}
+    raw_history = data.get("elo_history", [])
+    history_items = []
+    for item in reversed(raw_history[-20:]):
+        mid = item.get("model", "")
+        opponent = item.get("opponent", "")
+        elo = item.get("elo", DEFAULT_ELO)
+        elo_before = item.get("elo_before", DEFAULT_ELO)
+        delta = item.get("delta", 0)
+        if delta > 0:
+            delta_str = f"+{delta}"
+            delta_class = "history-delta-up"
+        elif delta < 0:
+            delta_str = str(delta)
+            delta_class = "history-delta-down"
+        else:
+            delta_str = "±0"
+            delta_class = "history-delta-neutral"
+        date = (item.get("recorded_at") or item.get("date", ""))[:19].replace("T", " ")
+        history_items.append(
+            HISTORY_ITEM_TEMPLATE
+            .replace("{model_name}", name_map.get(mid, mid))
+            .replace("{opponent_name}", name_map.get(opponent, opponent))
+            .replace("{elo}", str(elo))
+            .replace("{elo_before}", str(elo_before))
+            .replace("{delta}", delta_str)
+            .replace("{delta_class}", delta_class)
+            .replace("{date}", date)
+        )
+
     html = (
         HTML
         .replace("{models_count}", str(len(models)))
         .replace("{matchups_count}", str(len(data.get("matchups_index", []))))
         .replace("{updated}", data.get("updated", ""))
         .replace("{rows}", "\n".join(rows))
+        .replace("{history}", "\n".join(history_items) if history_items else '<p style="color:#999;padding:8px 0;">Нет истории</p>')
     )
 
     OUTPUT_PATH.write_text(html, encoding="utf-8")

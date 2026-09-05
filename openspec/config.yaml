@@ -1,12 +1,18 @@
 schema: spec-driven
 
 context: |
-  Benchmark — репозиторий для сравнения LLM-моделей на задачах из живых Android-проектов
-  (GymProgress, VoiceMind, Wishlot — Kotlin/Compose/Room). Кода приложения здесь нет:
-  только текстовые артефакты — задачи, снапшоты волн, прогоны моделей, leaderboard.
+  Benchmark — репозиторий для сравнения LLM-моделей через попарные сравнения и ELO-рейтинг.
+  Модели отвечают на аналитические задачи (анализ проекта, поиск багов, планирование),
+  судья сравнивает два ответа и выбирает победителя, ELO пересчитывается.
+  Кода приложения здесь нет: только текстовые артефакты — задачи (tasks/),
+  ответы моделей (answers/), вердикты (matchups/), реестр (models.yaml),
+  кэш ELO (index.json), инструменты (tools/), веб-сервер leaderboard (tools/server.py).
+  Прогоны выполняются skills benchmark-run-a / benchmark-run-b
+  (фиксированные слоты modelA / modelB), судейство — skill benchmark-judge
+  или вручную по docs/judge-prompt.md с записью через веб-UI (корзина general).
   OpenSpec-артефакты (proposal, design, tasks, specs) — на русском,
   кроме normative keywords MUST/SHALL/MUST NOT и заголовков сценариев WHEN/THEN/AND.
-  Код и идентификаторы — на английском, как в проектах-референсах.
+  Код и идентификаторы — на английском.
 
 rules:
   specs:
@@ -15,7 +21,12 @@ rules:
     - Main spec (openspec/specs/): секции ## Purpose и ## Requirements
     - Delta spec (openspec/changes/*/specs/): ## ADDED/MODIFIED/REMOVED Requirements
     - Каждый requirement — минимум один #### Scenario: с WHEN/THEN
-    - Capability = подсистема бенчмарк-системы (task-format, run-protocol, wave-snapshot, leaderboard), не отдельная фича
+    - Capability = подсистема бенчмарк-системы (benchmark-workflow, task-management,
+      answer-management, matchup-management, elo-engine, pairing-algorithm,
+      leaderboard-ui, model-registry, data-storage) — спеки описывают ФАКТИЧЕСКОЕ
+      поведение кода MVP (tools/*.py, skills), а не желаемое
+    - Известные дефекты кода фиксировать в спеке явно (пометка «Известный дефект»),
+      код при наведении порядка в документации не менять
     - После правок запускать openspec validate --all
   proposal:
     - Русский язык, кратко: что и зачем

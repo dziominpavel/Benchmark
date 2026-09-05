@@ -1,4 +1,4 @@
-# Реестр LLM-моделей для бенчмарка
+﻿# Реестр LLM-моделей для бенчмарка
 #
 # Формат записи:
 #   - id: <slug>          # короткий стабильный идентификатор, используется в именах файлов ответов
@@ -24,4 +24,48 @@
 # Старую версию можно заархивировать (status: archived) — ELO сохранится, новые пары не предлагаются.
 
 models:
-
+  - id: cursor-composer-2-5
+    name: "Cursor Composer 2.5"
+    provider: 
+    version: 
+    status: active
+  - id: cursor-grok-4-6
+    name: "Cursor Grok 4.6"
+    provider: 
+    version: 
+    status: active
+  - id: devin-glm-5-2-high
+    name: "Devin GLM-5.2 High"
+    provider: 
+    version: 
+    status: active
+  - id: devin-glm-5-3-flash-max
+    name: "Devin GLM-5.3 Flash Max"
+    provider: 
+    version: 
+    status: active
+  - id: devin-gpt-5-6-sol-max
+    name: "Devin GPT-5.6 Sol Max"
+    provider: 
+    version: 
+    status: active
+  - id: devin-kimi-k3-max
+    name: "Devin Kimi K3 Max"
+    provider: 
+    version: 
+    status: active
+  - id: devin-swe-1-7-max
+    name: "Devin SWE-1.7 Max"
+    provider: 
+    version: 
+    status: active
+  - id: opencode-mimo-v2-5-free
+    name: "OpenCode MiMo V2.5 Free"
+    provider: 
+    version: 
+    status: active
+  - id: opencode-muse-spark-1-3-free-xhigh
+    name: "OpenCode Muse Spark 1.3 Free Xhigh"
+    provider: 
+    version: 
+    status: active

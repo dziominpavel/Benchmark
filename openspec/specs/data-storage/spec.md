@@ -1,82 +1,120 @@
 # data-storage Specification
 
 ## Purpose
-Гибридное хранение данных бенчмарка. Файлы (source of truth, коммитятся в git) + index.json (генерируемый кэш для быстрого поиска и просмотра без сервера).
+Гибридное хранение MVP: файлы — source of truth (коммитятся в git),
+`index.json` — генерируемый кэш для просмотра рейтинга без сервера,
+`leaderboard.html` — генерируемый статичный экспорт (в git не коммитится).
 
 ## Requirements
 
 ### Requirement: Source of truth — файлы
 
-Исходные данные хранятся в файлах: models.yaml (модели), tasks/T-NNN/task.md (задачи), answers/T-NNN/model.md (ответы), matchups/T-NNN/NNN.json (вердикты). Эти файлы коммитятся в git.
+Исходные данные SHALL храниться в файлах: `models.yaml` (реестр),
+`tasks/T-NNN-<slug>/task.md` (задачи), `answers/T-NNN/*.md` (ответы:
+`modelA.md` / `modelB.md` от skills либо `<model-id>.md` вручную),
+`matchups/T-NNN/NNN.json` (вердикты skill судьи) и `matchups/general/NNN.json`
+(вердикты веб-формы). Эти файлы SHALL коммититься в git.
 
 #### Scenario: Git diff вердикта
 
 - **WHEN** записывается новый вердикт
-- **THEN** git diff показывает добавленный файл matchups/T-NNN/NNN.json
-- **AND** дифф содержит только содержимое этого файла
+- **THEN** git diff показывает один добавленный JSON-файл
+- **AND** содержимое читаемо (5 полей)
 
 #### Scenario: Git diff ответа
 
 - **WHEN** модель пишет ответ
-- **THEN** git diff показывает добавленный файл answers/T-NNN/model.md
-- **AND** содержимое читаемо (Markdown)
+- **THEN** git diff показывает добавленный Markdown-файл в `answers/T-NNN/`
 
 ### Requirement: Кэш — index.json
 
-index.json — генерируемый файл, содержащий: текущий ELO всех моделей, статистику W/L/D/games, сводку задач, индекс вердиктов, историю ELO. Коммитится в git для просмотра без сервера.
+`index.json` SHALL содержать: `version` (=1), `updated` (YYYY-MM-DD),
+`models` (имя, провайдер, статус, ELO, games/wins/losses/draws),
+`tasks` (сводка), `matchups_index` (сводка вердиктов), `elo_history`.
+Файл SHALL коммититься в git для просмотра рейтинга без запуска сервера.
 
 #### Scenario: Структура index.json
 
-- **WHEN** index.json сгенерирован
-- **THEN** он содержит секции: version, updated, models (с ELO и статистикой), tasks (с количеством ответов и вердиктов), matchups_index (сводка), elo_history
+- **WHEN** `index.json` сгенерирован
+- **THEN** он содержит секции: version, updated, models, tasks, matchups_index, elo_history
 
 #### Scenario: Просмотр без сервера
 
-- **WHEN** пользователь открывает index.json в редакторе (без запуска сервера)
+- **WHEN** пользователь открывает `index.json` в редакторе
 - **THEN** видит текущий ELO всех моделей и статистику
 
 ### Requirement: Обновление index.json
 
-index.json обновляется при: записи вердикта, архивации модели, регистрации модели. Обновление = пересчёт ELO из всех вердиктов + обновление сводок.
+`index.json` SHALL пересчитываться при: записи вердикта через веб-UI,
+добавлении модели через веб-UI, ручном запуске `python tools/elo.py`.
+CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переписывать
+`index.json` сами — свежесть восстанавливается лениво: `ensure_index` сервера
+сверяет кэш через `is_index_stale` и пересчитывает при расхождении.
 
 #### Scenario: Запись вердикта обновляет кэш
 
 - **WHEN** через веб-UI записан вердикт
-- **THEN** index.json перезаписывается с обновлённым ELO
-- **AND** updated timestamp обновляется
+- **THEN** `index.json` перезаписывается с обновлённым ELO
+- **AND** поле `updated` обновляется на сегодня
 
-### Requirement: Восстановление кэша
+#### Scenario: Ленивое восстановление после CLI
 
-При запуске сервер проверяет целостность index.json vs файлы. Если index.json устарел (новые файлы в matchups/ или answers/, не отражённые в кэше) — пересчитывает.
+- **WHEN** модель зарегистрирована через CLI и сервер стартует со старым кэшем
+- **THEN** `ensure_index` обнаруживает расхождение набора моделей и пересчитывает кэш
 
-#### Scenario: Устаревший кэш
+### Requirement: Критерий устаревания кэша
 
-- **WHEN** сервер запускается, в matchups/ есть файлы, не отражённые в index.json
-- **THEN** сервер пересчитывает ELO из всех вердиктов
-- **AND** перезаписывает index.json
+`is_index_stale` SHALL считать кэш устаревшим если: `index.json` отсутствует
+или не парсится; число записей `matchups_index` ≠ числу JSON-файлов в
+`matchups/`; множество id моделей в кэше ≠ множеству id в `models.yaml`.
+Содержимое ответов, тексты задач и даты внутри вердиктов НЕ проверяются.
+
+#### Scenario: Новый вердикт делает кэш устаревшим
+
+- **WHEN** в `matchups/` появился файл, не отражённый в `matchups_index`
+- **THEN** `is_index_stale` возвращает True
 
 #### Scenario: Актуальный кэш
 
-- **WHEN** сервер запускается, index.json актуален
+- **WHEN** сервер стартует и все три проверки сошлись
 - **THEN** сервер использует кэш без пересчёта (мгновенный старт)
+
+### Requirement: Ключ задач в сводке (известный дефект)
+
+`collect_tasks_info` SHALL сканировать директории `tasks/` (кроме `_`-префикса)
+и считать ответы из `answers/<task-id>/`, вердикты из `matchups/<task-id>/`.
+Идентификатор задачи извлекается как префикс имени директории до первого `-`
+(`split("-")[0]`), поэтому для `T-001-recurrence-bugs` ключом фактически
+становится `"T"`, а счётчики ответов/вердиктов для T-001 — нулевые.
+Это известный дефект `tools/elo.py:collect_tasks_info`, исправление — отдельной
+задачей; спека фиксирует фактическое поведение.
+
+#### Scenario: Сводка T-001 в MVP
+
+- **WHEN** сгенерирован `index.json` при задаче `T-001-recurrence-bugs`
+- **THEN** секция `tasks` содержит ключ `"T"` с пустыми ответами и нулевыми вердиктами
+- **AND** вердикт `general/001` отражён только в `matchups_index` и `elo_history`
+
+### Requirement: .gitignore
+
+`.gitignore` SHALL исключать: `__pycache__/`, `*.pyc`, окружения, IDE-кэши,
+ОС-мусор. `index.json` MUST NOT игнорироваться (коммитится).
+`leaderboard.html` SHALL игнорироваться (генерируемый экспорт).
+
+#### Scenario: Проверка .gitignore
+
+- **WHEN** выполняется `git status`
+- **THEN** `index.json` виден (не игнорируется)
+- **AND** `__pycache__/` и `leaderboard.html` игнорируются
 
 ### Requirement: Масштаб хранилища
 
-Хранилище рассчитано на: 1–10 задач, 5–30 моделей, 10–500 вердиктов. index.json — до ~50 KB. Ответы — до ~50 KB каждый.
+Хранилище рассчитано на: 1–10 задач, 5–30 моделей, 10–500 вердиктов.
+`index.json` — до ~50 KB; ответы — до ~50 KB каждый. Полный пересчёт при
+500 вердиктах занимает <100ms (один проход, только stdlib).
 
 #### Scenario: Типичный объём
 
 - **WHEN** 3 задачи, 10 моделей, 100 вердиктов
-- **THEN** index.json ~10 KB
-- **AND** answers/ ~30 файлов × 20 KB = ~600 KB
-- **AND** matchups/ ~100 файлов × 200 байт = ~20 KB
-
-### Requirement: .gitignore
-
-В .gitignore исключаются: __pycache__/, *.pyc, .DS_Store, Thumbs.db. index.json НЕ в .gitignore (коммитится).
-
-#### Scenario: Проверка .gitignore
-
-- **WHEN** выполняется git status
-- **THEN** index.json виден (не игнорируется)
-- **AND** __pycache__/ игнорируется
+- **THEN** `index.json` ~10 KB
+- **AND** `answers/` ~30 файлов, `matchups/` ~100 файлов по ~200 байт

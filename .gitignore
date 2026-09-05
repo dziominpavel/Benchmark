@@ -26,3 +26,6 @@ ehthumbs.db
 
 # Logs
 *.log
+
+# Generated (regenerate via tools/generate_html.py)
+leaderboard.html

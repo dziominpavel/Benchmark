@@ -15,42 +15,60 @@
 │                                                              │
 │  ┌─────────────┐   ┌─────────────┐   ┌──────────────┐       │
 │  │  tasks/     │   │  answers/   │   │  matchups/   │       │
-│  │  task.md    │   │  model.md   │   │  NNN.json    │       │
-│  │  (описание) │   │  (ответ)    │   │  (вердикт)   │       │
+│  │  task.md    │   │  modelA.md  │   │  T-NNN/      │       │
+│  │  (вручную   │   │  modelB.md  │   │  general/    │       │
+│  │  из шаблона)│   │  slots.json │   │  NNN.json    │       │
+│  │             │   │ (слот→id)   │   │  state.json  │       │
 │  └──────┬──────┘   └──────┬──────┘   └──────┬───────┘       │
 │         │                 │                  │               │
 │         │     ┌───────────┴──────────┐       │               │
 │         │     │  tools/server.py     │       │               │
 │         │     │  (Flask веб-сервер)  │       │               │
 │         │     │  - leaderboard       │       │               │
+│         │     │  - рекомендации пар  │       │               │
 │         │     │  - форма вердикта    │       │               │
-│         │     │  - рекомендация пар  │       │               │
+│         │     │    (корзина general) │       │               │
+│         │     │  - + добавить модель │       │               │
 │         │     └───────────┬──────────┘       │               │
 │         │                 │                  │               │
-│         │     ┌───────────┴──────────┐       │               │
-│         │     │  tools/elo.py        │◄──────┘               │
+│         │     ┌───────────┴──────────┴───────┘               │
+│         │     │  tools/record_verdict.py │                   │
+│         │     │  (единая точка записи)   │                   │
+│         │     │  - seq + recorded_at     │                   │
+│         │     │  - слот → реальный id    │                   │
+│         │     │  - ELO-снэпшот в вердикт │                   │
+│         │     │  - --void (tombstone)    │                   │
+│         │     └───────────┬──────────────┘                   │
+│         │                 │                                  │
+│         │     ┌───────────┴──────────┐                       │
+│         │     │  tools/elo.py        │                       │
 │         │     │  (ELO-движок)        │                       │
-│         │     │  - пересчёт          │                       │
+│         │     │  - реплей журнала    │                       │
+│         │     │    по seq            │                       │
+│         │     │  - --check (целостн.)│                       │
 │         │     │  - адаптивный K      │                       │
 │         │     └───────────┬──────────┘                       │
 │         │                 │                                  │
 │         │     ┌───────────┴──────────┐                       │
 │         │     │  index.json          │                       │
-│         │     │  (кэш: ELO + сводки) │                       │
+│         │     │  (кэш: ELO + сводки  │                       │
+│         │     │   + matchups_digest) │                       │
 │         │     └──────────────────────┘                       │
 │         │                                                    │
 │  ┌──────┴──────┐   ┌──────────────┐   ┌──────────────┐      │
 │  │  models.yaml│   │  tools/      │   │  tools/      │      │
 │  │  (реестр)   │   │  register_   │   │  archive_    │      │
 │  │  status:    │   │  model.py    │   │  model.py    │      │
-│  │  active/    │   │  (регистр.)  │   │  (архивация) │      │
-│  │  archived   │   │              │   │              │      │
+│  │  active/    │   │  (+ --auto,  │   │  (+--restore)│      │
+│  │  archived   │   │  веб-форма)  │   │              │      │
 │  └─────────────┘   └──────────────┘   └──────────────┘      │
 │                                                              │
 │  ┌─────────────────────────────────────────────────────┐    │
-│  │  Skills (.devin/skills/)                            │    │
-│  │  - benchmark-01-gen-task  (создание задачи)         │    │
-│  │  - benchmark-02-run       (промпт для модели)       │    │
+│  │  Skills (.opencode/skills/, зеркала в .cursor/      │    │
+│  │  и .devin/skills/)                                  │    │
+│  │  - benchmark-run-a      (ответ + slots.json)        │    │
+│  │  - benchmark-run-b      (ответ + slots.json)        │    │
+│  │  - benchmark-judge      (судья → record_verdict.py) │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
@@ -59,66 +77,116 @@
 ## Поток данных
 
 ```
-① СОЗДАНИЕ ЗАДАЧИ
-   @benchmark-01-gen-task → tasks/T-NNN/task.md
+① СОЗДАНИЕ ЗАДАЧИ (вручную)
+   tasks/_TEMPLATE.md → tasks/T-NNN-<slug>/task.md
 
-② ПРОГОН МОДЕЛИ
-   @benchmark-02-run <model> → answers/T-NNN/<model>.md
-   (повтор для каждой модели)
+② ПРОГОН МОДЕЛИ (skills)
+   @benchmark-run-a T-001 → answers/T-001/modelA.md + slots.json (modelA→id)
+   @benchmark-run-b T-001 → answers/T-001/modelB.md + slots.json (modelB→id)
+   (каждый skill сам делает checkout baseline_commit и очистку после,
+    и записывает свой реальный model-id в answers/T-001/slots.json)
 
-③ СУДЬЯ (вручную)
-   Пользователь открывает чат с LLM
-   Даёт: task.md + 2 файла ответов
-   Судья: "A победила 8/10 vs 6/10, потому что..."
+③ СУДЬЯ
+   Путь 1 (skill): @benchmark-judge T-001
+     → читает task.md + оба ответа, оценивает 5 критериев (/50)
+     → python tools/record_verdict.py --task T-001 --winner <a|b|draw>
+     → вердикт получает seq + recorded_at + resolved ids + ELO-снэпшот
+   Путь 2 (вручную): чат с LLM по docs/judge-prompt.md
+     → судья отвечает в чате → пользователь переносит итог в веб-форму
 
-④ ЗАПИСЬ ВЕРДИКТА (веб-UI)
-   localhost:5000 → форма → POST /verdict
-   → matchups/T-NNN/NNN.json
-   → elo.py пересчёт
-   → index.json обновлён
+④ ЗАПИСЬ ВЕРДИКТА
+    Единая точка записи — elo.record_verdict():
+    - skill судьи:  python tools/record_verdict.py --task T-001 --winner b
+                    (слоты разрешаются через answers/T-001/slots.json)
+    - веб-UI:       localhost:5000 → форма → POST /verdict
+                    (task всегда "general", id из формы — уже реальные)
+    - CLI вручную:  python tools/record_verdict.py --task general \
+                    --model-a <id> --model-b <id> --winner a
+    Каждый вызов: seq из matchups/state.json, recorded_at (системное
+    время), ELO-снэпшот (before/after/delta) в файл, пересчёт index.json.
+    Аннулирование: record_verdict.py --void T-001/001 --reason "..."
 
 ⑤ LEADERBOARD
-   localhost:5000 → таблица ELO
-   или: python tools/generate_html.py → leaderboard.html
+    localhost:5000 → таблица ELO + рекомендации + история
+    или: python tools/generate_html.py → leaderboard.html (только чтение)
+    Проверка целостности журнала: python tools/elo.py --check
 ```
 
 ## Хранение
 
 **Source of truth (в git):**
 - `models.yaml` — реестр моделей (id, name, provider, status)
-- `tasks/T-NNN/task.md` — задачи
-- `answers/T-NNN/model.md` — ответы (контент, MD)
-- `matchups/T-NNN/NNN.json` — вердикты (по одному на файл)
+- `tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `tasks/_TEMPLATE.md`)
+- `answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
+  `answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
+- `answers/T-NNN/slots.json` — маппинг слот→реальный model-id
+  (пишут run-скиллы; судья НЕ читает — анонимность)
+- `matchups/T-NNN/NNN.json`, `matchups/general/NNN.json` — журнал вердиктов
+  (append-only; поля: version, seq, task, model_a/b, model_a_id/b_id,
+  winner, date, recorded_at, elo-снэпшот; tombstone — поле void_of)
+- `matchups/state.json` — счётчик seq (next_seq)
 
 **Кэш (генерируется, в git):**
-- `index.json` — ELO + статистика + сводки + история
+- `index.json` — ELO + статистика + сводки + история + matchups_digest
+  (sha256 содержимого журнала — правка любого файла инвалидирует кэш)
 
 **Генерируется (не в git):**
-- `leaderboard.html` — статичный экспорт
+- `leaderboard.html` — статичный экспорт (добавлен в `.gitignore`)
 
 ## ELO-движок
 
 - **Начальный ELO:** 1200 для всех моделей
-- **Адаптивный K-factor:** <10 игр → 40, 10–30 → 32, >30 → 24
-- **Пересчёт:** полный, из всех вердиктов в хронологическом порядке
+- **Адаптивный K-factor:** <10 игр → 40, 10–30 (включительно) → 32, >30 → 24;
+  K применяется индивидуально к каждой модели в паре
+- **Пересчёт:** полный реплей журнала в порядке `seq` (глобальный
+  монотонный номер из `matchups/state.json`); легаси-вердикты без `seq`
+  идут первыми по (`date`, `<task-id>/<NNN>`). Вердикты с неразрешёнными
+  моделями пропускаются с WARNING (не молча); аннулированные (`void_of`)
+  и tombstone-события игр не создают
+- **Снэпшот:** каждый вердикт v2 хранит `elo.{id}.before/after/delta` —
+  рейтинги на момент записи. `python tools/elo.py --check` сверяет их
+  с реплеем: расхождение = история изменена задним числом
+- **Округление:** целое, half-to-even (Python `round`)
 - **Подробности:** [elo-mechanics.md](elo-mechanics.md)
 
 ## Pairing algorithm
 
-Предлагает следующую пару для сравнения. Композитный score:
+Предлагает следующие пары для сравнения (топ-3, глобально по всем моделям,
+без разреза по задачам). Уже сравнённые пары (в любом `matchups/*/`) исключаются.
+Ранжирование двухуровневое (`tools/server.py:get_recommendations`):
+сначала тир калибровки по `min_games` (0 — новая модель — выше всего,
+<3 — калибровка, остальные — ниже), внутри тира — близость ELO:
+
 ```
-score = 0.5 × undersampled + 0.3 × close_elo + 0.2 × few_games
+score = closeness = 1 / (1 + elo_diff / 100)   # близкий ELO — информативно
+сортировка: (tier ↑, score ↓)
 ```
-- `undersampled` — мало голосов у пары (быстрая калибровка)
-- `close_elo` — близкий ELO (информативно для рейтинга)
-- `few_games` — модели с мало игр (недооценены)
+
+Причины в UI — по порогам: 0 игр — «новая модель, ещё не играла»;
+<3 игр — «мало игр, нужна калибровка»; Δ<50 — «близкий рейтинг»;
+Δ<150 — «различается умеренно»; иначе — «разный уровень — проверить апсет».
+
+Ограничения MVP: архивные модели из рекомендаций не исключаются;
+наличие ответов не проверяется.
+
+## Веб-сервер
+
+- `GET /` — таблица (`#`, Модель, ELO, Побед, Поражений, Ничьих, Всего;
+  колонки «Провайдер» на сервере нет), статистика, топ-3 рекомендаций,
+  форма вердикта (кнопки заблокированы пока A ≠ B не выбраны), последние
+  20 записей истории
+- `GET /add`, `POST /add_model` — добавление модели по названию (slug генерируется)
+- `POST /verdict` — валидация (обе модели из реестра, A ≠ B,
+  winner ∈ a/b/draw) → `matchups/general/NNN.json` → пересчёт ELO
+- Порт: 5000, при занятости — следующий свободный (до 10 попыток)
+- `start.bat` — запуск под Windows + открытие `localhost:5000` в браузере
 
 ## Архивация моделей
 
 - `status: archived` в models.yaml
-- ELO замораживается (нет новых вердиктов)
-- История сохраняется
-- В leaderboard: серым, скрыта по умолчанию
+- История сохраняется, старые вердикты участвуют в пересчёте
+- В серверной таблице архивные показываются наравне с active
+  (переключатель «показывать архивные» есть только в `leaderboard.html`)
 - `python tools/archive_model.py <id>` / `--restore <id>`
 
 ## Масштаб
@@ -127,3 +195,8 @@ score = 0.5 × undersampled + 0.3 × close_elo + 0.2 × few_games
 - 5–30 моделей (растут медленно, архивируются)
 - 10–500 вердиктов
 - index.json ~5–50 KB
+
+## Известные дефекты MVP (зафиксированы в спеках, исправляются отдельно)
+
+- Рекомендации и серверная таблица не фильтруют `archived`; сервер не проверяет
+  наличие ответов при записи вердикта
