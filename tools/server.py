@@ -311,16 +311,6 @@ CSS = """
   }
   tbody tr:hover { background: #334155; }
   .rank { color: #64748b; font-weight: 600; }
-  .elo-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.95rem;
-  }
-  .elo-high { background: #064e3b; color: #6ee7b7; }
-  .elo-mid  { background: #78350f; color: #fcd34d; }
-  .elo-low  { background: #7f1d1d; color: #fca5a5; }
   .wld { font-weight: 600; }
   .w { color: #34d399; }
   .l { color: #f87171; }
@@ -627,7 +617,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
           <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
           {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
         </td>
-        <td><span class="elo-badge {{ 'elo-high' if m.elo >= 1300 else ('elo-mid' if m.elo >= 1150 else 'elo-low') }}">{{ m.elo }}</span></td>
+        <td>{{ m.elo }}</td>
         <td class="wld w">{{ m.wins }}</td>
         <td class="wld l">{{ m.losses }}</td>
         <td class="wld d">{{ m.draws }}</td>
@@ -786,7 +776,7 @@ ADD_TEMPLATE = """<!DOCTYPE html>
           {% if status == 'archived' %}<span class="status-pill status-archived">неактивна</span>
           {% else %}<span class="status-pill status-active">активна</span>{% endif %}
         </td>
-        <td><span class="elo-badge {{ 'elo-high' if elo >= 1300 else ('elo-mid' if elo >= 1150 else 'elo-low') }}">{{ elo }}</span></td>
+        <td>{{ elo }}</td>
         <td>{{ games }}</td>
         <td><a href="/edit/{{ mid }}" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">Изменить</a></td>
       </tr>

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-09-06",
-  "matchups_digest": "3c036c2335f6116e8849c91f60294e13d29178b1abb6773829aa902c2b5a6c83",
+  "matchups_digest": "7fc18763156d7e0e7d41f54827245524cfa0a910c0f5dc14a1d64c4a8a328cf6",
   "models": {
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
@@ -27,19 +27,19 @@
       "name": "Cursor Gemini 3.8 Flash High",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 1,
+      "elo": 1200,
+      "games": 2,
       "wins": 1,
-      "losses": 0,
+      "losses": 1,
       "draws": 0
     },
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6 Extra High",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 1,
-      "wins": 1,
+      "elo": 1240,
+      "games": 2,
+      "wins": 2,
       "losses": 0,
       "draws": 0
     },
@@ -291,6 +291,19 @@
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T00:51:58+03:00",
       "status": "applied"
+    },
+    {
+      "id": "general/013",
+      "seq": 13,
+      "task": "general",
+      "model_a": "cursor-gemini-3-8-flash-high",
+      "model_b": "cursor-grok-4-6",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T01:00:24+03:00",
+      "status": "applied"
     }
   ],
   "elo_history": [
@@ -532,6 +545,26 @@
         "before": 1219,
         "after": 1198,
         "delta": -21
+      }
+    },
+    {
+      "matchup": "general/013",
+      "after_matchup": "general/013",
+      "seq": 13,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T01:00:24+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "b",
+      "elo_a": {
+        "before": 1220,
+        "after": 1200,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1240,
+        "delta": 20
       }
     }
   ]

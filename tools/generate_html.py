@@ -51,9 +51,6 @@ HTML = """<!DOCTYPE html>
   .archived { color: #999; font-style: italic; }
   .rank { font-weight: bold; color: #666; }
   .elo { font-weight: bold; font-size: 1.1em; }
-  .elo-high { color: #2e7d32; }
-  .elo-mid { color: #f57f17; }
-  .elo-low { color: #c62828; }
   .note { margin-top: 20px; color: #999; font-size: 0.85em; }
   .history-item { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; gap: 12px; font-size: 0.95em; }
   .history-item:last-child { border-bottom: none; }
@@ -115,7 +112,7 @@ document.addEventListener('DOMContentLoaded', toggleArchived);
 </html>
 """
 
-ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td>{name}</td>\n      <td>{provider}</td>\n      <td class="elo {elo_class}">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
+ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td>{name}</td>\n      <td>{provider}</td>\n      <td class="elo">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
 
 
 def main() -> int:
@@ -137,7 +134,6 @@ def main() -> int:
     for i, m in enumerate(models_sorted, 1):
         elo = m.get("elo", DEFAULT_ELO)
         is_archived = m.get("status", "active") == "archived"
-        elo_class = "elo-high" if elo >= 1300 else ("elo-mid" if elo >= 1150 else "elo-low")
         rows.append(ROW_TEMPLATE
             .replace("{rank}", str(i))
             .replace("{name}", m.get("name", ""))
@@ -149,7 +145,6 @@ def main() -> int:
             .replace("{games}", str(m.get("games", 0)))
             .replace("{is_archived}", "true" if is_archived else "false")
             .replace("{archived_class}", "archived" if is_archived else "")
-            .replace("{elo_class}", elo_class)
         )
 
     # История ELO
