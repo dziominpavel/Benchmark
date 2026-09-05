@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "seq": 6,
+  "seq": 5,
   "task": "general",
   "model_a": "devin-glm-5-3-flash-max",
   "model_b": "devin-swe-1-7-max",

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "seq": 3,
+  "seq": 2,
   "task": "general",
   "model_a": "devin-swe-1-7-max",
   "model_b": "opencode-mimo-v2-5-free",

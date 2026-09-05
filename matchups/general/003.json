@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "seq": 4,
+  "seq": 3,
   "task": "general",
   "model_a": "devin-glm-5-2-high",
   "model_b": "opencode-mimo-v2-5-free",

@@ -1,25 +1,25 @@
 {
   "version": 2,
   "updated": "2026-09-05",
-  "matchups_digest": "1188ee88815155c89f082bd7c8f06eb3112363cc91a77a54066e4ec07f16fe7f",
+  "matchups_digest": "76db73d2335722092d746374037a62da47e8074666c6ebd16e7764b8f59ff6d2",
   "models": {
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
       "provider": "",
       "status": "active",
-      "elo": 1200,
-      "games": 0,
+      "elo": 1180,
+      "games": 1,
       "wins": 0,
-      "losses": 0,
+      "losses": 1,
       "draws": 0
     },
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6",
       "provider": "",
       "status": "active",
-      "elo": 1200,
-      "games": 0,
-      "wins": 0,
+      "elo": 1220,
+      "games": 1,
+      "wins": 1,
       "losses": 0,
       "draws": 0
     },
@@ -98,30 +98,14 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "answers": [
-        "modelA",
-        "modelB"
-      ],
-      "matchups_count": 2
+      "answers": [],
+      "matchups_count": 0
     }
   },
   "matchups_index": [
     {
-      "id": "T-001/001",
-      "seq": 1,
-      "task": "T-001",
-      "model_a": "modelA",
-      "model_b": "modelB",
-      "model_a_id": "",
-      "model_b_id": "",
-      "winner": "b",
-      "date": "2026-09-05",
-      "recorded_at": "2026-09-05T00:00:03+00:00",
-      "status": "voided"
-    },
-    {
       "id": "general/001",
-      "seq": 2,
+      "seq": 1,
       "task": "general",
       "model_a": "devin-glm-5-2-high",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
@@ -134,7 +118,7 @@
     },
     {
       "id": "general/002",
-      "seq": 3,
+      "seq": 2,
       "task": "general",
       "model_a": "devin-swe-1-7-max",
       "model_b": "opencode-mimo-v2-5-free",
@@ -147,7 +131,7 @@
     },
     {
       "id": "general/003",
-      "seq": 4,
+      "seq": 3,
       "task": "general",
       "model_a": "devin-glm-5-2-high",
       "model_b": "opencode-mimo-v2-5-free",
@@ -160,7 +144,7 @@
     },
     {
       "id": "general/004",
-      "seq": 5,
+      "seq": 4,
       "task": "general",
       "model_a": "devin-glm-5-2-high",
       "model_b": "devin-glm-5-3-flash-max",
@@ -173,7 +157,7 @@
     },
     {
       "id": "general/005",
-      "seq": 6,
+      "seq": 5,
       "task": "general",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "devin-swe-1-7-max",
@@ -186,7 +170,7 @@
     },
     {
       "id": "general/006",
-      "seq": 7,
+      "seq": 6,
       "task": "general",
       "model_a": "devin-glm-5-2-high",
       "model_b": "devin-swe-1-7-max",
@@ -198,24 +182,24 @@
       "status": "applied"
     },
     {
-      "id": "T-001/002",
-      "seq": 8,
-      "task": "T-001",
-      "model_a": "",
-      "model_b": "",
-      "model_a_id": "",
-      "model_b_id": "",
-      "winner": "",
+      "id": "general/007",
+      "seq": 7,
+      "task": "general",
+      "model_a": "cursor-composer-2-5",
+      "model_b": "cursor-grok-4-6",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "b",
       "date": "2026-09-05",
-      "recorded_at": "2026-09-05T19:32:13+03:00",
-      "status": "tombstone"
+      "recorded_at": "2026-09-05T22:04:12+03:00",
+      "status": "applied"
     }
   ],
   "elo_history": [
     {
       "matchup": "general/001",
       "after_matchup": "general/001",
-      "seq": 2,
+      "seq": 1,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:04+00:00",
       "model_a_id": "devin-glm-5-2-high",
@@ -235,7 +219,7 @@
     {
       "matchup": "general/002",
       "after_matchup": "general/002",
-      "seq": 3,
+      "seq": 2,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:05+00:00",
       "model_a_id": "devin-swe-1-7-max",
@@ -255,7 +239,7 @@
     {
       "matchup": "general/003",
       "after_matchup": "general/003",
-      "seq": 4,
+      "seq": 3,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:06+00:00",
       "model_a_id": "devin-glm-5-2-high",
@@ -275,7 +259,7 @@
     {
       "matchup": "general/004",
       "after_matchup": "general/004",
-      "seq": 5,
+      "seq": 4,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:07+00:00",
       "model_a_id": "devin-glm-5-2-high",
@@ -295,7 +279,7 @@
     {
       "matchup": "general/005",
       "after_matchup": "general/005",
-      "seq": 6,
+      "seq": 5,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:08+00:00",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -315,7 +299,7 @@
     {
       "matchup": "general/006",
       "after_matchup": "general/006",
-      "seq": 7,
+      "seq": 6,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:09+00:00",
       "model_a_id": "devin-glm-5-2-high",
@@ -330,6 +314,26 @@
         "before": 1200,
         "after": 1219,
         "delta": 19
+      }
+    },
+    {
+      "matchup": "general/007",
+      "after_matchup": "general/007",
+      "seq": 7,
+      "date": "2026-09-05",
+      "recorded_at": "2026-09-05T22:04:12+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "b",
+      "elo_a": {
+        "before": 1200,
+        "after": 1180,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1220,
+        "delta": 20
       }
     }
   ]
