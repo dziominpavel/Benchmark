@@ -28,20 +28,19 @@
 
 ### Requirement: Кэш — index.json
 
-`index.json` SHALL содержать: `version` (=1), `updated` (YYYY-MM-DD),
-`models` (имя, провайдер, статус, ELO, games/wins/losses/draws),
-`tasks` (сводка), `matchups_index` (сводка вердиктов), `elo_history`.
-Файл SHALL коммититься в git для просмотра рейтинга без запуска сервера.
+`index.json` SHALL содержать: `version` (=2), `updated` (YYYY-MM-DD), `matchups_digest` (sha256 содержимого журнала), `models` (имя, провайдер, статус, ELO, games/wins/losses/draws), `tasks` (сводка), `matchups_index` (сводка вердиктов), `elo_history`. `elo_history` SHALL содержать одну запись на матч с полями `matchup`, `seq`, `date`, `recorded_at`, `model_a_id`, `model_b_id`, `winner`, `elo_a` (before/after/delta), `elo_b` (before/after/delta). Файл SHALL коммититься в git для просмотра рейтинга без запуска сервера.
 
 #### Scenario: Структура index.json
 
 - **WHEN** `index.json` сгенерирован
-- **THEN** он содержит секции: version, updated, models, tasks, matchups_index, elo_history
+- **THEN** он содержит секции: `version`, `updated`, `matchups_digest`, `models`, `tasks`, `matchups_index`, `elo_history`
+- **AND** `elo_history[0]` содержит `elo_a` и `elo_b`
 
 #### Scenario: Просмотр без сервера
 
 - **WHEN** пользователь открывает `index.json` в редакторе
 - **THEN** видит текущий ELO всех моделей и статистику
+- **AND** историю матчей в match-centric формате
 
 ### Requirement: Обновление index.json
 
@@ -81,19 +80,13 @@ CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переп�
 
 ### Requirement: Ключ задач в сводке (известный дефект)
 
-`collect_tasks_info` SHALL сканировать директории `tasks/` (кроме `_`-префикса)
-и считать ответы из `answers/<task-id>/`, вердикты из `matchups/<task-id>/`.
-Идентификатор задачи извлекается как префикс имени директории до первого `-`
-(`split("-")[0]`), поэтому для `T-001-recurrence-bugs` ключом фактически
-становится `"T"`, а счётчики ответов/вердиктов для T-001 — нулевые.
-Это известный дефект `tools/elo.py:collect_tasks_info`, исправление — отдельной
-задачей; спека фиксирует фактическое поведение.
+`collect_tasks_info` SHALL сканировать директории `tasks/` (кроме `_`-префикса) и считать ответы из `answers/<task-id>/`, вердикты из `matchups/<task-id>/`. Идентификатор задачи SHALL извлекаться из имени директории как префикс `T-NNN` до первого дефиса, включая номер: `T-001-recurrence-bugs` → `T-001`.
 
 #### Scenario: Сводка T-001 в MVP
 
 - **WHEN** сгенерирован `index.json` при задаче `T-001-recurrence-bugs`
-- **THEN** секция `tasks` содержит ключ `"T"` с пустыми ответами и нулевыми вердиктами
-- **AND** вердикт `general/001` отражён только в `matchups_index` и `elo_history`
+- **THEN** секция `tasks` содержит ключ `"T-001"` с корректными счётчиками ответов и вердиктов
+- **AND** не создаётся ключа `"T"`
 
 ### Requirement: .gitignore
 
@@ -118,3 +111,13 @@ CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переп�
 - **WHEN** 3 задачи, 10 моделей, 100 вердиктов
 - **THEN** `index.json` ~10 KB
 - **AND** `answers/` ~30 файлов, `matchups/` ~100 файлов по ~200 байт
+
+### Requirement: Миграция recorded_at
+
+Код и/или отдельный скрипт SHALL уметь дополнять legacy-вердикты в `matchups/` полем `recorded_at` на основе `date` и `seq` перед пересчётом `index.json`.
+
+#### Scenario: Миграция перед пересчётом
+
+- **WHEN** `tools/elo.py` запущен после миграции
+- **THEN** `index.json` содержит `recorded_at` для всех матчей
+- **AND** `--check` проходит без предупреждений

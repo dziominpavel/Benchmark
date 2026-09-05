@@ -36,6 +36,8 @@ from elo import (
     DEFAULT_ELO, REPO_ROOT,
 )
 
+from render_helpers import format_elo_history
+
 from register_model import parse_existing, format_model
 
 from flask import Flask, request, redirect, url_for, render_template_string
@@ -689,16 +691,12 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   <h2>История</h2>
   {% for item in history %}
   <div class="history-item">
-    <span class="history-model">{{ item.model_name }} vs {{ item.opponent_name }}</span>
-    <span class="history-elo">{{ item.elo_before }} <span class="history-elo-arrow">→</span> {{ item.elo }}</span>
-    {% if item.delta > 0 %}
-    <span class="history-delta-up">+{{ item.delta }}</span>
-    {% elif item.delta < 0 %}
-    <span class="history-delta-down">{{ item.delta }}</span>
-    {% else %}
-    <span class="history-delta-neutral">±0</span>
-    {% endif %}
-    <span class="history-date">{{ item.date }}</span>
+    <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
+    <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">→</span> {{ item.elo_a_after }}</span>
+    <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
+    <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">→</span> {{ item.elo_b_after }}</span>
+    <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
+    <span class="history-date">{{ item.date_str }}</span>
   </div>
   {% endfor %}
 </div>
@@ -898,19 +896,7 @@ def leaderboard():
     # История: последние 20 записей (новые сверху)
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
     raw_history = index_data.get("elo_history", [])
-    history = []
-    for item in reversed(raw_history[-20:]):
-        mid = item.get("model", "")
-        opponent = item.get("opponent", "")
-        history.append({
-            "model_name": name_map.get(mid, mid),
-            "opponent_name": name_map.get(opponent, opponent),
-            "elo_before": item.get("elo_before", DEFAULT_ELO),
-            "elo": item.get("elo", DEFAULT_ELO),
-            "delta": item.get("delta", 0),
-            # recorded_at (с временем) приоритетнее date (только дата)
-            "date": (item.get("recorded_at") or item.get("date", ""))[:19].replace("T", " "),
-        })
+    history = format_elo_history(list(reversed(raw_history[-20:])), name_map)
 
     return render_template_string(
         INDEX_TEMPLATE,

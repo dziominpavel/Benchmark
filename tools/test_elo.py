@@ -70,10 +70,14 @@ def test_elo_history():
     ]
     result = recalculate(matchups, ["A", "B"])
     history = result["elo_history"]
-    assert len(history) == 2, f"1 matchup x 2 models = 2 entries, got {len(history)}"
-    for h in history:
-        assert "model" in h and "elo" in h and "delta" in h and "after_matchup" in h
-        assert "elo_before" in h and "opponent" in h
+    assert len(history) == 1, f"1 matchup = 1 entry, got {len(history)}"
+    h = history[0]
+    assert h["matchup"] == "T-001/001"
+    assert h["model_a_id"] == "A"
+    assert h["model_b_id"] == "B"
+    assert h["winner"] == "a"
+    assert h["elo_a"] == {"before": 1200, "after": 1220, "delta": 20}
+    assert h["elo_b"] == {"before": 1200, "after": 1180, "delta": -20}
     print("2.5 elo_history: OK")
 
 
@@ -128,6 +132,30 @@ def test_unknown_models_warn():
     print("unknown models warning: OK")
 
 
+def test_recorded_at_required():
+    """verify_snapshots требует recorded_at."""
+    from elo import verify_snapshots
+    matchups = [
+        {"task": "T-001", "model_a": "A", "model_b": "B", "winner": "a",
+         "date": "2026-09-05", "seq": 1,
+         "_matchup_id": "T-001/001"},
+    ]
+    problems = verify_snapshots(matchups, ["A", "B"])
+    assert any("recorded_at" in p for p in problems), "Должна быть проблема с recorded_at"
+    print("recorded_at required: OK")
+
+
+def test_collect_tasks_info():
+    """collect_tasks_info корректно извлекает T-001 из имени директории."""
+    from elo import collect_tasks_info
+    # Функция читает реальные директории; проверим, что T-001 существует,
+    # а ключа 'T' нет.
+    info = collect_tasks_info()
+    assert "T-001" in info, f"ожидался T-001, получили {list(info.keys())}"
+    assert "T" not in info, f"не должен быть ключ T, получили {list(info.keys())}"
+    print("collect_tasks_info: OK")
+
+
 def test_snapshot_verification():
     """verify_snapshots детектит подделку записанного снэпшота."""
     from elo import verify_snapshots, matchup_sort_key
@@ -160,5 +188,7 @@ if __name__ == "__main__":
     test_seq_ordering()
     test_void()
     test_unknown_models_warn()
+    test_recorded_at_required()
+    test_collect_tasks_info()
     test_snapshot_verification()
     print("\nALL ELO TESTS PASSED")

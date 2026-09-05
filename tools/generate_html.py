@@ -28,6 +28,9 @@ OUTPUT_PATH = REPO_ROOT / "leaderboard.html"
 
 DEFAULT_ELO = 1200
 
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+from render_helpers import format_elo_history, render_history_html
+
 HTML = """<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -114,8 +117,6 @@ document.addEventListener('DOMContentLoaded', toggleArchived);
 
 ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td>{name}</td>\n      <td>{provider}</td>\n      <td class="elo {elo_class}">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
 
-HISTORY_ITEM_TEMPLATE = '    <div class="history-item">\n      <span class="history-model">{model_name} vs {opponent_name}</span>\n      <span class="history-elo">{elo_before} → {elo}</span>\n      <span class="{delta_class}">{delta}</span>\n      <span class="history-date">{date}</span>\n    </div>'
-
 
 def main() -> int:
     if not INDEX_PATH.exists():
@@ -154,33 +155,9 @@ def main() -> int:
     # История ELO
     name_map = {mid: m.get("name", mid) for mid, m in models.items()}
     raw_history = data.get("elo_history", [])
-    history_items = []
-    for item in reversed(raw_history[-20:]):
-        mid = item.get("model", "")
-        opponent = item.get("opponent", "")
-        elo = item.get("elo", DEFAULT_ELO)
-        elo_before = item.get("elo_before", DEFAULT_ELO)
-        delta = item.get("delta", 0)
-        if delta > 0:
-            delta_str = f"+{delta}"
-            delta_class = "history-delta-up"
-        elif delta < 0:
-            delta_str = str(delta)
-            delta_class = "history-delta-down"
-        else:
-            delta_str = "±0"
-            delta_class = "history-delta-neutral"
-        date = (item.get("recorded_at") or item.get("date", ""))[:19].replace("T", " ")
-        history_items.append(
-            HISTORY_ITEM_TEMPLATE
-            .replace("{model_name}", name_map.get(mid, mid))
-            .replace("{opponent_name}", name_map.get(opponent, opponent))
-            .replace("{elo}", str(elo))
-            .replace("{elo_before}", str(elo_before))
-            .replace("{delta}", delta_str)
-            .replace("{delta_class}", delta_class)
-            .replace("{date}", date)
-        )
+    history_items = render_history_html(
+        format_elo_history(list(reversed(raw_history[-20:])), name_map)
+    )
 
     html = (
         HTML
@@ -188,7 +165,7 @@ def main() -> int:
         .replace("{matchups_count}", str(len(data.get("matchups_index", []))))
         .replace("{updated}", data.get("updated", ""))
         .replace("{rows}", "\n".join(rows))
-        .replace("{history}", "\n".join(history_items) if history_items else '<p style="color:#999;padding:8px 0;">Нет истории</p>')
+        .replace("{history}", history_items if history_items else '<p style="color:#999;padding:8px 0;">Нет истории</p>')
     )
 
     OUTPUT_PATH.write_text(html, encoding="utf-8")

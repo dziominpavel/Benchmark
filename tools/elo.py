@@ -394,7 +394,8 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
 
     Возвращает dict:
       models: {id: {elo, games, wins, losses, draws}}
-      elo_history: [{model, opponent, matchup, elo_before, elo, delta, ...}]
+      elo_history: [{matchup, seq, date, recorded_at, model_a_id, model_b_id,
+                     winner, elo_a, elo_b}, ...]
       warnings: [str]
       applied/voided/tombstone/skipped: списки matchup_id
     """
@@ -464,7 +465,6 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
             stats[a]["draws"] += 1
             stats[b]["draws"] += 1
 
-        result_a = "win" if winner == "a" else "loss" if winner == "b" else "draw"
         common = {
             "matchup": mu_id,
             "after_matchup": mu_id,  # обратная совместимость
@@ -473,14 +473,12 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
             "recorded_at": mu.get("recorded_at", ""),
         }
         history.append({
-            **common, "model": a, "opponent": b, "result": result_a,
-            "elo_before": r_a, "elo": new_a, "delta": new_a - r_a,
-        })
-        history.append({
-            **common, "model": b, "opponent": a, "result": (
-                "loss" if result_a == "win" else "win" if result_a == "loss" else "draw"
-            ),
-            "elo_before": r_b, "elo": new_b, "delta": new_b - r_b,
+            **common,
+            "model_a_id": a,
+            "model_b_id": b,
+            "winner": winner,
+            "elo_a": {"before": r_a, "after": new_a, "delta": new_a - r_a},
+            "elo_b": {"before": r_b, "after": new_b, "delta": new_b - r_b},
         })
         applied.append(mu_id)
 
@@ -520,16 +518,19 @@ def verify_snapshots(matchups: list[dict], model_ids: list[str]) -> list[str]:
             if seq in seen_seq:
                 problems.append(f"{mu_id}: дубликат seq={seq}")
             seen_seq.add(int(seq))
-            dt = mu.get("recorded_at")
-            if dt and prev_dt and dt < prev_dt:
+        else:
+            problems.append(f"{mu_id}: нет seq — легаси/записан вне record_verdict.py")
+
+        dt = mu.get("recorded_at")
+        if not dt:
+            problems.append(f"{mu_id}: отсутствует recorded_at")
+        else:
+            if prev_dt and dt < prev_dt:
                 problems.append(
                     f"{mu_id}: recorded_at '{dt}' раньше предыдущего '{prev_dt}' "
                     f"(нарушен порядок журнала)"
                 )
-            if dt:
-                prev_dt = dt
-        else:
-            problems.append(f"{mu_id}: нет seq — легаси/записан вне record_verdict.py")
+            prev_dt = dt
 
         if mu.get("void_of") or mu_id in voided:
             continue
@@ -764,6 +765,14 @@ def is_index_stale() -> bool:
     yaml_models = {m["id"] for m in load_models_yaml()}
     if indexed_models != yaml_models:
         return True
+
+    # Метаданные моделей (status, name, provider) тоже влияют на UI/рекомендации
+    for m in load_models_yaml():
+        mid = m["id"]
+        info = idx.get("models", {}).get(mid, {})
+        for key in ("name", "provider", "status"):
+            if info.get(key) != m.get(key, ""):
+                return True
 
     return False
 
