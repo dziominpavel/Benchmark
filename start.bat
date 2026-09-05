@@ -1,19 +1,9 @@
 @echo off
-REM start.bat - запуск ELO Benchmark сервера
-REM Открывает http://localhost:5000 в браузере и стартует Flask-сервер
+REM start.bat — запуск ELO Benchmark сервера в фоне
+REM Запускает launch.vbs и сразу закрывается; сервер стартует без видимого окна.
 
 cd /d "%~dp0"
 
-echo === ELO Benchmark ===
-echo Запуск сервера на http://localhost:5000 ...
-echo.
+if not exist logs\ mkdir logs
 
-REM Открываем браузер через 2 секунды (даём серверу стартовать)
-start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
-
-REM Запускаем сервер (блокирует консоль до Ctrl+C)
-python tools/server.py
-
-echo.
-echo Сервер остановлен. Нажмите любую клавишу для выхода.
-pause >nul
+start "" wscript "%~dp0launch.vbs"
