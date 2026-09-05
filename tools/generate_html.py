@@ -39,10 +39,11 @@ HTML = """<!DOCTYPE html>
 <title>ELO Benchmark — Leaderboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 1200px; margin: 0 auto; }
-  h1 { margin-bottom: 10px; color: #1a1a2e; }
-  .stats { color: #666; font-size: 0.9em; margin-bottom: 20px; }
-  .controls { margin-bottom: 20px; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .page { width: 100%; max-width: 1400px; margin: 0 auto; padding: 24px; }
+  h1 { margin-bottom: 24px; color: #1a1a2e; }
+  .stats { color: #666; font-size: 0.9em; margin-bottom: 12px; }
+  .controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
   .controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
   table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; }
@@ -52,17 +53,37 @@ HTML = """<!DOCTYPE html>
   .rank { font-weight: bold; color: #666; }
   .elo { font-weight: bold; font-size: 1.1em; }
 
-  .main-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr); gap: 20px; align-items: start; }
-  .main-column { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-  .right-panel { display: flex; flex-direction: column; gap: 16px; }
+  .content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas: "rating sidebar" "history .";
+    row-gap: 16px;
+    column-gap: 24px;
+    align-items: stretch;
+  }
+  .main-column { display: contents; }
+  .rating-card { grid-area: rating; }
+  .history-details { grid-area: history; }
+  .sidebar {
+    grid-area: sidebar;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+    min-width: 0;
+  }
+  .card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .rating-card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   .note-card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .note-card h2 { font-size: 1.1rem; margin-bottom: 10px; color: #1a1a2e; }
 
   .table-wrap { overflow-x: auto; }
-  .table-wrap table { min-width: 100%; }
+  .table-wrap table { width: 100%; min-width: 0; }
   th, td { white-space: nowrap; }
+  .model-cell, .model-cell .edit-link { white-space: normal; }
+  .model-cell .status-pill { white-space: nowrap; }
   td:first-child, th:first-child { padding-left: 16px; }
   td:last-child, th:last-child { padding-right: 16px; }
-  .note-card h2 { font-size: 1.1rem; margin-bottom: 10px; color: #1a1a2e; }
   .note-card p { margin-bottom: 8px; font-size: 0.9rem; color: #555; }
   .note-card code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
   .note-card a { color: #1a1a2e; text-decoration: none; font-weight: 600; }
@@ -109,64 +130,73 @@ HTML = """<!DOCTYPE html>
   .pagination a.current { background: #1a1a2e; color: white; }
 
   @media (max-width: 900px) {
-    .main-layout { grid-template-columns: 1fr; }
+    .content-grid {
+      grid-template-columns: 1fr;
+      grid-template-areas: "rating" "history" "sidebar";
+    }
+    .page { padding: 16px; }
   }
 </style>
 </head>
 <body>
-<h1>ELO Benchmark — Leaderboard</h1>
+<div class="page">
+  <h1>ELO Benchmark — Leaderboard</h1>
 
-<div class="main-layout">
-  <div class="main-column">
+  <div class="controls">
     <div class="stats">
       Всего моделей: {models_count} · Вердиктов: {matchups_count} · Обновлено: {updated}
     </div>
-    <div class="controls">
-      <label>
-        <input type="checkbox" id="showArchived" onchange="toggleArchived()">
-        Показывать архивные
-      </label>
-    </div>
-    <div class="table-wrap">
-      <table id="leaderboard">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Модель</th>
-            <th>Провайдер</th>
-            <th>ELO</th>
-            <th>W</th>
-            <th>L</th>
-            <th>D</th>
-            <th>Игры</th>
-          </tr>
-        </thead>
-        <tbody>
-{rows}
-        </tbody>
-      </table>
-    </div>
+    <label>
+      <input type="checkbox" id="showArchived" onchange="toggleArchived()">
+      Показывать архивные
+    </label>
   </div>
 
-  <div class="main-column right-panel">
-    <div class="note-card">
-      <h2>Запись вердиктов</h2>
-      <p>Статичный экспорт. Для записи вердиктов и просмотра рекомендаций запустите сервер:</p>
-      <code>python tools/server.py</code>
-      <p style="margin-top:10px;"><a href="http://localhost:5000" target="_blank">Открыть сервер</a></p>
+  <div class="content-grid">
+    <div class="main-column">
+      <div class="rating-card">
+        <div class="table-wrap">
+          <table id="leaderboard">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Модель</th>
+                <th>Провайдер</th>
+                <th>ELO</th>
+                <th>W</th>
+                <th>L</th>
+                <th>D</th>
+                <th>Игры</th>
+              </tr>
+            </thead>
+            <tbody>
+{rows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <details class="history-details">
+        <summary>История <span class="history-count">({history_total})</span></summary>
+        <div class="history-box">
+          <div id="historyPagesContainer">
+            {history_pages_html}
+          </div>
+          {history_pagination_html}
+        </div>
+      </details>
+    </div>
+
+    <div class="sidebar">
+      <div class="note-card">
+        <h2>Запись вердиктов</h2>
+        <p>Статичный экспорт. Для записи вердиктов и просмотра рекомендаций запустите сервер:</p>
+        <code>python tools/server.py</code>
+        <p style="margin-top:10px;"><a href="http://localhost:5000" target="_blank">Открыть сервер</a></p>
+      </div>
     </div>
   </div>
 </div>
-
-<details class="history-details">
-  <summary>История <span class="history-count">({history_total})</span></summary>
-  <div class="history-box">
-    <div id="historyPagesContainer">
-      {history_pages_html}
-    </div>
-    {history_pagination_html}
-  </div>
-</details>
 
 <script>
 function toggleArchived() {
@@ -197,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </html>
 """
 
-ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td>{name}</td>\n      <td>{provider}</td>\n      <td class="elo">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
+ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td class="model-cell">{name}</td>\n      <td>{provider}</td>\n      <td class="elo">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
 
 
 def main() -> int:

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-09-06",
-  "matchups_digest": "ac4cc2dd64bb428be1282678c3111f9ace0d1da67503da075b2e2826caffaab7",
+  "matchups_digest": "9fe5e830d0671095fde3c98db94ce133873c35a20c69431ce571b54e81e817ca",
   "models": {
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
@@ -67,19 +67,19 @@
       "name": "Devin GLM-5.3 Flash Max",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 3,
+      "elo": 1200,
+      "games": 4,
       "wins": 2,
-      "losses": 1,
+      "losses": 2,
       "draws": 0
     },
     "devin-gpt-5-6-sol-max": {
       "name": "Devin GPT-5.6 Sol Max",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 1,
-      "wins": 1,
+      "elo": 1240,
+      "games": 2,
+      "wins": 2,
       "losses": 0,
       "draws": 0
     },
@@ -316,6 +316,19 @@
       "winner": "a",
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T01:12:18+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/015",
+      "seq": 15,
+      "task": "general",
+      "model_a": "devin-glm-5-3-flash-max",
+      "model_b": "devin-gpt-5-6-sol-max",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "devin-gpt-5-6-sol-max",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T01:35:03+03:00",
       "status": "applied"
     }
   ],
@@ -598,6 +611,26 @@
         "before": 1240,
         "after": 1220,
         "delta": -20
+      }
+    },
+    {
+      "matchup": "general/015",
+      "after_matchup": "general/015",
+      "seq": 15,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T01:35:03+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "devin-gpt-5-6-sol-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1220,
+        "after": 1200,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1240,
+        "delta": 20
       }
     }
   ]

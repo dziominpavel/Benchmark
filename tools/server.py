@@ -236,16 +236,19 @@ CSS = """
     font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
     background: #0f172a;
     color: #e2e8f0;
-    padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
     line-height: 1.5;
+  }
+  .page {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
   }
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
   .header h1 {
     font-size: 1.6rem;
@@ -291,7 +294,13 @@ CSS = """
   .stats {
     color: #64748b;
     font-size: 0.85rem;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+  }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
   }
   table {
     width: 100%;
@@ -526,17 +535,27 @@ CSS = """
   .status-archived { background: #475569; color: #cbd5e1; }
   tr.archived td { opacity: 0.6; }
 
-  /* Main 2-column layout */
-  .main-layout {
+  /* Content grid */
+  .content-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
-    gap: 24px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas: "rating sidebar" "history .";
+    row-gap: 16px;
+    column-gap: 24px;
+    align-items: stretch;
   }
-  .main-column { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-  .main-column .card { margin-bottom: 0; }
-  .right-panel { display: flex; flex-direction: column; gap: 20px; }
-  .right-panel .card { margin-bottom: 0; }
+  .main-column { display: contents; }
+  .rating-card { grid-area: rating; }
+  .history-details { grid-area: history; }
+  .sidebar {
+    grid-area: sidebar;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+    min-width: 0;
+  }
+  .sidebar .card { margin-bottom: 0; }
 
   .table-wrap {
     overflow-x: auto;
@@ -544,16 +563,23 @@ CSS = """
     padding: 0 24px;
   }
   .table-wrap table {
-    min-width: 100%;
+    width: 100%;
+    min-width: 0;
   }
   th, td {
     white-space: nowrap;
   }
-  td:first-child, th:first-child {
+  th:first-child, td:first-child {
     padding-left: 24px;
   }
-  td:last-child, th:last-child {
+  th:last-child, td:last-child {
     padding-right: 24px;
+  }
+  .model-cell, .model-cell .edit-link {
+    white-space: normal;
+  }
+  .model-cell .status-pill {
+    white-space: nowrap;
   }
 
   /* Collapsible history */
@@ -614,8 +640,14 @@ CSS = """
 
   /* Responsive */
   @media (max-width: 900px) {
-    .main-layout { grid-template-columns: 1fr; }
-    .right-panel { margin-top: 0; }
+    .content-grid {
+      grid-template-columns: 1fr;
+      grid-template-areas: "rating" "history" "sidebar";
+    }
+    .page { padding: 16px; }
+    .table-wrap { margin: 0 -16px; padding: 0 16px; }
+    th:first-child, td:first-child { padding-left: 16px; }
+    th:last-child, td:last-child { padding-right: 16px; }
   }
 """
 
@@ -631,16 +663,16 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 <style>""" + CSS + """</style>
 </head>
 <body>
-<div class="header">
-  <h1>ELO Benchmark</h1>
-  <a href="/add" class="btn btn-primary">+ Добавить модель</a>
-</div>
+<div class="page">
+  <div class="header">
+    <h1>ELO Benchmark</h1>
+    <a href="/add" class="btn btn-primary">+ Добавить модель</a>
+  </div>
 
-{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
-<div class="main-layout">
-  <div class="main-column">
+  <div class="controls">
     <div class="stats">
       Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
@@ -652,153 +684,158 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
         <option value="inactive" {% if filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
       </select>
     </form>
-    <div class="card">
-      <h2>Рейтинг</h2>
-      {% if models_sorted %}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Модель</th>
-              <th>ELO</th>
-              <th>Побед</th>
-              <th>Поражений</th>
-              <th>Ничьих</th>
-              <th>Всего</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for m in models_sorted %}
-            <tr class="{{ 'archived' if m.status == 'archived' }}">
-              <td class="rank">{{ loop.index }}</td>
-              <td>
-                <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
-                {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
-              </td>
-              <td>{{ m.elo }}</td>
-              <td class="wld w">{{ m.wins }}</td>
-              <td class="wld l">{{ m.losses }}</td>
-              <td class="wld d">{{ m.draws }}</td>
-              <td>{{ m.games }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <div class="empty-state">
-        {% if filter == 'active' %}
-        Нет активных моделей. Переключите фильтр или добавьте новую модель.
-        {% elif filter == 'inactive' %}
-        Нет неактивных (архивных) моделей.
-        {% else %}
-        Нет моделей. Нажмите «+ Добавить модель», чтобы начать.
-        {% endif %}
-      </div>
-      {% endif %}
-    </div>
   </div>
 
-  <div class="main-column right-panel">
-    {% if recommendations %}
-    <div class="card">
-      <div class="rec-header">
-        <h2>Рекомендуемые модели к прогону</h2>
-        {% if recommendations|length > 1 %}
-        <div class="rec-nav">
-          <span class="rec-counter" id="recCounter">1 / {{ recommendations|length }}</span>
-          <button type="button" class="rec-next" onclick="nextRec()" title="Следующая рекомендация">→</button>
+  <div class="content-grid">
+    <div class="main-column">
+      <div class="card rating-card">
+        <h2>Рейтинг</h2>
+        {% if models_sorted %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Модель</th>
+                <th>ELO</th>
+                <th>Побед</th>
+                <th>Поражений</th>
+                <th>Ничьих</th>
+                <th>Всего</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in models_sorted %}
+              <tr class="{{ 'archived' if m.status == 'archived' }}">
+                <td class="rank">{{ loop.index }}</td>
+                <td class="model-cell">
+                  <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                  {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+                </td>
+                <td>{{ m.elo }}</td>
+                <td class="wld w">{{ m.wins }}</td>
+                <td class="wld l">{{ m.losses }}</td>
+                <td class="wld d">{{ m.draws }}</td>
+                <td>{{ m.games }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          {% if filter == 'active' %}
+          Нет активных моделей. Переключите фильтр или добавьте новую модель.
+          {% elif filter == 'inactive' %}
+          Нет неактивных (архивных) моделей.
+          {% else %}
+          Нет моделей. Нажмите «+ Добавить модель», чтобы начать.
+          {% endif %}
         </div>
         {% endif %}
       </div>
-      {% for rec in recommendations %}
-      <div class="rec-item" data-rec-index="{{ loop.index0 }}"{% if not loop.first %} style="display:none;"{% endif %}>
-        <div class="rec-info">
-          <div class="rec-pair">
-            <span class="rec-model">{{ rec.name_a }}</span>
-            <span class="rec-elo">{{ rec.elo_a }}</span>
-            <span class="rec-vs">vs</span>
-            <span class="rec-model">{{ rec.name_b }}</span>
-            <span class="rec-elo">{{ rec.elo_b }}</span>
+
+      {% if history %}
+      <details class="history-details">
+        <summary>История <span style="color:#64748b;font-size:0.85rem;font-weight:400;margin-left:8px;">({{ history_total }})</span></summary>
+        <div class="card">
+          <h2 style="display:none;">История</h2>
+          {% for item in history %}
+          <div class="history-item">
+            <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
+            <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">→</span> {{ item.elo_a_after }}</span>
+            <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
+            <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">→</span> {{ item.elo_b_after }}</span>
+            <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
+            <span class="history-date">{{ item.date_str }}</span>
           </div>
-          <div class="rec-reason">{{ rec.reason }}</div>
+          {% endfor %}
+          {% if history_pages > 1 %}
+          <div class="pagination">
+            {% for p in range(1, history_pages + 1) %}
+            {% if p == history_page %}<span class="current">{{ p }}</span>
+            {% else %}<a href="?filter={{ filter }}&page={{ p }}">{{ p }}</a>{% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
         </div>
-        <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
+      </details>
+      {% endif %}
+    </div>
+
+    <div class="sidebar">
+      {% if recommendations %}
+      <div class="card">
+        <div class="rec-header">
+          <h2>Рекомендуемые модели к прогону</h2>
+          {% if recommendations|length > 1 %}
+          <div class="rec-nav">
+            <span class="rec-counter" id="recCounter">1 / {{ recommendations|length }}</span>
+            <button type="button" class="rec-next" onclick="nextRec()" title="Следующая рекомендация">→</button>
+          </div>
+          {% endif %}
+        </div>
+        {% for rec in recommendations %}
+        <div class="rec-item" data-rec-index="{{ loop.index0 }}"{% if not loop.first %} style="display:none;"{% endif %}>
+          <div class="rec-info">
+            <div class="rec-pair">
+              <span class="rec-model">{{ rec.name_a }}</span>
+              <span class="rec-elo">{{ rec.elo_a }}</span>
+              <span class="rec-vs">vs</span>
+              <span class="rec-model">{{ rec.name_b }}</span>
+              <span class="rec-elo">{{ rec.elo_b }}</span>
+            </div>
+            <div class="rec-reason">{{ rec.reason }}</div>
+          </div>
+          <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
-    {% elif models_count|int >= 2 %}
-    <div class="card" style="background: #1e293b; border-color: #334155;">
-      <h2 style="color: #94a3b8;">Все пары уже прогнаны</h2>
-      <div class="rec-reason" style="color: #64748b;">Все возможные пары моделей уже сравнены. Добавьте новую модель или повторите сравнение.</div>
-    </div>
-    {% endif %}
-    <div class="card">
-      <h2>Записать результат</h2>
-      {% if models_list|length >= 2 %}
-      <form method="POST" action="/verdict" id="verdictForm">
-        <div class="verdict-row">
-          <div class="form-group">
-            <label>Модель A</label>
-            <select name="model_a" id="modelA" onchange="validate()">
-              <option value="">— выбрать —</option>
-              {% for mid, mname in models_list %}
-              <option value="{{ mid }}">{{ mname }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Модель B</label>
-            <select name="model_b" id="modelB" onchange="validate()">
-              <option value="">— выбрать —</option>
-              {% for mid, mname in models_list %}
-              <option value="{{ mid }}">{{ mname }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="verdict-actions">
-          <button type="submit" name="winner" value="a" class="btn btn-win" id="btnA" disabled>Победила A</button>
-          <button type="submit" name="winner" value="b" class="btn btn-lose" id="btnB" disabled>Победила B</button>
-          <button type="submit" name="winner" value="draw" class="btn btn-draw" id="btnDraw" disabled>Ничья</button>
-        </div>
-      </form>
-      {% else %}
-      <div class="empty-state">
-        Нужно минимум 2 модели, чтобы записать результат.
+      {% elif models_count|int >= 2 %}
+      <div class="card" style="background: #1e293b; border-color: #334155;">
+        <h2 style="color: #94a3b8;">Все пары уже прогнаны</h2>
+        <div class="rec-reason" style="color: #64748b;">Все возможные пары моделей уже сравнены. Добавьте новую модель или повторите сравнение.</div>
       </div>
       {% endif %}
+      <div class="card">
+        <h2>Записать результат</h2>
+        {% if models_list|length >= 2 %}
+        <form method="POST" action="/verdict" id="verdictForm">
+          <div class="verdict-row">
+            <div class="form-group">
+              <label>Модель A</label>
+              <select name="model_a" id="modelA" onchange="validate()">
+                <option value="">— выбрать —</option>
+                {% for mid, mname in models_list %}
+                <option value="{{ mid }}">{{ mname }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Модель B</label>
+              <select name="model_b" id="modelB" onchange="validate()">
+                <option value="">— выбрать —</option>
+                {% for mid, mname in models_list %}
+                <option value="{{ mid }}">{{ mname }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="verdict-actions">
+            <button type="submit" name="winner" value="a" class="btn btn-win" id="btnA" disabled>Победила A</button>
+            <button type="submit" name="winner" value="b" class="btn btn-lose" id="btnB" disabled>Победила B</button>
+            <button type="submit" name="winner" value="draw" class="btn btn-draw" id="btnDraw" disabled>Ничья</button>
+          </div>
+        </form>
+        {% else %}
+        <div class="empty-state">
+          Нужно минимум 2 модели, чтобы записать результат.
+        </div>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
-
-{% if history %}
-<details class="history-details">
-  <summary>История <span style="color:#64748b;font-size:0.85rem;font-weight:400;margin-left:8px;">({{ history_total }})</span></summary>
-  <div class="card">
-    <h2 style="display:none;">История</h2>
-    {% for item in history %}
-    <div class="history-item">
-      <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
-      <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">→</span> {{ item.elo_a_after }}</span>
-      <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
-      <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">→</span> {{ item.elo_b_after }}</span>
-      <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
-      <span class="history-date">{{ item.date_str }}</span>
-    </div>
-    {% endfor %}
-    {% if history_pages > 1 %}
-    <div class="pagination">
-      {% for p in range(1, history_pages + 1) %}
-      {% if p == history_page %}<span class="current">{{ p }}</span>
-      {% else %}<a href="?filter={{ filter }}&page={{ p }}">{{ p }}</a>{% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-</details>
-{% endif %}
 
 <script>
 let recIndex = 0;
