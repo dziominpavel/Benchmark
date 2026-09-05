@@ -26,6 +26,7 @@ ehthumbs.db
 
 # Logs
 *.log
+logs/*.pid
 
 # Generated (regenerate via tools/generate_html.py)
 leaderboard.html
