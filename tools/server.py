@@ -708,14 +708,13 @@ CSS = """
   .content-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 380px;
-    grid-template-areas: "rating sidebar" "history .";
+    grid-template-areas: "rating sidebar";
     row-gap: 16px;
     column-gap: 24px;
     align-items: stretch;
   }
   .main-column { display: contents; }
   .rating-card { grid-area: rating; }
-  .history-details { grid-area: history; }
   .sidebar {
     grid-area: sidebar;
     display: flex;
@@ -785,35 +784,7 @@ CSS = """
     white-space: nowrap;
   }
 
-  /* Collapsible history */
-  .history-details summary {
-    list-style: none;
-    cursor: pointer;
-    font-size: 1.15rem;
-    font-weight: 600;
-    color: #f1f5f9;
-    padding: 24px;
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .history-details summary::-webkit-details-marker { display: none; }
-  .history-details summary::after {
-    content: '▼';
-    font-size: 0.8rem;
-    color: #94a3b8;
-    transition: transform 0.2s;
-  }
-  .history-details[open] summary::after { transform: rotate(180deg); }
-  .history-details .card {
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    border-top: none;
-    margin-top: -1px;
-  }
+
   .pagination {
     display: flex;
     justify-content: center;
@@ -845,7 +816,7 @@ CSS = """
   @media (max-width: 900px) {
     .content-grid {
       grid-template-columns: 1fr;
-      grid-template-areas: "rating" "history" "sidebar";
+      grid-template-areas: "rating" "sidebar";
     }
     .page { padding: 16px; }
     .table-wrap { margin: 0 -16px; padding: 0 16px; }
@@ -869,7 +840,10 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 <div class="page">
   <div class="header">
     <h1>ELO Benchmark</h1>
-    <a href="/settings" class="btn btn-primary">Настройки</a>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <a href="/history" class="btn btn-secondary">История</a>
+      <a href="/settings" class="btn btn-primary">Настройки</a>
+    </div>
   </div>
 
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
@@ -940,32 +914,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
         {% endif %}
       </div>
 
-      {% if history %}
-      <details class="history-details">
-        <summary>История <span style="color:#64748b;font-size:0.85rem;font-weight:400;margin-left:8px;">({{ history_total }})</span></summary>
-        <div class="card">
-          <h2 style="display:none;">История</h2>
-          {% for item in history %}
-          <div class="history-item">
-            <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
-            <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">→</span> {{ item.elo_a_after }}</span>
-            <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
-            <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">→</span> {{ item.elo_b_after }}</span>
-            <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
-            <span class="history-date">{{ item.date_str }}</span>
-          </div>
-          {% endfor %}
-          {% if history_pages > 1 %}
-          <div class="pagination">
-            {% for p in range(1, history_pages + 1) %}
-            {% if p == history_page %}<span class="current">{{ p }}</span>
-            {% else %}<a href="?filter={{ filter }}&page={{ p }}">{{ p }}</a>{% endif %}
-            {% endfor %}
-          </div>
-          {% endif %}
-        </div>
-      </details>
-      {% endif %}
+
     </div>
 
     <div class="sidebar">
@@ -1079,6 +1028,73 @@ function usePair(a, b) {
   validate();
 }
 </script>
+</body>
+</html>
+"""
+
+
+# ─── HTML: History page ─────────────────────────────────────────────
+
+HISTORY_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>История — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+  <div class="header">
+    <h1>История ELO</h1>
+  </div>
+
+  <div class="controls">
+    <div class="stats">
+      Всего записей: {{ history_total }}{% if model %} · Фильтр: {{ model_name }}{% endif %}
+    </div>
+    <form method="GET" action="/history" class="filter-bar">
+      <label for="model">Модель</label>
+      <select name="model" id="model" onchange="this.form.submit()">
+        {% for m in models_dropdown %}
+        <option value="{{ m.id }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
+        {% endfor %}
+      </select>
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
+        Включать неактивные
+      </label>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="display:none;">История</h2>
+    {% if history %}
+    {% for item in history %}
+    <div class="history-item">
+      <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
+      <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span>
+      <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
+      <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
+      <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
+      <span class="history-date">{{ item.date_str }}</span>
+    </div>
+    {% endfor %}
+    {% if history_pages > 1 %}
+    <div class="pagination">
+      {% for p in range(1, history_pages + 1) %}
+      {% if p == history_page %}<span class="current">{{ p }}</span>
+      {% else %}<a href="?page={{ p }}{% if model %}&model={{ model }}{% endif %}{% if include_inactive %}&include_inactive=1{% endif %}">{{ p }}</a>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">Нет истории</div>
+    {% endif %}
+  </div>
+</div>
 </body>
 </html>
 """
@@ -1410,6 +1426,72 @@ document.querySelectorAll('input[name="active"]').forEach((cb) => {
 # ─── Routes ─────────────────────────────────────────────────────────
 
 
+@app.route("/history")
+def history_page():
+    index_data = ensure_index()
+
+    models = index_data.get("models", {})
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+
+    model_id = request.args.get("model", "").strip()
+    include_inactive = request.args.get("include_inactive", "") == "1"
+
+    # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе
+    all_models = sorted(models.values(), key=lambda m: m.get("name", "").lower())
+    dropdown = [{"id": "", "name": "Все", "archived": False, "selected": not model_id}]
+    for m in all_models:
+        mid = m.get("id", "")
+        status = m.get("status", "active")
+        archived = status == "archived"
+        if not include_inactive and archived and mid != model_id:
+            continue
+        dropdown.append({
+            "id": mid,
+            "name": m.get("name", mid),
+            "archived": archived,
+            "selected": mid == model_id,
+        })
+
+    name_map = {mid: info.get("name", mid) for mid, info in models.items()}
+    raw_history = list(reversed(index_data.get("elo_history", [])))
+
+    if model_id:
+        raw_history = [
+            h for h in raw_history
+            if h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
+        ]
+
+    # Пагинация по 20 записей
+    page_size = 20
+    total_history = len(raw_history)
+    history_pages = (total_history + page_size - 1) // page_size if total_history else 1
+    history_page_num = request.args.get("page", "1").strip()
+    try:
+        history_page_num = int(history_page_num)
+    except ValueError:
+        history_page_num = 1
+    history_page_num = max(1, min(history_page_num, history_pages))
+    start = (history_page_num - 1) * page_size
+    end = start + page_size
+    history = format_elo_history(raw_history[start:end], name_map)
+
+    model_name = name_map.get(model_id, model_id) if model_id else ""
+
+    return render_template_string(
+        HISTORY_TEMPLATE,
+        history=history,
+        history_page=history_page_num,
+        history_pages=history_pages,
+        history_total=total_history,
+        models_dropdown=dropdown,
+        model=model_id,
+        model_name=model_name,
+        include_inactive=include_inactive,
+    )
+
+
 @app.route("/")
 def leaderboard():
     index_data = ensure_index()
@@ -1464,22 +1546,6 @@ def leaderboard():
             f"(закрыто {coverage['filled']} из {coverage['total']})"
         )
 
-    # История: пагинация по 20 записей, новые сверху
-    name_map = {mid: info.get("name", mid) for mid, info in models.items()}
-    raw_history = list(reversed(index_data.get("elo_history", [])))
-    history_page = request.args.get("page", "1").strip()
-    try:
-        history_page = int(history_page)
-    except ValueError:
-        history_page = 1
-    page_size = 20
-    total_history = len(raw_history)
-    history_pages = (total_history + page_size - 1) // page_size if total_history else 1
-    history_page = max(1, min(history_page, history_pages))
-    start = (history_page - 1) * page_size
-    end = start + page_size
-    history = format_elo_history(raw_history[start:end], name_map)
-
     return render_template_string(
         INDEX_TEMPLATE,
         models_sorted=models_sorted,
@@ -1492,10 +1558,6 @@ def leaderboard():
         current_task=current_task,
         task_options=task_options,
         progress_label=progress_label,
-        history=history,
-        history_page=history_page,
-        history_pages=history_pages,
-        history_total=total_history,
         filter=filter_mode,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),

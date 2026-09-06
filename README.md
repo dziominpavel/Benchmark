@@ -29,7 +29,7 @@
                           → только выбор победителя
 ④ Записать вердикт        координатор: веб-UI localhost:5000 или record_verdict.py
                           с явным --task T-NNN и --model-a/--model-b → matchups/T-NNN/NNN.json
-⑤ Leaderboard             веб-UI (localhost:5000) или leaderboard.html
+⑤ Leaderboard             веб-UI (localhost:5000)
 ```
 
 Подробная инструкция: **[docs/workflow-guide.md](docs/workflow-guide.md)**
@@ -55,7 +55,6 @@ Benchmark/
 ├── models.yaml            # Реестр моделей (status: active/archived)
 ├── judges.yaml            # Резерв пула судей (пока пуст, судейство — skill/вручную)
 ├── index.json             # Кэш ELO + сводки (генерируется tools/elo.py, коммитится)
-├── leaderboard.html       # Статичный экспорт (генерируется, в git не коммитится)
 ├── start.bat              # Запуск сервера в Windows (открывает localhost:5000)
 │
 ├── tasks/
@@ -83,7 +82,6 @@ Benchmark/
 │   ├── elo.py             # ELO-движок (пересчёт из matchups → index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
 │   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
-│   ├── generate_html.py   # Статичный leaderboard.html
 │   ├── register_model.py  # Регистрация модели (в т.ч. --auto для саморегистрации)
 │   ├── register_task.py   # Регистрация задачи T-NNN
 │   ├── archive_model.py   # Архивация/разархивация модели (--restore)
@@ -103,10 +101,6 @@ Benchmark/
 python tools/server.py
 # → http://localhost:5000 (при занятом порте — следующий свободный, см. вывод в консоли)
 # Windows: start.bat (открывает браузер на localhost:5000)
-
-# Сгенерировать статичный HTML (без сервера, только чтение)
-python tools/generate_html.py
-# → leaderboard.html
 
 # Пересчитать ELO вручную / проверить свежесть кэша
 python tools/elo.py

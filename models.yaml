@@ -83,7 +83,7 @@ models:
     name: "Devin Kimi K3 Max"
     provider: 
     version: 
-    status: archived
+    status: active
   - id: devin-swe-1-7-max
     name: "Devin SWE-1.7 Max"
     provider: 

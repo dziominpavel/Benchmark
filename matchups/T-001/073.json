@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 73,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "cursor-grok-4-6-low",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "cursor-grok-4-6-low",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T15:38:28+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1312,
+      "after": 1325,
+      "delta": 13
+    },
+    "cursor-grok-4-6-low": {
+      "before": 1179,
+      "after": 1169,
+      "delta": -10
+    }
+  }
+}

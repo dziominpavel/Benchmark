@@ -2,8 +2,7 @@
 
 ## Purpose
 Гибридное хранение MVP: файлы — source of truth (коммитятся в git),
-`index.json` — генерируемый кэш для просмотра рейтинга без сервера,
-`leaderboard.html` — генерируемый статичный экспорт (в git не коммитится).
+`index.json` — генерируемый кэш для просмотра рейтинга без сервера.
 
 ## Requirements
 
@@ -90,14 +89,16 @@ CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переп�
 ### Requirement: .gitignore
 
 `.gitignore` SHALL исключать: `__pycache__/`, `*.pyc`, окружения, IDE-кэши,
-ОС-мусор. `index.json` MUST NOT игнорироваться (коммитится).
-`leaderboard.html` SHALL игнорироваться (генерируемый экспорт).
+ОС-мусор. `index.json` MUST NOT игнорироваться (коммитится). Статичный
+`leaderboard.html` более не генерируется, поэтому `.gitignore` не SHALL
+содержать специальных правил для него.
 
 #### Scenario: Проверка .gitignore
 
 - **WHEN** выполняется `git status`
 - **THEN** `index.json` виден (не игнорируется)
-- **AND** `__pycache__/` и `leaderboard.html` игнорируются
+- **AND** `__pycache__/` игнорируется
+- **AND** `leaderboard.html` не упоминается в `.gitignore`
 
 ### Requirement: Масштаб хранилища
 

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 72,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6-low",
+  "model_b": "devin-gpt-5-6-sol-max",
+  "model_a_id": "cursor-grok-4-6-low",
+  "model_b_id": "devin-gpt-5-6-sol-max",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T15:35:26+03:00",
+  "elo": {
+    "cursor-grok-4-6-low": {
+      "before": 1191,
+      "after": 1179,
+      "delta": -12
+    },
+    "devin-gpt-5-6-sol-max": {
+      "before": 1291,
+      "after": 1305,
+      "delta": 14
+    }
+  }
+}

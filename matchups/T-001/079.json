@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 79,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "opencode-mimo-v2-5-free",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "opencode-mimo-v2-5-free",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T16:12:56+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1253,
+      "after": 1261,
+      "delta": 8
+    },
+    "opencode-mimo-v2-5-free": {
+      "before": 1064,
+      "after": 1054,
+      "delta": -10
+    }
+  }
+}

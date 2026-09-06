@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 81,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "devin-gpt-5-6-sol-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "devin-gpt-5-6-sol-max",
+  "winner": "b",
+  "date": "2026-09-07",
+  "recorded_at": "2026-09-07T01:10:01+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1096,
+      "after": 1089,
+      "delta": -7
+    },
+    "devin-gpt-5-6-sol-max": {
+      "before": 1305,
+      "after": 1312,
+      "delta": 7
+    }
+  }
+}

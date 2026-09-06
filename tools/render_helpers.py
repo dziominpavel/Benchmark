@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """render_helpers.py — общие helpers для рендеринга leaderboard и истории.
 
-Используются tools/server.py и tools/generate_html.py.
+Используются tools/server.py.
 """
 
 from __future__ import annotations
@@ -86,23 +86,3 @@ def format_elo_history(history: list[dict], name_map: dict) -> list[dict]:
             "date_str": date_str,
         })
     return items
-
-
-def render_history_html(items: list[dict]) -> str:
-    """Рендерит историю в HTML-строку для generate_html.py."""
-    if not items:
-        return '<p style="color:#999;padding:8px 0;">Нет истории</p>'
-
-    lines = []
-    for item in items:
-        lines.append(
-            '    <div class="history-item">\n'
-            f'      <span class="history-model">{item["model_a_name"]} vs {item["model_b_name"]}</span>\n'
-            f'      <span class="history-elo">{item["elo_a_before"]} → {item["elo_a_after"]}</span>\n'
-            f'      <span class="{item["elo_a_delta_class"]}">{item["elo_a_delta_str"]}</span>\n'
-            f'      <span class="history-elo">{item["elo_b_before"]} → {item["elo_b_after"]}</span>\n'
-            f'      <span class="{item["elo_b_delta_class"]}">{item["elo_b_delta_str"]}</span>\n'
-            f'      <span class="history-date">{item["date_str"]}</span>\n'
-            '    </div>'
-        )
-    return "\n".join(lines)
