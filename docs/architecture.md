@@ -16,8 +16,8 @@
 │  ┌─────────────┐   ┌─────────────┐   ┌──────────────┐       │
 │  │  tasks/     │   │  answers/   │   │  matchups/   │       │
 │  │  task.md    │   │  modelA.md  │   │  T-NNN/      │       │
-│  │  (вручную   │   │  modelB.md  │   │  general/    │       │
-│  │  из шаблона)│   │             │   │  NNN.json    │       │
+│  │  (вручную   │   │  modelB.md  │   │  NNN.json    │       │
+│  │  из шаблона)│   │             │   │              │       │
 │  │             │   │             │   │  state.json  │       │
 │  └──────┬──────┘   └──────┬──────┘   └──────┬───────┘       │
 │         │                 │                  │               │
@@ -27,7 +27,7 @@
 │         │     │  - leaderboard       │       │               │
 │         │     │  - рекомендации пар  │       │               │
 │         │     │  - форма вердикта    │       │               │
-│         │     │    (корзина general) │       │               │
+│         │     │    (выбор таски)     │       │               │
 │         │     │  - + добавить модель │       │               │
 │         │     └───────────┬──────────┘       │               │
 │         │                 │                  │               │
@@ -98,8 +98,8 @@
     - skill путь:   python tools/record_verdict.py --task T-001 \
                     --model-a <id> --model-b <id> --winner b
     - веб-UI:       localhost:5000 → форма → POST /verdict
-                    (task всегда "general", id из формы — уже реальные)
-    - CLI вручную:  python tools/record_verdict.py --task general \
+                    (task из выпадающего списка активных тасок)
+    - CLI вручную:  python tools/record_verdict.py --task T-001 \
                     --model-a <id> --model-b <id> --winner a
     Каждый вызов: seq из matchups/state.json, recorded_at (системное
     время), ELO-снэпшот (before/after/delta) в файл, пересчёт index.json.
@@ -118,7 +118,7 @@
 - `tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `tasks/_TEMPLATE.md`)
 - `answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
   `answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
-- `matchups/T-NNN/NNN.json`, `matchups/general/NNN.json` — журнал вердиктов
+- `matchups/T-NNN/NNN.json` — журнал вердиктов
   (append-only; поля: version, seq, task, model_a/b, model_a_id/b_id,
   winner, date, recorded_at, elo-снэпшот; tombstone — поле void_of)
 - `matchups/state.json` — счётчик seq (next_seq)
@@ -173,8 +173,8 @@ score = closeness = 1 / (1 + elo_diff / 100)   # близкий ELO — инфо
   форма вердикта (кнопки заблокированы пока A ≠ B не выбраны), последние
   20 записей истории
 - `GET /add`, `POST /add_model` — добавление модели по названию (slug генерируется)
-- `POST /verdict` — валидация (обе модели из реестра, A ≠ B,
-  winner ∈ a/b/draw) → `matchups/general/NNN.json` → пересчёт ELO
+- `POST /verdict` — валидация (обе модели из реестра, A ≠ B, task —
+  активная таска T-NNN, winner ∈ a/b/draw) → `matchups/T-NNN/NNN.json` → пересчёт ELO
 - Порт: 5000, при занятости — следующий свободный (до 10 попыток)
 - `start.bat` — запуск под Windows + открытие `localhost:5000` в браузере
 

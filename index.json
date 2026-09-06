@@ -158,10 +158,7 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "answers": [
-        "modelA",
-        "modelB"
-      ],
+      "answers": [],
       "matchups_count": 82
     }
   },

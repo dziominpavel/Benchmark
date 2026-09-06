@@ -6,8 +6,8 @@
 > Это ручной путь судейства. Автоматический путь — skill `@benchmark-judge T-NNN`,
 > который применяет те же 5 критериев и выдаёт победителя (`a` | `b` | `draw`).
 > Запись результата и пересчёт ELO выполняет координатор через веб-форму
-> на localhost:5000 (корзина `general`) или `record_verdict.py --task general
-> --model-a <id> --model-b <id> --winner <a|b|draw>`.
+> на localhost:5000 (с выбором активной таски) или
+> `record_verdict.py --task T-NNN --model-a <id> --model-b <id> --winner <a|b|draw>`.
 
 ---
 
