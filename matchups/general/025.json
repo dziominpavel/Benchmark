@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 25,
+  "task": "general",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T03:01:43+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1180,
+      "after": 1160,
+      "delta": -20
+    },
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1180,
+      "after": 1200,
+      "delta": 20
+    }
+  }
+}

@@ -29,7 +29,7 @@ OUTPUT_PATH = REPO_ROOT / "leaderboard.html"
 DEFAULT_ELO = 1200
 
 sys.path.insert(0, str(REPO_ROOT / "tools"))
-from render_helpers import format_elo_history, render_history_html
+from render_helpers import format_elo_history, render_history_html, format_winrate
 
 HTML = """<!DOCTYPE html>
 <html lang="ru">
@@ -167,6 +167,7 @@ HTML = """<!DOCTYPE html>
                 <th>L</th>
                 <th>D</th>
                 <th>Игры</th>
+                <th>Винрейт, %</th>
               </tr>
             </thead>
             <tbody>
@@ -227,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </html>
 """
 
-ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td class="model-cell">{name}</td>\n      <td>{provider}</td>\n      <td class="elo">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n    </tr>'
+ROW_TEMPLATE = '    <tr class="{archived_class}" data-archived="{is_archived}">\n      <td class="rank">{rank}</td>\n      <td class="model-cell">{name}</td>\n      <td>{provider}</td>\n      <td class="elo">{elo}</td>\n      <td>{wins}</td>\n      <td>{losses}</td>\n      <td>{draws}</td>\n      <td>{games}</td>\n      <td>{winrate}</td>\n    </tr>'
 
 
 def main() -> int:
@@ -249,6 +250,7 @@ def main() -> int:
     for i, m in enumerate(models_sorted, 1):
         elo = m.get("elo", DEFAULT_ELO)
         is_archived = m.get("status", "active") == "archived"
+        winrate = format_winrate(m.get("wins", 0), m.get("games", 0))
         rows.append(ROW_TEMPLATE
             .replace("{rank}", str(i))
             .replace("{name}", m.get("name", ""))
@@ -258,6 +260,7 @@ def main() -> int:
             .replace("{losses}", str(m.get("losses", 0)))
             .replace("{draws}", str(m.get("draws", 0)))
             .replace("{games}", str(m.get("games", 0)))
+            .replace("{winrate}", winrate)
             .replace("{is_archived}", "true" if is_archived else "false")
             .replace("{archived_class}", "archived" if is_archived else "")
         )

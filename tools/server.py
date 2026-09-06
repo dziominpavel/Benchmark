@@ -36,7 +36,7 @@ from elo import (
     DEFAULT_ELO, REPO_ROOT,
 )
 
-from render_helpers import format_elo_history
+from render_helpers import format_elo_history, format_winrate
 
 from register_model import parse_existing, format_model
 
@@ -703,6 +703,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 <th>Поражений</th>
                 <th>Ничьих</th>
                 <th>Всего</th>
+                <th>Винрейт, %</th>
               </tr>
             </thead>
             <tbody>
@@ -718,6 +719,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 <td class="wld l">{{ m.losses }}</td>
                 <td class="wld d">{{ m.draws }}</td>
                 <td>{{ m.games }}</td>
+                <td class="winrate">{{ format_winrate(m.wins, m.games) }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -1060,6 +1062,7 @@ def leaderboard():
         filter=filter_mode,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        format_winrate=format_winrate,
     )
 
 

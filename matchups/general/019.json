@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 19,
+  "task": "general",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T02:29:15+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1221,
+      "after": 1241,
+      "delta": 20
+    },
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1220,
+      "after": 1200,
+      "delta": -20
+    }
+  }
+}

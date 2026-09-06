@@ -26,6 +26,16 @@ def format_recorded_at(recorded_at: str, fallback_date: str = "") -> str:
     return ts[:19].replace("T", " ")
 
 
+def format_winrate(wins: int, games: int) -> str:
+    """Возвращает winrate в процентах с одним знаком после запятой.
+
+    При games == 0 возвращает '—'.
+    """
+    if games == 0:
+        return "—"
+    return f"{(wins / games) * 100:.1f}%"
+
+
 def format_elo_history(history: list[dict], name_map: dict) -> list[dict]:
     """Преобразует match-centric elo_history в форму для рендеринга.
 
