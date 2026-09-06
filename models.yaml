@@ -64,6 +64,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: devin-gpt-6-astra-max
+    name: "Devin GPT-6 Astra Max"
+    provider: 
+    version: 
+    status: active
   - id: devin-kimi-k3-max
     name: "Devin Kimi K3 Max"
     provider: 
