@@ -178,6 +178,97 @@ def test_snapshot_verification():
     print("snapshot verification: OK")
 
 
+def test_settings_roundtrip():
+    """settings: запись и чтение возвращают те же значения; дефолты при отсутствии."""
+    import tempfile
+    from elo import load_settings, save_settings
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "settings.yaml"
+        # Отсутствующий файл → дефолты
+        s = load_settings(path)
+        assert s == {"current_task": "general", "tasks": {}}, s
+
+        save_settings({"current_task": "T-001",
+                       "tasks": {"general": "active", "T-001": "active",
+                                 "typo": "inactive"}}, path)
+        s2 = load_settings(path)
+        assert s2["current_task"] == "T-001", s2
+        assert s2["tasks"]["typo"] == "inactive", s2
+        assert s2["tasks"]["general"] == "active", s2
+        # Без BOM
+        assert not path.read_bytes().startswith(b"\xef\xbb\xbf")
+    print("settings roundtrip: OK")
+
+
+def test_known_tasks():
+    """known_tasks объединяет matchups/, tasks/ и settings.tasks."""
+    from elo import known_tasks
+    tasks = known_tasks({"current_task": "general", "tasks": {"extra-1": "active"}})
+    assert "general" in tasks, f"ожидался general, получили {tasks}"
+    assert "T-001" in tasks, f"ожидался T-001, получили {tasks}"
+    assert "extra-1" in tasks, f"ожидался extra-1 из settings, получили {tasks}"
+    print("known_tasks: OK")
+
+
+def test_active_and_current_task():
+    """Таска без записи активна; неактивный current_task → general."""
+    from elo import active_tasks, is_task_active, resolve_current_task, known_tasks
+    s = {"current_task": "T-001",
+         "tasks": {"general": "active", "T-001": "inactive"}}
+    assert not is_task_active(s, "T-001")
+    assert is_task_active(s, "never-seen")  # без записи → активна
+    assert "T-001" in known_tasks(s)  # неактивная остаётся известной
+    assert "T-001" not in active_tasks(s)
+    assert resolve_current_task(s) == "general"  # неактивный → fallback
+    s2 = {"current_task": "general", "tasks": {}}
+    assert resolve_current_task(s2) == "general"
+    print("active/current task: OK")
+
+
+def test_get_coverage():
+    """Ячейки (таск × пара активных): повторы не засчитываются, кап 100%."""
+    from elo import get_coverage
+    models = [{"id": "A", "status": "active"}, {"id": "B", "status": "active"},
+              {"id": "C", "status": "active"}, {"id": "D", "status": "archived"}]
+    settings = {"current_task": "general",
+                "tasks": {"general": "active", "T-001": "active",
+                          "typo": "inactive"}}
+    mus = [
+        # A-B: 3 игры в general → 1 ячейка; 1 игра в T-001 → ещё 1
+        {"task": "general", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "general/001"},
+        {"task": "general", "model_a_id": "B", "model_b_id": "A", "winner": "b", "_matchup_id": "general/002"},
+        {"task": "general", "model_a_id": "A", "model_b_id": "B", "winner": "draw", "_matchup_id": "general/003"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-001/001"},
+        # A-C только в general; в неактивной таске — не считается
+        {"task": "general", "model_a_id": "A", "model_b_id": "C", "winner": "a", "_matchup_id": "general/004"},
+        {"task": "typo", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "typo/001"},
+        # С архивной моделью D — не считается
+        {"task": "general", "model_a_id": "A", "model_b_id": "D", "winner": "a", "_matchup_id": "general/005"},
+        # Аннулированный вердикт — не считается
+        {"task": "general", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "general/006"},
+        {"task": "general", "void_of": "general/006", "_matchup_id": "general/007"},
+    ]
+    cov = get_coverage(settings, mus, models)
+    # Активных моделей 3 → C(3,2)=3 пары; активных тасков 2 → total=6
+    # Ячейки: (general,A-B), (T-001,A-B), (general,A-C) = 3
+    assert cov["total"] == 6, cov
+    assert cov["filled"] == 3, cov
+    assert abs(cov["percent"] - 50.0) < 0.01, cov
+
+    # Нет активных тасков → percent=None (general и T-001 из known_tasks
+    # помечены неактивными явно — без записи таска считалась бы активной)
+    cov_none = get_coverage({"current_task": "general",
+                             "tasks": {"general": "inactive",
+                                       "T-001": "inactive"}}, mus, models)
+    assert cov_none["percent"] is None, cov_none
+
+    # <2 активных моделей → percent=None
+    cov_one = get_coverage(settings, mus, [{"id": "A", "status": "active"}])
+    assert cov_one["percent"] is None, cov_one
+    print("get_coverage: OK")
+
+
 if __name__ == "__main__":
     test_expected_score()
     test_k_factor()
@@ -191,4 +282,8 @@ if __name__ == "__main__":
     test_recorded_at_required()
     test_collect_tasks_info()
     test_snapshot_verification()
+    test_settings_roundtrip()
+    test_known_tasks()
+    test_active_and_current_task()
+    test_get_coverage()
     print("\nALL ELO TESTS PASSED")

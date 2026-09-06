@@ -43,8 +43,10 @@ if hasattr(sys.stderr, "reconfigure"):
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MATCHUPS_DIR = REPO_ROOT / "matchups"
 ANSWERS_DIR = REPO_ROOT / "answers"
+TASKS_DIR = REPO_ROOT / "tasks"
 INDEX_PATH = REPO_ROOT / "index.json"
 STATE_PATH = MATCHUPS_DIR / "state.json"
+SETTINGS_PATH = REPO_ROOT / "settings.yaml"
 
 DEFAULT_ELO = 1200
 VERDICT_VERSION = 2
@@ -717,6 +719,150 @@ def generate_index() -> dict:
 def save_index(data: dict) -> None:
     """Записывает index.json (атомарно)."""
     _atomic_write_json(INDEX_PATH, data)
+
+
+# ─── Settings & coverage ────────────────────────────────────────────
+
+
+def _unquote(val: str) -> str:
+    """Снимает кавычки с простого YAML-скаляра."""
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+        return val[1:-1]
+    return val
+
+
+def load_settings(path: Path = SETTINGS_PATH) -> dict:
+    """Читает settings.yaml → {"current_task": str, "tasks": {id: status}}.
+
+    Файл может отсутствовать или быть частичным — применяются дефолты
+    (`current_task: general`, пустой реестр тасков). Таска без записи
+    в реестре считается активной (см. is_task_active).
+    """
+    settings: dict = {"current_task": "general", "tasks": {}}
+    if not path.exists():
+        return settings
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return settings
+
+    in_tasks = False
+    for raw in lines:
+        if not raw.strip() or raw.strip().startswith("#"):
+            continue
+        indented = raw[:1] in (" ", "\t")
+        key, sep, val = raw.strip().partition(":")
+        if not sep:
+            continue
+        key, val = key.strip(), _unquote(val)
+        if not indented:
+            in_tasks = key == "tasks"
+            if key == "current_task" and val:
+                settings["current_task"] = val
+        elif in_tasks and val:
+            settings["tasks"][key] = val
+    return settings
+
+
+def save_settings(settings: dict, path: Path = SETTINGS_PATH) -> None:
+    """Записывает settings.yaml (UTF-8 без BOM, детерминированный вид)."""
+    out = ["# Настройки бенчмарка: активные таски и текущая таска.",
+           "# tasks: <id> -> active | inactive; без записи таска активна.",
+           f"current_task: {settings.get('current_task', 'general')}",
+           "tasks:"]
+    for tid in sorted(settings.get("tasks", {})):
+        out.append(f"  {tid}: {settings['tasks'][tid]}")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def known_tasks(settings: dict | None = None) -> list[str]:
+    """Известные таски: matchups/* ∪ tasks/T-NNN-* ∪ settings.tasks."""
+    if settings is None:
+        settings = load_settings()
+    known = set(settings.get("tasks", {}))
+    if MATCHUPS_DIR.exists():
+        for d in MATCHUPS_DIR.iterdir():
+            if d.is_dir():
+                known.add(d.name)
+    if TASKS_DIR.exists():
+        for d in TASKS_DIR.iterdir():
+            if not d.is_dir() or d.name.startswith("_"):
+                continue
+            m = TASK_ID_RE.match(d.name)
+            known.add(m.group(1) if m else d.name)
+    return sorted(known)
+
+
+def is_task_active(settings: dict, task: str) -> bool:
+    """Таска активна, если не помечена inactive в settings.tasks."""
+    return settings.get("tasks", {}).get(task, "active") != "inactive"
+
+
+def active_tasks(settings: dict | None = None) -> list[str]:
+    """Список известных активных тасков."""
+    if settings is None:
+        settings = load_settings()
+    return [t for t in known_tasks(settings) if is_task_active(settings, t)]
+
+
+def resolve_current_task(settings: dict | None = None) -> str:
+    """Текущая таска для формы вердикта; неактивная/неизвестная → general."""
+    if settings is None:
+        settings = load_settings()
+    current = settings.get("current_task", "general")
+    if current in known_tasks(settings) and is_task_active(settings, current):
+        return current
+    return "general"
+
+
+def get_coverage(
+    settings: dict | None = None,
+    matchups: list[dict] | None = None,
+    models: list[dict] | None = None,
+) -> dict:
+    """Покрытие прогона: заполненные ячейки (таск × пара активных моделей).
+
+    Ячейка (task, {a, b}) заполнена, если у пары есть ≥1 неаннулированный
+    вердикт в активном таске. Повторы в ячейке не засчитываются.
+    Возвращает {"filled", "total", "percent"}; percent=None, если метрика
+    не определена (нет активных тасков или <2 активных моделей).
+    """
+    if settings is None:
+        settings = load_settings()
+    if models is None:
+        models = load_models_yaml()
+    if matchups is None:
+        matchups = load_matchups()
+
+    active_model_ids = {
+        m["id"] for m in models if m.get("status", "active") != "archived"
+    }
+    tasks = set(active_tasks(settings))
+    total = len(tasks) * (len(active_model_ids) * (len(active_model_ids) - 1) // 2)
+    if total == 0:
+        return {"filled": 0, "total": 0, "percent": None}
+
+    model_ids = {m["id"] for m in models}
+    voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+    cells: set[tuple[str, frozenset]] = set()
+    for mu in matchups:
+        if mu.get("void_of") or mu.get("_matchup_id") in voided:
+            continue
+        task = mu.get("task") or str(mu.get("_matchup_id", "")).split("/", 1)[0]
+        if task not in tasks:
+            continue
+        a, b = resolve_matchup_models(mu, model_ids)
+        if not a or not b or a not in active_model_ids or b not in active_model_ids:
+            continue
+        cells.add((task, frozenset((a, b))))
+
+    filled = len(cells)
+    return {
+        "filled": filled,
+        "total": total,
+        "percent": min(100.0, filled / total * 100),
+    }
 
 
 # ─── Integrity check ────────────────────────────────────────────────

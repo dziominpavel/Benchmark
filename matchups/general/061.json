@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 61,
+  "task": "general",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "cursor-grok-4-6-low",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "cursor-grok-4-6-low",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T14:06:51+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1125,
+      "after": 1107,
+      "delta": -18
+    },
+    "cursor-grok-4-6-low": {
+      "before": 1158,
+      "after": 1176,
+      "delta": 18
+    }
+  }
+}

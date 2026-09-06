@@ -20,8 +20,8 @@ ELO-снэпшотом, без обоснования и идентификац�
 
 #### Scenario: Вердикт от веб-сервера
 
-- **WHEN** пользователь записывает вердикт через форму
-- **THEN** сервер вызывает `record_verdict` и создаёт `matchups/general/NNN.json`
+- **WHEN** пользователь записывает вердикт через форму с таском `<task>`
+- **THEN** сервер вызывает `record_verdict` и создаёт `matchups/<task>/NNN.json`
 - **AND** файл содержит реальные `model_a_id` и `model_b_id`, `winner`, `elo`-снэпшот, `recorded_at`
 
 #### Scenario: Ничья
@@ -47,17 +47,25 @@ NNN SHALL быть порядковым номером вердикта внут
 
 ### Requirement: Запись через веб-UI
 
-POST /verdict SHALL принимать `model_a`, `model_b`, `winner`, проверять их,
-вызывать `record_verdict` с `task: general`, писать файл в `matchups/general/`
-и пересчитывать ELO (`generate_index` + `save_index`). Выбор задачи в форме
-отсутствует — корзина всегда `general`.
+POST /verdict SHALL принимать `model_a`, `model_b`, `winner` и `task`,
+проверять их и вызывать `record_verdict` с переданным `task`, записывая
+файл в `matchups/<task>/`, и пересчитывать ELO (`generate_index` +
+`save_index`). Значение `task` SHALL быть непустым и удовлетворять
+валидации `record_verdict` (`[A-Za-z0-9_-]+`); значение по умолчанию в
+форме — `current_task` из `settings.yaml`.
 
 #### Scenario: Успешная запись
 
-- **WHEN** пользователь выбирает модели A, B и победителя A в веб-форме
-- **THEN** система создаёт `matchups/general/NNN.json`
+- **WHEN** пользователь выбирает модели A, B, таск `T-001` и победителя A в веб-форме
+- **THEN** система создаёт `matchups/T-001/NNN.json`
 - **AND** пересчитывает ELO обеих моделей
 - **AND** обновляет `index.json` и показывает обновлённый leaderboard
+
+#### Scenario: Некорректный таск
+
+- **WHEN** POST /verdict получает пустой `task` или значение с недопустимыми символами
+- **THEN** запись отклоняется с ошибкой
+- **AND** файл вердикта не создаётся
 
 ### Requirement: Валидация вердикта на сервере
 

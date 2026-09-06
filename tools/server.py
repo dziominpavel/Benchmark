@@ -4,7 +4,8 @@ server.py — локальный веб-сервер для бенчмарка L
 
 Предоставляет:
   - Leaderboard (таблица ELO-рейтинга)
-  - Форму записи вердикта (попарное сравнение: A vs B → победитель)
+  - Форму записи вердикта (попарное сравнение: A vs B → победитель, таск)
+  - Страницу настроек /settings (добавление модели, активные таски)
   - Отдельную страницу добавления модели (одно поле — название)
   - Историю изменений рейтинга
 
@@ -33,6 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
     is_index_stale, record_verdict, resolve_matchup_models,
+    load_settings, save_settings, known_tasks, is_task_active,
+    resolve_current_task, get_coverage,
     DEFAULT_ELO, REPO_ROOT,
 )
 
@@ -47,8 +50,6 @@ app = Flask(__name__)
 ANSWERS_DIR = REPO_ROOT / "answers"
 MATCHUPS_DIR = REPO_ROOT / "matchups"
 TASKS_DIR = REPO_ROOT / "tasks"
-
-DEFAULT_TASK = "general"
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -577,6 +578,37 @@ CSS = """
   }
   .sidebar .card { margin-bottom: 0; }
 
+  /* Settings page */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    align-items: stretch;
+  }
+  .settings-grid .card {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-grid .card > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .card-actions {
+    margin-top: auto;
+    padding-top: 16px;
+  }
+  .tasks-table input[type="checkbox"],
+  .tasks-table input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+  .tasks-table td { text-align: center; }
+  .tasks-table td:first-child { text-align: left; font-weight: 600; }
+
   .table-wrap {
     overflow-x: auto;
     margin: 0 -24px;
@@ -686,7 +718,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 <div class="page">
   <div class="header">
     <h1>ELO Benchmark</h1>
-    <a href="/add" class="btn btn-primary">+ Добавить модель</a>
+    <a href="/settings" class="btn btn-primary">Настройки</a>
   </div>
 
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
@@ -694,7 +726,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 
   <div class="controls">
     <div class="stats">
-      Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
+      Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Прогресс: {{ progress_label }} · Обновлено: {{ updated }}
     </div>
     <form method="GET" action="/" class="filter-bar">
       <label for="filter">Показывать</label>
@@ -751,7 +783,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
           {% elif filter == 'inactive' %}
           Нет неактивных (архивных) моделей.
           {% else %}
-          Нет моделей. Нажмите «+ Добавить модель», чтобы начать.
+          Нет моделей. Добавьте модель через «Настройки», чтобы начать.
           {% endif %}
         </div>
         {% endif %}
@@ -837,6 +869,14 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 {% endfor %}
               </select>
             </div>
+            <div class="form-group">
+              <label>Таск</label>
+              <input type="text" name="task" id="taskField" list="task-list"
+                     value="{{ current_task }}" oninput="validate()" required>
+              <datalist id="task-list">
+                {% for t in task_options %}<option value="{{ t }}">{% endfor %}
+              </datalist>
+            </div>
           </div>
           <div class="verdict-actions">
             <button type="submit" name="winner" value="a" class="btn btn-win" id="btnA" disabled>Победила A</button>
@@ -874,7 +914,8 @@ function nextRec() {
 function validate() {
   const a = document.getElementById('modelA').value;
   const b = document.getElementById('modelB').value;
-  const ok = a && b && a !== b;
+  const t = document.getElementById('taskField').value.trim();
+  const ok = a && b && a !== b && t;
   document.getElementById('btnA').disabled = !ok;
   document.getElementById('btnB').disabled = !ok;
   document.getElementById('btnDraw').disabled = !ok;
@@ -1000,6 +1041,107 @@ EDIT_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+# ─── HTML: Settings page ────────────────────────────────────────────
+
+SETTINGS_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Настройки — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+  <div class="header">
+    <h1>Настройки</h1>
+  </div>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+  <div class="settings-grid">
+    <div class="card">
+      <h2>Модели</h2>
+      <table class="tasks-table">
+        <tbody>
+          <tr><td>Всего в реестре</td><td>{{ models_total }}</td></tr>
+          <tr><td>Активных</td><td>{{ models_active }}</td></tr>
+          <tr><td>Неактивных (архив)</td><td>{{ models_archived }}</td></tr>
+        </tbody>
+      </table>
+      <div class="hint">
+        Модель добавляется одним полем — названием; id генерируется
+        автоматически. Изменить или архивировать — по ссылке «Изменить»
+        в списке моделей.
+      </div>
+      <div class="card-actions">
+        <a href="/add" class="btn btn-primary">+ Добавить модель</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Таски</h2>
+      {% if tasks_list %}
+      <form method="POST" action="/settings">
+        <table class="tasks-table">
+          <thead>
+            <tr><th>Таск</th><th>Активна</th><th>Текущая</th></tr>
+          </thead>
+          <tbody>
+            {% for t in tasks_list %}
+            <tr>
+              <td>{{ t.id }}</td>
+              <td>
+                <input type="checkbox" name="active" value="{{ t.id }}"
+                       {% if t.active %}checked{% endif %}>
+              </td>
+              <td>
+                <input type="radio" name="current_task" value="{{ t.id }}"
+                       {% if t.current %}checked{% endif %}
+                       {% if not t.active %}disabled{% endif %}>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="hint">
+          Активные таски участвуют в расчёте прогресса на главной.
+          Текущая таска подставляется в форму записи вердикта по умолчанию.
+          Неактивные — опечатки и устаревшие, они не прогоняются.
+        </div>
+        <div class="card-actions">
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+      {% else %}
+      <div class="empty-state">Тасков пока нет — они появятся после первых вердиктов.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+// Снятие «активна» отключает и сбрасывает радио «текущая» у этой таски.
+document.querySelectorAll('input[name="active"]').forEach((cb) => {
+  cb.addEventListener('change', () => {
+    const radio = document.querySelector(
+      'input[name="current_task"][value="' + cb.value + '"]'
+    );
+    if (radio) {
+      radio.disabled = !cb.checked;
+      if (!cb.checked && radio.checked) radio.checked = false;
+    }
+  });
+});
+</script>
+</body>
+</html>
+"""
+
+
 # ─── Routes ─────────────────────────────────────────────────────────
 
 
@@ -1044,6 +1186,19 @@ def leaderboard():
     # Рекомендации пар
     recommendations = get_recommendations(index_data, top_n=3)
 
+    # Настройки: текущая таска и прогресс покрытия
+    settings = load_settings()
+    current_task = resolve_current_task(settings)
+    task_options = known_tasks(settings)
+    coverage = get_coverage(settings)
+    if coverage["percent"] is None:
+        progress_label = "—"
+    else:
+        progress_label = (
+            f"{coverage['percent']:.0f}% "
+            f"(закрыто {coverage['filled']} из {coverage['total']})"
+        )
+
     # История: пагинация по 20 записей, новые сверху
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
     raw_history = list(reversed(index_data.get("elo_history", [])))
@@ -1069,6 +1224,9 @@ def leaderboard():
         updated=index_data.get("updated", ""),
         models_list=models_list,
         recommendations=recommendations,
+        current_task=current_task,
+        task_options=task_options,
+        progress_label=progress_label,
         history=history,
         history_page=history_page,
         history_pages=history_pages,
@@ -1150,6 +1308,7 @@ def record_verdict_route():
     model_a = request.form.get("model_a", "").strip()
     model_b = request.form.get("model_b", "").strip()
     winner = request.form.get("winner", "").strip()
+    task = request.form.get("task", "").strip()
 
     if not model_a or not model_b or not winner:
         return redirect(url_for("leaderboard", error="Выберите обе модели и победителя"))
@@ -1160,9 +1319,12 @@ def record_verdict_route():
     if winner not in ("a", "b", "draw"):
         return redirect(url_for("leaderboard", error="Неверный победитель"))
 
+    if not task:
+        return redirect(url_for("leaderboard", error="Укажите таск"))
+
     try:
         result = record_verdict(
-            task=DEFAULT_TASK,
+            task=task,
             model_a=model_a,
             model_b=model_b,
             winner=winner,
@@ -1179,6 +1341,51 @@ def record_verdict_route():
         "leaderboard",
         success=f"Записано: {name_a} vs {name_b} → {winner_label}",
     ))
+
+
+@app.route("/settings")
+def settings_page():
+    settings = load_settings()
+    current = resolve_current_task(settings)
+    tasks_list = [
+        {
+            "id": t,
+            "active": is_task_active(settings, t),
+            "current": t == current,
+        }
+        for t in known_tasks(settings)
+    ]
+    models = load_models_yaml()
+    models_active = sum(1 for m in models if is_model_active(m))
+    return render_template_string(
+        SETTINGS_TEMPLATE,
+        tasks_list=tasks_list,
+        models_total=len(models),
+        models_active=models_active,
+        models_archived=len(models) - models_active,
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
+    )
+
+
+@app.route("/settings", methods=["POST"])
+def settings_save():
+    settings = load_settings()
+    active = set(request.form.getlist("active"))
+    current = request.form.get("current_task", "").strip()
+
+    tasks = {
+        t: ("active" if t in active else "inactive")
+        for t in known_tasks(settings)
+    }
+    if current not in active:
+        return redirect(url_for(
+            "settings_page",
+            error="Текущая таска должна быть одной из активных",
+        ))
+
+    save_settings({"current_task": current, "tasks": tasks})
+    return redirect(url_for("settings_page", success="Настройки сохранены"))
 
 
 @app.route("/edit/<model_id>")

@@ -44,6 +44,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: cursor-grok-4-6-low
+    name: "Cursor Grok 4.6 Low"
+    provider: 
+    version: 
+    status: active
   - id: cursor-kimi-k3-max
     name: "Cursor Kimi K3 Max"
     provider: 
@@ -66,6 +71,11 @@ models:
     status: active
   - id: devin-gpt-6-astra-max
     name: "Devin GPT-6 Astra Max"
+    provider: 
+    version: 
+    status: active
+  - id: devin-gpt-6-astra-max-2
+    name: "Devin GPT-6 Astra Low"
     provider: 
     version: 
     status: active

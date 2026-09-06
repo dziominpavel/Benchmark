@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 48,
+  "task": "general",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "devin-glm-5-3-flash-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "devin-glm-5-3-flash-max",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T12:59:46+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1141,
+      "after": 1125,
+      "delta": -16
+    },
+    "devin-glm-5-3-flash-max": {
+      "before": 1219,
+      "after": 1235,
+      "delta": 16
+    }
+  }
+}
