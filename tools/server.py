@@ -82,16 +82,17 @@ def get_model_name_map() -> dict[str, str]:
     return {m["id"]: m.get("name", m["id"]) for m in models}
 
 
-def get_pair_game_counts() -> dict[frozenset[str], int]:
-    """Возвращает счётчик игр на пару: {frozenset{id_a, id_b}: число вердиктов}.
+def get_pair_stats() -> dict[frozenset[str], dict]:
+    """Возвращает статистику пары: {frozenset{id_a, id_b}: {"games": int, "wins": {id: int}}}.
 
     Использует resolved ids (model_a_id/model_b_id) и пропускает
-    tombstone- и аннулированные вердикты.
+    tombstone- и аннулированные вердикты. `winner: "draw"` увеличивает
+    только games, не меняя счёт побед.
     """
     model_ids = {m["id"] for m in load_models_yaml()}
-    counts: dict[frozenset[str], int] = {}
+    stats: dict[frozenset[str], dict] = {}
     if not MATCHUPS_DIR.exists():
-        return counts
+        return stats
     matchups = load_matchups()
     voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
     for mu in matchups:
@@ -102,8 +103,14 @@ def get_pair_game_counts() -> dict[frozenset[str], int]:
         a, b = resolve_matchup_models(mu, model_ids)
         if a and b:
             key = frozenset({a, b})
-            counts[key] = counts.get(key, 0) + 1
-    return counts
+            st = stats.setdefault(key, {"games": 0, "wins": {a: 0, b: 0}})
+            st["games"] += 1
+            winner = mu.get("winner")
+            if winner == "a":
+                st["wins"][a] += 1
+            elif winner == "b":
+                st["wins"][b] += 1
+    return stats
 
 
 def is_model_active(model: dict) -> bool:
@@ -162,7 +169,8 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     3. Возвращаем top_n
 
     Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a,
-    elo_b, elo_diff, pair_games, reason, tier, score}
+    elo_b, elo_diff, pair_games, pair_wins_a, pair_wins_b, h2h_label,
+    tier, score}
     """
     models = index_data.get("models", {})
     name_map = get_model_name_map()
@@ -178,14 +186,17 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     elo_map = {mid: models[mid].get("elo", DEFAULT_ELO) for mid in model_ids}
     games_map = {mid: models[mid].get("games", 0) for mid in model_ids}
 
-    pair_counts = get_pair_game_counts()
+    pair_stats = get_pair_stats()
 
     candidates = []
     for i in range(len(model_ids)):
         for j in range(i + 1, len(model_ids)):
             a, b = model_ids[i], model_ids[j]
             pair_key = frozenset({a, b})
-            pair_games = pair_counts.get(pair_key, 0)
+            st = pair_stats.get(pair_key)
+            pair_games = st["games"] if st else 0
+            pair_wins_a = st["wins"].get(a, 0) if st else 0
+            pair_wins_b = st["wins"].get(b, 0) if st else 0
 
             elo_a = elo_map[a]
             elo_b = elo_map[b]
@@ -201,20 +212,16 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
             else:
                 tier = 2
 
-            # Причина: для сыгранной пары — рематч, для несыгранной —
-            # диагностика по тиру калибровки и близости ELO
+            # Строка личных встреч: число вердиктов пары и счёт по победам
+            # в порядке отображения карточки (model_a : model_b). Ничьи
+            # входят в pair_games, но в счёт не выделяются.
             if pair_games > 0:
-                reason = f"рематч (встречались {pair_games} раз)"
-            elif min_games == 0:
-                reason = "новая модель, ещё не играла"
-            elif min_games < 3:
-                reason = f"мало игр ({min_games}), нужна калибровка"
-            elif elo_diff < 50:
-                reason = f"близкий рейтинг (разница {elo_diff})"
-            elif elo_diff < 150:
-                reason = f"рейтинг различается умеренно (Δ{elo_diff})"
+                h2h_label = (
+                    f"личные встречи: {pair_games} · "
+                    f"счёт {pair_wins_a}:{pair_wins_b}"
+                )
             else:
-                reason = f"разный уровень (Δ{elo_diff}) — проверить апсет"
+                h2h_label = "личные встречи: не встречались"
 
             # score = близость ELO: монотонно убывает с ростом diff,
             # внутри тира больший score идёт первым
@@ -229,7 +236,9 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
                 "elo_b": elo_b,
                 "elo_diff": elo_diff,
                 "pair_games": pair_games,
-                "reason": reason,
+                "pair_wins_a": pair_wins_a,
+                "pair_wins_b": pair_wins_b,
+                "h2h_label": h2h_label,
                 "tier": tier,
                 "score": closeness,
             })
@@ -451,7 +460,7 @@ CSS = """
     font-size: 0.85rem;
     font-weight: 600;
   }
-  .rec-reason {
+  .rec-h2h {
     color: #a5b4fc;
     font-size: 0.82rem;
     margin-top: 4px;
@@ -798,7 +807,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
               <span class="rec-model">{{ rec.name_b }}</span>
               <span class="rec-elo">{{ rec.elo_b }}</span>
             </div>
-            <div class="rec-reason">{{ rec.reason }}</div>
+            <div class="rec-h2h">{{ rec.h2h_label }}</div>
           </div>
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
         </div>

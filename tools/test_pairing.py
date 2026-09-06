@@ -37,20 +37,27 @@ def test_rematch_recommendations() -> None:
         print("rematch: меньше двух активных моделей — пропуск")
         return
 
-    # Подменяем счётчик: все пары сыграли по 2 раза, одна — 1 раз
-    fake_counts = {}
+    # Подменяем статистику: все пары сыграли по 2 раза, одна — 1 раз
+    fake_stats = {}
     for i in range(len(active_ids)):
         for j in range(i + 1, len(active_ids)):
-            fake_counts[frozenset({active_ids[i], active_ids[j]})] = 2
+            a_id, b_id = active_ids[i], active_ids[j]
+            fake_stats[frozenset({a_id, b_id})] = {
+                "games": 2,
+                "wins": {a_id: 1, b_id: 1},
+            }
     min_pair = frozenset({active_ids[0], active_ids[1]})
-    fake_counts[min_pair] = 1
+    fake_stats[min_pair] = {
+        "games": 1,
+        "wins": {active_ids[0]: 1, active_ids[1]: 0},
+    }
 
-    real_fn = server.get_pair_game_counts
-    server.get_pair_game_counts = lambda: fake_counts
+    real_fn = server.get_pair_stats
+    server.get_pair_stats = lambda: fake_stats
     try:
         recs = get_recommendations(index_data, top_n=3)
     finally:
-        server.get_pair_game_counts = real_fn
+        server.get_pair_stats = real_fn
 
     assert recs, "рекомендации пусты при полном покрытии"
     assert all(r["pair_games"] >= 1 for r in recs), (
@@ -61,9 +68,12 @@ def test_rematch_recommendations() -> None:
         f"первой должна идти пара с min pair_games=1, получено: {first}"
     )
     assert frozenset({first["model_a"], first["model_b"]}) == min_pair
-    assert "рематч" in first["reason"], f"ожидалась причина-рематч: {first}"
+    assert "reason" not in first, f"поле reason должно быть удалено: {first}"
+    assert first["h2h_label"].startswith("личные встречи:"), (
+        f"ожидалась строка личных встреч: {first}"
+    )
     print(f"rematch OK: первая рекомендация — рематч "
-          f"{first['model_a']} vs {first['model_b']} ({first['reason']})")
+          f"{first['model_a']} vs {first['model_b']} ({first['h2h_label']})")
 
 
 def find_archiveable_model() -> str:
