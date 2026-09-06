@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 63,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "cursor-grok-4-6-low",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "cursor-grok-4-6-low",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T14:18:25+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1231,
+      "after": 1244,
+      "delta": 13
+    },
+    "cursor-grok-4-6-low": {
+      "before": 1176,
+      "after": 1159,
+      "delta": -17
+    }
+  }
+}

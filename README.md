@@ -22,12 +22,13 @@
 ## Workflow (5 шагов)
 
 ```
-① Создать задачу          вручную из tasks/_TEMPLATE.md
+① Создать задачу          python tools/register_task.py --title "..." [--slug ...]
+                          (или вручную из tasks/_TEMPLATE.md)
 ② Прогнать модели         @benchmark-run-a T-001, @benchmark-run-b T-001
 ③ Судья                   @benchmark-judge T-001 (или вручную по docs/judge-prompt.md)
                           → только выбор победителя
 ④ Записать вердикт        координатор: веб-UI localhost:5000 или record_verdict.py
-                          с явными --model-a/--model-b → matchups/T-NNN/NNN.json или general/NNN.json
+                          с явным --task T-NNN и --model-a/--model-b → matchups/T-NNN/NNN.json
 ⑤ Leaderboard             веб-UI (localhost:5000) или leaderboard.html
 ```
 
@@ -58,7 +59,7 @@ Benchmark/
 ├── start.bat              # Запуск сервера в Windows (открывает localhost:5000)
 │
 ├── tasks/
-│   ├── _TEMPLATE.md       # Шаблон задачи (создание — вручную из него)
+│   ├── _TEMPLATE.md       # Шаблон задачи (создание — register_task.py или вручная копия)
 │   └── T-NNN-<slug>/
 │       └── task.md        # Описание + критерии + baseline_commit (опц.)
 │
@@ -69,10 +70,8 @@ Benchmark/
 │       └── modelB.md
 │
 ├── matchups/              # Вердикты (попарные сравнения)
-│   ├── T-NNN/
-│   │   └── NNN.json       # От record_verdict.py (skill-путь): task, model_a/b, winner, date, elo
-│   └── general/
-│       └── NNN.json       # От record_verdict.py (ручной путь): task, model_a/b, winner, date, elo
+│   └── T-NNN/
+│       └── NNN.json       # От record_verdict.py: task, model_a/b, winner, date, elo
 │
 ├── docs/
 │   ├── architecture.md    # Полная архитектура
@@ -83,10 +82,12 @@ Benchmark/
 ├── tools/
 │   ├── elo.py             # ELO-движок (пересчёт из matchups → index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
-│   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + добавление модели
+│   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
 │   ├── generate_html.py   # Статичный leaderboard.html
 │   ├── register_model.py  # Регистрация модели (в т.ч. --auto для саморегистрации)
-│   └── archive_model.py   # Архивация/разархивация модели (--restore)
+│   ├── register_task.py   # Регистрация задачи T-NNN
+│   ├── archive_model.py   # Архивация/разархивация модели (--restore)
+│   └── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
 │
 └── openspec/              # Спецификации системы (по факту кода MVP)
     ├── config.yaml
@@ -116,6 +117,9 @@ python tools/test_elo.py
 
 # Зарегистрировать модель
 python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
+
+# Зарегистрировать задачу
+python tools/register_task.py --title "Bug Hunt — NewModule" --project VoiceMind --baseline abc123
 
 # Заархивировать / разархивировать модель
 python tools/archive_model.py gpt-5

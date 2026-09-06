@@ -268,12 +268,16 @@ def record_verdict(
 
     Возвращает dict с path и записанным вердиктом. Бросает ValueError.
     """
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", task or ""):
-        raise ValueError(f"Некорректный task: '{task}'")
+    if not is_valid_task_id(task):
+        raise ValueError(f"Некорректный task: '{task}'. Допустимы только идентификаторы вида T-NNN.")
     if winner not in ("a", "b", "draw"):
         raise ValueError(f"winner должен быть a|b|draw, получено '{winner}'")
     if model_a == model_b:
         raise ValueError("Модели A и B должны различаться")
+
+    settings = load_settings()
+    if task not in active_tasks(settings):
+        raise ValueError(f"Таск '{task}' неактивна или неизвестна.")
 
     model_ids = {m["id"] for m in load_models_yaml()}
 
@@ -736,10 +740,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> dict:
     """Читает settings.yaml → {"current_task": str, "tasks": {id: status}}.
 
     Файл может отсутствовать или быть частичным — применяются дефолты
-    (`current_task: general`, пустой реестр тасков). Таска без записи
+    (`current_task: ""`, пустой реестр тасков). Таска без записи
     в реестре считается активной (см. is_task_active).
     """
-    settings: dict = {"current_task": "general", "tasks": {}}
+    settings: dict = {"current_task": "", "tasks": {}}
     if not path.exists():
         return settings
     try:
@@ -776,21 +780,30 @@ def save_settings(settings: dict, path: Path = SETTINGS_PATH) -> None:
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
+def is_valid_task_id(task: str) -> bool:
+    """Проверяет, что task — корректный идентификатор вида T-NNN."""
+    return bool(TASK_ID_RE.fullmatch(task or ""))
+
+
 def known_tasks(settings: dict | None = None) -> list[str]:
-    """Известные таски: matchups/* ∪ tasks/T-NNN-* ∪ settings.tasks."""
+    """Известные таски: matchups/T-NNN ∪ tasks/T-NNN-* ∪ settings.tasks (только T-NNN)."""
     if settings is None:
         settings = load_settings()
-    known = set(settings.get("tasks", {}))
+    known = {
+        t for t in settings.get("tasks", {})
+        if is_valid_task_id(t)
+    }
     if MATCHUPS_DIR.exists():
         for d in MATCHUPS_DIR.iterdir():
-            if d.is_dir():
+            if d.is_dir() and is_valid_task_id(d.name):
                 known.add(d.name)
     if TASKS_DIR.exists():
         for d in TASKS_DIR.iterdir():
             if not d.is_dir() or d.name.startswith("_"):
                 continue
             m = TASK_ID_RE.match(d.name)
-            known.add(m.group(1) if m else d.name)
+            if m and is_valid_task_id(m.group(1)):
+                known.add(m.group(1))
     return sorted(known)
 
 
@@ -807,13 +820,14 @@ def active_tasks(settings: dict | None = None) -> list[str]:
 
 
 def resolve_current_task(settings: dict | None = None) -> str:
-    """Текущая таска для формы вердикта; неактивная/неизвестная → general."""
+    """Текущая таска для формы вердикта; неактивная/неизвестная → первая активная T-NNN."""
     if settings is None:
         settings = load_settings()
-    current = settings.get("current_task", "general")
-    if current in known_tasks(settings) and is_task_active(settings, current):
+    current = settings.get("current_task", "")
+    if is_valid_task_id(current) and current in known_tasks(settings) and is_task_active(settings, current):
         return current
-    return "general"
+    active = active_tasks(settings)
+    return active[0] if active else ""
 
 
 def get_coverage(

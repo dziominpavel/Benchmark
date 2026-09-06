@@ -34,9 +34,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
     is_index_stale, record_verdict, resolve_matchup_models,
-    load_settings, save_settings, known_tasks, is_task_active,
-    resolve_current_task, get_coverage,
+    load_settings, save_settings, known_tasks, active_tasks, is_task_active,
+    resolve_current_task, get_coverage, is_valid_task_id,
     DEFAULT_ELO, REPO_ROOT,
+)
+
+from register_task import (
+    next_task_id, unique_slug_dir, fill_template, TEMPLATE_PATH, slugify as slugify_task,
 )
 
 from render_helpers import format_elo_history, format_winrate
@@ -117,6 +121,150 @@ def get_pair_stats() -> dict[frozenset[str], dict]:
 def is_model_active(model: dict) -> bool:
     """Проверяет, что модель не заархивирована."""
     return model.get("status", "active") != "archived"
+
+
+def find_task_dir(task_id: str) -> Path | None:
+    """Находит директорию tasks/T-NNN-<slug> по id."""
+    if not TASKS_DIR.exists():
+        return None
+    for d in TASKS_DIR.iterdir():
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        if re.match(rf"^{re.escape(task_id)}(?:$|-)", d.name):
+            return d
+    return None
+
+
+def parse_task_md(text: str) -> dict:
+    """Парсит task.md на front matter и тело."""
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {"title": "", "project": "", "baseline_commit": "", "body": text}
+    front = parts[1]
+    body = parts[2].strip()
+    data = {}
+    for raw in front.splitlines():
+        # Убираем inline-комментарии и лишние пробелы
+        line = raw.split("#", 1)[0].strip()
+        if not line or ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        data[k] = v
+    return {
+        "title": data.get("title", ""),
+        "project": data.get("project", ""),
+        "baseline_commit": data.get("baseline_commit", ""),
+        "body": body,
+    }
+
+
+def format_task_md(task_id: str, title: str, project: str, baseline: str, body: str) -> str:
+    """Форматирует содержимое task.md."""
+    return (
+        f"---\n"
+        f"id: {task_id}\n"
+        f"title: \"{title}\"\n"
+        f"project: \"{project}\"\n"
+        f"baseline_commit: \"{baseline}\"\n"
+        f"---\n\n"
+        f"{body.strip()}\n"
+    )
+
+
+def get_task_info(task_id: str) -> dict | None:
+    """Возвращает метаданные и тело task.md по id.
+
+    Если директории/файла нет, возвращает stub на основе _TEMPLATE.md,
+    чтобы можно было создать задачу через форму редактирования.
+    """
+    task_dir = find_task_dir(task_id)
+    task_file = task_dir / "task.md" if task_dir else None
+    if task_file and task_file.exists():
+        info = parse_task_md(task_file.read_text(encoding="utf-8"))
+        info["id"] = task_id
+        info["dir"] = task_dir
+        return info
+
+    # Stub: таска есть в настройках, но ещё без task.md
+    if not TEMPLATE_PATH.exists():
+        return None
+    info = parse_task_md(TEMPLATE_PATH.read_text(encoding="utf-8"))
+    info["id"] = task_id
+    info["missing"] = True
+    info["title"] = ""
+    return info
+
+
+def create_task(title: str, slug: str = "", project: str = "", baseline: str = "") -> dict:
+    """Создаёт новую задачу: папку, task.md, обновляет settings."""
+    if not title:
+        raise ValueError("Введите название задачи")
+    if not TEMPLATE_PATH.exists():
+        raise ValueError("Шаблон tasks/_TEMPLATE.md не найден")
+
+    task_id = next_task_id()
+    if not slug:
+        slug = slugify_task(title)
+    if not slug:
+        slug = "task"
+
+    task_dir = unique_slug_dir(task_id, slug)
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    filled = fill_template(template, task_id, title, project, baseline)
+
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.md").write_text(filled, encoding="utf-8")
+
+    settings = load_settings()
+    settings["tasks"][task_id] = "active"
+    settings["current_task"] = task_id
+    save_settings(settings)
+
+    return {"id": task_id, "dir": task_dir}
+
+
+def update_task(task_id: str, title: str, project: str, baseline: str, body: str) -> bool:
+    """Обновляет task.md; если директории нет — создаёт её."""
+    task_dir = find_task_dir(task_id)
+    if not task_dir:
+        slug = slugify_task(title) or "task"
+        task_dir = unique_slug_dir(task_id, slug)
+    task_dir.mkdir(parents=True, exist_ok=True)
+    task_file = task_dir / "task.md"
+    task_file.write_text(format_task_md(task_id, title, project, baseline, body), encoding="utf-8")
+    return True
+
+
+def toggle_task_status(task_id: str) -> bool:
+    """Переключает статус задачи active/inactive."""
+    if not is_valid_task_id(task_id):
+        return False
+    settings = load_settings()
+    current = settings.get("tasks", {}).get(task_id, "active")
+    new_status = "inactive" if current == "active" else "active"
+    settings["tasks"][task_id] = new_status
+
+    # Если деактивировали текущую — переключаем current на первую активную
+    if new_status == "inactive" and settings.get("current_task") == task_id:
+        active = [t for t in known_tasks(settings) if is_task_active(settings, t) and t != task_id]
+        settings["current_task"] = active[0] if active else ""
+
+    save_settings(settings)
+    return True
+
+
+def set_current_task(task_id: str) -> bool:
+    """Назначает текущей задачей, если она активна."""
+    if not is_valid_task_id(task_id):
+        return False
+    settings = load_settings()
+    if not is_task_active(settings, task_id):
+        return False
+    settings["current_task"] = task_id
+    save_settings(settings)
+    return True
 
 
 def update_model(model_id: str, name: str, status: str) -> bool:
@@ -606,8 +754,11 @@ CSS = """
     accent-color: #6366f1;
     cursor: pointer;
   }
-  .tasks-table td { text-align: center; }
-  .tasks-table td:first-child { text-align: left; font-weight: 600; }
+  .tasks-table td { text-align: left; vertical-align: middle; }
+  .tasks-table .id-col { font-weight: 600; white-space: nowrap; padding-right: 12px; }
+  .tasks-table .title-col { width: 99%; white-space: normal; }
+  .tasks-table .title-col .status-pill { margin-left: 8px; white-space: nowrap; }
+  .tasks-table .actions-col { text-align: right; white-space: nowrap; padding-left: 12px; }
 
   .table-wrap {
     overflow-x: auto;
@@ -871,11 +1022,12 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="form-group">
               <label>Таск</label>
-              <input type="text" name="task" id="taskField" list="task-list"
-                     value="{{ current_task }}" oninput="validate()" required>
-              <datalist id="task-list">
-                {% for t in task_options %}<option value="{{ t }}">{% endfor %}
-              </datalist>
+              <select name="task" id="taskField" onchange="validate()" required>
+                <option value="">— выбрать —</option>
+                {% for t in task_options %}
+                <option value="{{ t }}" {% if t == current_task %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
           <div class="verdict-actions">
@@ -1041,6 +1193,113 @@ EDIT_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+# ─── HTML: Add task page ────────────────────────────────────────────
+
+ADD_TASK_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Добавить таску — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<a href="/settings" class="back-link">&larr; Назад к настройкам</a>
+
+<div class="header">
+  <h1>Добавить таску</h1>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+<div class="card add-form">
+  <form method="POST" action="/add_task">
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" name="title" required placeholder="Например: Bug Hunt — NewModule" autofocus>
+    </div>
+    <div class="form-group">
+      <label>Slug (опц.)</label>
+      <input type="text" name="slug" placeholder="new-module">
+      <div class="hint">Если пусто, slug сгенерируется из названия.</div>
+    </div>
+    <div class="form-group">
+      <label>Проект (опц.)</label>
+      <input type="text" name="project" placeholder="Например: VoiceMind">
+    </div>
+    <div class="form-group">
+      <label>Baseline commit (опц.)</label>
+      <input type="text" name="baseline" placeholder="abc1234...">
+    </div>
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary">Добавить</button>
+      <a href="/settings" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>
+"""
+
+
+# ─── HTML: Edit task page ───────────────────────────────────────────
+
+EDIT_TASK_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Редактировать таску — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<a href="/settings" class="back-link">&larr; Назад к настройкам</a>
+
+<div class="header">
+  <h1>Редактировать таску {{ task.id }}</h1>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+<div class="card add-form">
+  <form method="POST" action="/edit_task/{{ task.id }}">
+    <input type="hidden" name="id" value="{{ task.id }}">
+    <div class="hint" style="margin-bottom:16px;">
+      Обязательны только <strong>название</strong> и <strong>описание</strong>.
+      Проект и baseline_commit — опциональны, нужны skills прогонов.
+    </div>
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" name="title" value="{{ task.title }}" required autofocus placeholder="Bug Hunt — NewModule">
+    </div>
+    <div class="form-group">
+      <label>Описание и критерии (Markdown)</label>
+      <textarea name="body" rows="12" style="width:100%;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:1rem;color:#e2e8f0;background:#0f172a;">{{ task.body }}</textarea>
+    </div>
+    <details class="card" style="background:transparent;border:none;padding:0;margin-bottom:16px;">
+      <summary style="cursor:pointer;font-weight:600;color:#94a3b8;font-size:0.95rem;">Дополнительно: проект и baseline</summary>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Проект (опц.)</label>
+        <input type="text" name="project" value="{{ task.project }}" placeholder="Например: VoiceMind">
+      </div>
+      <div class="form-group">
+        <label>Baseline commit (опц.)</label>
+        <input type="text" name="baseline" value="{{ task.baseline_commit }}" placeholder="abc1234...">
+      </div>
+    </details>
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+      <a href="/settings" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>
+"""
+
+
 # ─── HTML: Settings page ────────────────────────────────────────────
 
 SETTINGS_TEMPLATE = """<!DOCTYPE html>
@@ -1085,40 +1344,46 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
     <div class="card">
       <h2>Таски</h2>
       {% if tasks_list %}
-      <form method="POST" action="/settings">
-        <table class="tasks-table">
-          <thead>
-            <tr><th>Таск</th><th>Активна</th><th>Текущая</th></tr>
-          </thead>
-          <tbody>
-            {% for t in tasks_list %}
-            <tr>
-              <td>{{ t.id }}</td>
-              <td>
-                <input type="checkbox" name="active" value="{{ t.id }}"
-                       {% if t.active %}checked{% endif %}>
-              </td>
-              <td>
-                <input type="radio" name="current_task" value="{{ t.id }}"
-                       {% if t.current %}checked{% endif %}
-                       {% if not t.active %}disabled{% endif %}>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <div class="hint">
-          Активные таски участвуют в расчёте прогресса на главной.
-          Текущая таска подставляется в форму записи вердикта по умолчанию.
-          Неактивные — опечатки и устаревшие, они не прогоняются.
-        </div>
-        <div class="card-actions">
-          <button type="submit" class="btn btn-primary">Сохранить</button>
-        </div>
-      </form>
+      <table class="tasks-table">
+        <thead>
+          <tr><th class="id-col">ID</th><th class="title-col">Название</th><th class="actions-col">Действия</th></tr>
+        </thead>
+        <tbody>
+          {% for t in tasks_list %}
+          <tr class="{{ 'archived' if not t.active }}">
+            <td class="id-col">{{ t.id }}</td>
+            <td class="title-col">
+              {{ t.title }}
+              {% if t.active %}<span class="status-pill status-active">активна</span>
+              {% else %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+              {% if t.current %}<span class="status-pill status-active">текущая</span>{% endif %}
+            </td>
+            <td class="actions-col">
+              <form method="POST" action="/task/{{ t.id }}/current" style="display:inline;">
+                <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
+              </form>
+              <form method="POST" action="/task/{{ t.id }}/toggle" style="display:inline;margin-left:6px;">
+                <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">
+                  {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
+                </button>
+              </form>
+              <a href="/edit_task/{{ t.id }}" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;margin-left:6px;">Изменить</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
       {% else %}
-      <div class="empty-state">Тасков пока нет — они появятся после первых вердиктов.</div>
+      <div class="empty-state">Тасков пока нет — добавьте первую.</div>
       {% endif %}
+      <div class="hint">
+        Активные таски участвуют в прогрессе и доступны в форме вердикта.
+        Текущая таска подставляется по умолчанию. «Удаление» = деактивация,
+        файлы задачи остаются.
+      </div>
+      <div class="card-actions">
+        <a href="/add_task" class="btn btn-primary">+ Добавить таску</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1189,7 +1454,7 @@ def leaderboard():
     # Настройки: текущая таска и прогресс покрытия
     settings = load_settings()
     current_task = resolve_current_task(settings)
-    task_options = known_tasks(settings)
+    task_options = active_tasks(settings)
     coverage = get_coverage(settings)
     if coverage["percent"] is None:
         progress_label = "—"
@@ -1347,14 +1612,21 @@ def record_verdict_route():
 def settings_page():
     settings = load_settings()
     current = resolve_current_task(settings)
-    tasks_list = [
-        {
+    tasks_list = []
+    for t in known_tasks(settings):
+        info = get_task_info(t)
+        if info:
+            title = info.get("title", "")
+            if not title and info.get("missing"):
+                title = "(не заполнено — нажмите Изменить)"
+        else:
+            title = "(файл не найден)"
+        tasks_list.append({
             "id": t,
+            "title": title,
             "active": is_task_active(settings, t),
             "current": t == current,
-        }
-        for t in known_tasks(settings)
-    ]
+        })
     models = load_models_yaml()
     models_active = sum(1 for m in models if is_model_active(m))
     return render_template_string(
@@ -1370,22 +1642,8 @@ def settings_page():
 
 @app.route("/settings", methods=["POST"])
 def settings_save():
-    settings = load_settings()
-    active = set(request.form.getlist("active"))
-    current = request.form.get("current_task", "").strip()
-
-    tasks = {
-        t: ("active" if t in active else "inactive")
-        for t in known_tasks(settings)
-    }
-    if current not in active:
-        return redirect(url_for(
-            "settings_page",
-            error="Текущая таска должна быть одной из активных",
-        ))
-
-    save_settings({"current_task": current, "tasks": tasks})
-    return redirect(url_for("settings_page", success="Настройки сохранены"))
+    # Управление тасками теперь через отдельные POST-роуты /task/<id>/toggle и /current.
+    return redirect(url_for("settings_page"))
 
 
 @app.route("/edit/<model_id>")
@@ -1427,6 +1685,79 @@ def edit_model(model_id: str):
         filter="active",
         success=f"Модель «{name}» обновлена, статус: {status_label}.",
     ))
+
+
+@app.route("/add_task")
+def add_task_page():
+    return render_template_string(
+        ADD_TASK_TEMPLATE,
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
+    )
+
+
+@app.route("/add_task", methods=["POST"])
+def add_task():
+    title = request.form.get("title", "").strip()
+    slug = request.form.get("slug", "").strip()
+    project = request.form.get("project", "").strip()
+    baseline = request.form.get("baseline", "").strip()
+
+    try:
+        result = create_task(title, slug, project, baseline)
+    except ValueError as e:
+        return redirect(url_for("add_task_page", error=str(e)))
+
+    index_data = generate_index()
+    save_index(index_data)
+    return redirect(url_for("settings_page", success=f"Таска {result['id']} добавлена."))
+
+
+@app.route("/edit_task/<task_id>")
+def edit_task_page(task_id: str):
+    info = get_task_info(task_id)
+    if not info:
+        return redirect(url_for("settings_page", error="Таска не найдена"))
+    return render_template_string(
+        EDIT_TASK_TEMPLATE,
+        task=info,
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
+    )
+
+
+@app.route("/edit_task/<task_id>", methods=["POST"])
+def edit_task(task_id: str):
+    title = request.form.get("title", "").strip()
+    project = request.form.get("project", "").strip()
+    baseline = request.form.get("baseline", "").strip()
+    body = request.form.get("body", "")
+
+    if not title:
+        return redirect(url_for("edit_task_page", task_id=task_id, error="Введите название"))
+
+    if not update_task(task_id, title, project, baseline, body):
+        return redirect(url_for("settings_page", error="Не удалось обновить таску"))
+
+    index_data = generate_index()
+    save_index(index_data)
+    return redirect(url_for("settings_page", success=f"Таска {task_id} обновлена."))
+
+
+@app.route("/task/<task_id>/toggle", methods=["POST"])
+def toggle_task(task_id: str):
+    if not toggle_task_status(task_id):
+        return redirect(url_for("settings_page", error="Не удалось переключить статус"))
+    index_data = generate_index()
+    save_index(index_data)
+    return redirect(url_for("settings_page", success=f"Статус {task_id} изменён"))
+
+
+@app.route("/task/<task_id>/current", methods=["POST"])
+def set_current_task_route(task_id: str):
+    if not set_current_task(task_id):
+        return redirect(url_for("settings_page", error="Таска должна быть активной"))
+    return redirect(url_for("settings_page", success=f"Текущая таска: {task_id}"))
 
 
 # ─── Port handling ──────────────────────────────────────────────────

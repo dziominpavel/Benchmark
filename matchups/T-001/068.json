@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 68,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max-2",
+  "model_b": "devin-swe-1-7-max",
+  "model_a_id": "devin-gpt-6-astra-max-2",
+  "model_b_id": "devin-swe-1-7-max",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T14:47:54+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max-2": {
+      "before": 1243,
+      "after": 1259,
+      "delta": 16
+    },
+    "devin-swe-1-7-max": {
+      "before": 1177,
+      "after": 1164,
+      "delta": -13
+    }
+  }
+}

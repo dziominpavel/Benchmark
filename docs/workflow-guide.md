@@ -2,14 +2,22 @@
 
 ## Минимальный прогон (1 задача, 2 ответа, 1 вердикт)
 
-### Шаг 1: Создать задачу (вручную)
+### Шаг 1: Создать задачу
 
-Скопируй `tasks/_TEMPLATE.md` в `tasks/T-001-<slug>/task.md`, заполни
-front matter (`id`, `title`, опционально `project` + `baseline_commit`)
+Самый быстрый путь — `register_task.py`:
+
+```bash
+python tools/register_task.py --title "Bug Hunt — NewModule" \
+    --project VoiceMind --baseline abc123
+```
+
+Он создаёт `tasks/T-NNN-<slug>/task.md` из шаблона, активирует задачу
+и назначает её текущей в `settings.yaml`.
+
+Альтернатива — вручную: скопируй `tasks/_TEMPLATE.md` в `tasks/T-NNN-<slug>/task.md`,
+заполни front matter (`id`, `title`, опционально `project` + `baseline_commit`)
 и разделы (описание, что искать, критерии полноты, ограничения).
 Пример готовой задачи: `tasks/T-001-recurrence-bugs/task.md`.
-
-Генеративного skill для создания задач в MVP нет — только шаблон.
 
 ### Шаг 2: Прогнать модели (skills)
 
@@ -66,27 +74,22 @@ python tools/server.py
 ```
 
 В браузере, в форме «Записать результат»:
-1. Модель A, модель B (выбора задачи нет — вердикт идёт в корзину `general`)
-2. Кнопка «Победила A» / «Победила B» / «Ничья»
-   (кнопки активны только когда выбраны две разные модели)
-3. Форма вызывает ту же `record_verdict` — вердикт получает seq,
+1. Модель A, Модель B
+2. Таск — выпадающий список активных задач (по умолчанию текущая)
+3. Кнопка «Победила A» / «Победила B» / «Ничья»
+   (кнопки активны только когда выбраны две разные модели и активный таск)
+4. Форма вызывает ту же `record_verdict` — вердикт получает seq,
    recorded_at и ELO-снэпшот; index.json пересчитывается автоматически
 
 Или через CLI (без сервера):
 ```bash
-python tools/record_verdict.py --task general \
-    --model-a <real-id-a> --model-b <real-id-b> --winner a
-```
-
-Для skill-пути:
-```bash
 python tools/record_verdict.py --task T-001 \
-    --model-a <real-id-A> --model-b <real-id-B> --winner <a|b|draw>
+    --model-a <real-id-a> --model-b <real-id-b> --winner a
 ```
 
 Аннулировать ошибочный вердикт (файл не удаляется — пишется tombstone):
 ```bash
-python tools/record_verdict.py --void general/003 --reason "ошибка"
+python tools/record_verdict.py --void T-001/003 --reason "ошибка"
 ```
 
 ### Шаг 5: Leaderboard
@@ -151,10 +154,21 @@ python tools/archive_model.py --restore claude-sonnet-4.5
    ```
 3. Прогнать новую на текущей задаче, сравнить с active-моделями.
 
-## Новая задача
+## Добавление / управление задачами
 
-Когда текущая задача исчерпана (все модели прогнаны, достаточно вердиктов):
-скопируй `tasks/_TEMPLATE.md` в `tasks/T-002-<slug>/task.md` и заполни.
+Добавить задачу:
+```bash
+python tools/register_task.py --title "Bug Hunt — NewModule" \
+    [--slug new-module] [--project VoiceMind] [--baseline abc123]
+```
 
-Модели **не сбрасывают ELO** — рейтинг переносится. Новая задача
+Управлять активными задачами, текущей и описанием — в веб-UI:
+`http://localhost:5000/settings` → карточка «Таски».
+
+«Удаление» задачи в UI = деактивация: директория `tasks/`, ответы `answers/`
+и вердикты `matchups/` остаются. При повторной активации история снова
+учитывается в прогрессе.
+
+При создании вручную: скопируй `tasks/_TEMPLATE.md` в `tasks/T-NNN-<slug>/task.md`
+и заполни. Модели **не сбрасывают ELO** — рейтинг переносится. Новая задача
 продолжает обновлять тот же глобальный ELO.

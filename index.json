@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-09-06",
-  "matchups_digest": "2f3de7bfea5a74f957281d843a43ccd7d5ba1d909cc27525860bf95a7a41376d",
+  "matchups_digest": "346aa487187f647bec0e6c72d069b8b73b6dcad0bc8a30ac574147ccd3033b76",
   "models": {
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
@@ -27,9 +27,9 @@
       "name": "Cursor Gemini 3.8 Flash High",
       "provider": "",
       "status": "active",
-      "elo": 1171,
-      "games": 12,
-      "wins": 5,
+      "elo": 1184,
+      "games": 13,
+      "wins": 6,
       "losses": 7,
       "draws": 0
     },
@@ -47,9 +47,9 @@
       "name": "Cursor Grok 4.6 Low",
       "provider": "",
       "status": "active",
-      "elo": 1176,
-      "games": 9,
-      "wins": 4,
+      "elo": 1191,
+      "games": 10,
+      "wins": 5,
       "losses": 5,
       "draws": 0
     },
@@ -57,10 +57,10 @@
       "name": "Cursor Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1161,
-      "games": 10,
+      "elo": 1149,
+      "games": 11,
       "wins": 4,
-      "losses": 6,
+      "losses": 7,
       "draws": 0
     },
     "devin-glm-5-2-high": {
@@ -87,9 +87,9 @@
       "name": "Devin GPT-5.6 Sol Max",
       "provider": "",
       "status": "active",
-      "elo": 1277,
-      "games": 8,
-      "wins": 6,
+      "elo": 1291,
+      "games": 9,
+      "wins": 7,
       "losses": 2,
       "draws": 0
     },
@@ -107,9 +107,9 @@
       "name": "Devin GPT-6 Astra Low",
       "provider": "",
       "status": "active",
-      "elo": 1243,
-      "games": 8,
-      "wins": 5,
+      "elo": 1274,
+      "games": 10,
+      "wins": 7,
       "losses": 3,
       "draws": 0
     },
@@ -127,20 +127,20 @@
       "name": "Devin SWE-1.7 Max",
       "provider": "",
       "status": "active",
-      "elo": 1177,
-      "games": 11,
+      "elo": 1153,
+      "games": 13,
       "wins": 5,
-      "losses": 6,
+      "losses": 8,
       "draws": 0
     },
     "opencode-mimo-v2-5-free": {
       "name": "OpenCode MiMo V2.5 Free",
       "provider": "",
       "status": "active",
-      "elo": 1106,
-      "games": 5,
+      "elo": 1075,
+      "games": 7,
       "wins": 0,
-      "losses": 5,
+      "losses": 7,
       "draws": 0
     },
     "opencode-muse-spark-1-3-free-xhigh": {
@@ -162,14 +162,14 @@
         "modelA",
         "modelB"
       ],
-      "matchups_count": 0
+      "matchups_count": 71
     }
   },
   "matchups_index": [
     {
-      "id": "general/001",
+      "id": "T-001/001",
       "seq": 1,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-2-high",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-glm-5-2-high",
@@ -180,9 +180,9 @@
       "status": "applied"
     },
     {
-      "id": "general/002",
+      "id": "T-001/002",
       "seq": 2,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-swe-1-7-max",
       "model_b": "opencode-mimo-v2-5-free",
       "model_a_id": "devin-swe-1-7-max",
@@ -193,9 +193,9 @@
       "status": "applied"
     },
     {
-      "id": "general/003",
+      "id": "T-001/003",
       "seq": 3,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-2-high",
       "model_b": "opencode-mimo-v2-5-free",
       "model_a_id": "devin-glm-5-2-high",
@@ -206,9 +206,9 @@
       "status": "applied"
     },
     {
-      "id": "general/004",
+      "id": "T-001/004",
       "seq": 4,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-2-high",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "devin-glm-5-2-high",
@@ -219,9 +219,9 @@
       "status": "applied"
     },
     {
-      "id": "general/005",
+      "id": "T-001/005",
       "seq": 5,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -232,9 +232,9 @@
       "status": "applied"
     },
     {
-      "id": "general/006",
+      "id": "T-001/006",
       "seq": 6,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-2-high",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "devin-glm-5-2-high",
@@ -245,9 +245,9 @@
       "status": "applied"
     },
     {
-      "id": "general/007",
+      "id": "T-001/007",
       "seq": 7,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "cursor-grok-4-6",
       "model_a_id": "cursor-composer-2-5",
@@ -258,9 +258,9 @@
       "status": "applied"
     },
     {
-      "id": "general/008",
+      "id": "T-001/008",
       "seq": 8,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "devin-gpt-5-6-sol-max",
       "model_a_id": "cursor-kimi-k3-max",
@@ -271,9 +271,9 @@
       "status": "applied"
     },
     {
-      "id": "general/009",
+      "id": "T-001/009",
       "seq": 9,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "cursor-kimi-k3-max",
       "model_a_id": "cursor-composer-2-5",
@@ -284,9 +284,9 @@
       "status": "applied"
     },
     {
-      "id": "general/010",
+      "id": "T-001/010",
       "seq": 10,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "opencode-mimo-v2-5-free",
       "model_a_id": "cursor-composer-2-5",
@@ -297,9 +297,9 @@
       "status": "applied"
     },
     {
-      "id": "general/011",
+      "id": "T-001/011",
       "seq": 11,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "cursor-kimi-k3-max",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -310,9 +310,9 @@
       "status": "applied"
     },
     {
-      "id": "general/012",
+      "id": "T-001/012",
       "seq": 12,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -323,9 +323,9 @@
       "status": "applied"
     },
     {
-      "id": "general/013",
+      "id": "T-001/013",
       "seq": 13,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "cursor-grok-4-6",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -336,9 +336,9 @@
       "status": "applied"
     },
     {
-      "id": "general/014",
+      "id": "T-001/014",
       "seq": 14,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-grok-4-6",
@@ -349,9 +349,9 @@
       "status": "applied"
     },
     {
-      "id": "general/015",
+      "id": "T-001/015",
       "seq": 15,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "devin-gpt-5-6-sol-max",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -362,9 +362,9 @@
       "status": "applied"
     },
     {
-      "id": "general/016",
+      "id": "T-001/016",
       "seq": 16,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -375,9 +375,9 @@
       "status": "applied"
     },
     {
-      "id": "general/017",
+      "id": "T-001/017",
       "seq": 17,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -388,9 +388,9 @@
       "status": "applied"
     },
     {
-      "id": "general/018",
+      "id": "T-001/018",
       "seq": 18,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-swe-1-7-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-swe-1-7-max",
@@ -401,9 +401,9 @@
       "status": "applied"
     },
     {
-      "id": "general/019",
+      "id": "T-001/019",
       "seq": 19,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -414,9 +414,9 @@
       "status": "applied"
     },
     {
-      "id": "general/020",
+      "id": "T-001/020",
       "seq": 20,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -427,9 +427,9 @@
       "status": "applied"
     },
     {
-      "id": "general/021",
+      "id": "T-001/021",
       "seq": 21,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "devin-gpt-5-6-sol-max",
       "model_a_id": "cursor-grok-4-6",
@@ -440,9 +440,9 @@
       "status": "applied"
     },
     {
-      "id": "general/022",
+      "id": "T-001/022",
       "seq": 22,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "cursor-gemini-3-8-flash-high",
       "model_a_id": "cursor-composer-2-5",
@@ -453,9 +453,9 @@
       "status": "applied"
     },
     {
-      "id": "general/023",
+      "id": "T-001/023",
       "seq": 23,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "devin-gpt-5-6-sol-max",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -466,9 +466,9 @@
       "status": "applied"
     },
     {
-      "id": "general/024",
+      "id": "T-001/024",
       "seq": 24,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -479,9 +479,9 @@
       "status": "applied"
     },
     {
-      "id": "general/025",
+      "id": "T-001/025",
       "seq": 25,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-kimi-k3-max",
@@ -492,9 +492,9 @@
       "status": "applied"
     },
     {
-      "id": "general/026",
+      "id": "T-001/026",
       "seq": 26,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "devin-glm-5-2-high",
       "model_a_id": "cursor-composer-2-5",
@@ -505,9 +505,9 @@
       "status": "applied"
     },
     {
-      "id": "general/027",
+      "id": "T-001/027",
       "seq": 27,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-composer-2-5",
@@ -518,9 +518,9 @@
       "status": "applied"
     },
     {
-      "id": "general/028",
+      "id": "T-001/028",
       "seq": 28,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "devin-glm-5-2-high",
       "model_a_id": "cursor-kimi-k3-max",
@@ -531,9 +531,9 @@
       "status": "applied"
     },
     {
-      "id": "general/029",
+      "id": "T-001/029",
       "seq": 29,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-kimi-k3-max",
@@ -544,9 +544,9 @@
       "status": "applied"
     },
     {
-      "id": "general/030",
+      "id": "T-001/030",
       "seq": 30,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-kimi-k3-max",
@@ -557,9 +557,9 @@
       "status": "applied"
     },
     {
-      "id": "general/031",
+      "id": "T-001/031",
       "seq": 31,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-gpt-5-6-sol-max",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -570,9 +570,9 @@
       "status": "applied"
     },
     {
-      "id": "general/032",
+      "id": "T-001/032",
       "seq": 32,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -583,9 +583,9 @@
       "status": "applied"
     },
     {
-      "id": "general/033",
+      "id": "T-001/033",
       "seq": 33,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-grok-4-6",
@@ -596,9 +596,9 @@
       "status": "applied"
     },
     {
-      "id": "general/034",
+      "id": "T-001/034",
       "seq": 34,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-composer-2-5",
@@ -609,9 +609,9 @@
       "status": "applied"
     },
     {
-      "id": "general/035",
+      "id": "T-001/035",
       "seq": 35,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "cursor-grok-4-6",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -622,9 +622,9 @@
       "status": "applied"
     },
     {
-      "id": "general/036",
+      "id": "T-001/036",
       "seq": 36,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-kimi-k3-max",
       "model_b": "opencode-mimo-v2-5-free",
       "model_a_id": "cursor-kimi-k3-max",
@@ -635,9 +635,9 @@
       "status": "applied"
     },
     {
-      "id": "general/037",
+      "id": "T-001/037",
       "seq": 37,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "cursor-kimi-k3-max",
       "model_a_id": "cursor-grok-4-6",
@@ -648,9 +648,9 @@
       "status": "applied"
     },
     {
-      "id": "general/038",
+      "id": "T-001/038",
       "seq": 38,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-5-6-sol-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-gpt-5-6-sol-max",
@@ -661,9 +661,9 @@
       "status": "applied"
     },
     {
-      "id": "general/039",
+      "id": "T-001/039",
       "seq": 39,
-      "task": "general",
+      "task": "T-001",
       "model_a": "opencode-mimo-v2-5-free",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "opencode-mimo-v2-5-free",
@@ -674,9 +674,9 @@
       "status": "applied"
     },
     {
-      "id": "general/040",
+      "id": "T-001/040",
       "seq": 40,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "cursor-gemini-3-8-flash-high",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -687,9 +687,9 @@
       "status": "applied"
     },
     {
-      "id": "general/041",
+      "id": "T-001/041",
       "seq": 41,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-6-astra-max",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-gpt-6-astra-max",
@@ -700,9 +700,9 @@
       "status": "applied"
     },
     {
-      "id": "general/042",
+      "id": "T-001/042",
       "seq": 42,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-gpt-6-astra-max",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -713,9 +713,9 @@
       "status": "applied"
     },
     {
-      "id": "general/043",
+      "id": "T-001/043",
       "seq": 43,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "devin-gpt-6-astra-max",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -726,9 +726,9 @@
       "status": "applied"
     },
     {
-      "id": "general/044",
+      "id": "T-001/044",
       "seq": 44,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "devin-gpt-6-astra-max",
       "model_a_id": "cursor-grok-4-6",
@@ -739,9 +739,9 @@
       "status": "applied"
     },
     {
-      "id": "general/045",
+      "id": "T-001/045",
       "seq": 45,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-5-6-sol-max",
       "model_b": "devin-gpt-6-astra-max",
       "model_a_id": "devin-gpt-5-6-sol-max",
@@ -752,9 +752,9 @@
       "status": "applied"
     },
     {
-      "id": "general/046",
+      "id": "T-001/046",
       "seq": 46,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "devin-gpt-6-astra-max",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -765,9 +765,9 @@
       "status": "applied"
     },
     {
-      "id": "general/047",
+      "id": "T-001/047",
       "seq": 47,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-glm-5-2-high",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -778,9 +778,9 @@
       "status": "applied"
     },
     {
-      "id": "general/048",
+      "id": "T-001/048",
       "seq": 48,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-composer-2-5",
@@ -791,9 +791,9 @@
       "status": "applied"
     },
     {
-      "id": "general/049",
+      "id": "T-001/049",
       "seq": 49,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-grok-4-6",
@@ -804,9 +804,9 @@
       "status": "applied"
     },
     {
-      "id": "general/050",
+      "id": "T-001/050",
       "seq": 50,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "cursor-grok-4-6-low",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -817,9 +817,9 @@
       "status": "applied"
     },
     {
-      "id": "general/051",
+      "id": "T-001/051",
       "seq": 51,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-gemini-3-8-flash-high",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "cursor-gemini-3-8-flash-high",
@@ -830,9 +830,9 @@
       "status": "applied"
     },
     {
-      "id": "general/052",
+      "id": "T-001/052",
       "seq": 52,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "cursor-grok-4-6-low",
@@ -843,9 +843,9 @@
       "status": "applied"
     },
     {
-      "id": "general/053",
+      "id": "T-001/053",
       "seq": 53,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-glm-5-3-flash-max",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "devin-glm-5-3-flash-max",
@@ -856,9 +856,9 @@
       "status": "applied"
     },
     {
-      "id": "general/054",
+      "id": "T-001/054",
       "seq": 54,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "cursor-grok-4-6-low",
@@ -869,9 +869,9 @@
       "status": "applied"
     },
     {
-      "id": "general/055",
+      "id": "T-001/055",
       "seq": 55,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "cursor-kimi-k3-max",
       "model_a_id": "cursor-grok-4-6-low",
@@ -882,9 +882,9 @@
       "status": "applied"
     },
     {
-      "id": "general/056",
+      "id": "T-001/056",
       "seq": 56,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-5-6-sol-max",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "devin-gpt-5-6-sol-max",
@@ -895,9 +895,9 @@
       "status": "applied"
     },
     {
-      "id": "general/057",
+      "id": "T-001/057",
       "seq": 57,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "cursor-grok-4-6",
@@ -908,9 +908,9 @@
       "status": "applied"
     },
     {
-      "id": "general/058",
+      "id": "T-001/058",
       "seq": 58,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "devin-glm-5-3-flash-max",
       "model_a_id": "cursor-grok-4-6-low",
@@ -921,9 +921,9 @@
       "status": "applied"
     },
     {
-      "id": "general/059",
+      "id": "T-001/059",
       "seq": 59,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-fable-5-1-1m-max",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "cursor-fable-5-1-1m-max",
@@ -934,9 +934,9 @@
       "status": "applied"
     },
     {
-      "id": "general/060",
+      "id": "T-001/060",
       "seq": 60,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "devin-swe-1-7-max",
       "model_a_id": "cursor-grok-4-6-low",
@@ -947,9 +947,9 @@
       "status": "applied"
     },
     {
-      "id": "general/061",
+      "id": "T-001/061",
       "seq": 61,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-composer-2-5",
       "model_b": "cursor-grok-4-6-low",
       "model_a_id": "cursor-composer-2-5",
@@ -960,9 +960,9 @@
       "status": "applied"
     },
     {
-      "id": "general/062",
+      "id": "T-001/062",
       "seq": 62,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-6-astra-max-2",
       "model_b": "opencode-muse-spark-1-3-free-xhigh",
       "model_a_id": "devin-gpt-6-astra-max-2",
@@ -973,9 +973,9 @@
       "status": "applied"
     },
     {
-      "id": "general/063",
+      "id": "T-001/063",
       "seq": 63,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6",
       "model_b": "cursor-grok-4-6-low",
       "model_a_id": "cursor-grok-4-6",
@@ -986,9 +986,9 @@
       "status": "applied"
     },
     {
-      "id": "general/064",
+      "id": "T-001/064",
       "seq": 64,
-      "task": "general",
+      "task": "T-001",
       "model_a": "cursor-grok-4-6-low",
       "model_b": "devin-glm-5-2-high",
       "model_a_id": "cursor-grok-4-6-low",
@@ -999,9 +999,9 @@
       "status": "applied"
     },
     {
-      "id": "general/065",
+      "id": "T-001/065",
       "seq": 65,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-gpt-6-astra-max",
       "model_b": "devin-gpt-6-astra-max-2",
       "model_a_id": "devin-gpt-6-astra-max",
@@ -1012,9 +1012,9 @@
       "status": "applied"
     },
     {
-      "id": "general/066",
+      "id": "T-001/066",
       "seq": 66,
-      "task": "general",
+      "task": "T-001",
       "model_a": "devin-swe-1-7-max",
       "model_b": "devin-glm-5-2-high",
       "model_a_id": "devin-swe-1-7-max",
@@ -1023,12 +1023,77 @@
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:30:57+03:00",
       "status": "applied"
+    },
+    {
+      "id": "T-001/067",
+      "seq": 67,
+      "task": "T-001",
+      "model_a": "cursor-gemini-3-8-flash-high",
+      "model_b": "opencode-mimo-v2-5-free",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:41:17+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "T-001/068",
+      "seq": 68,
+      "task": "T-001",
+      "model_a": "devin-gpt-6-astra-max-2",
+      "model_b": "devin-swe-1-7-max",
+      "model_a_id": "devin-gpt-6-astra-max-2",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:47:54+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "T-001/069",
+      "seq": 69,
+      "task": "T-001",
+      "model_a": "cursor-grok-4-6-low",
+      "model_b": "opencode-mimo-v2-5-free",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:56:07+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "T-001/070",
+      "seq": 70,
+      "task": "T-001",
+      "model_a": "devin-gpt-5-6-sol-max",
+      "model_b": "devin-swe-1-7-max",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T15:16:37+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "T-001/071",
+      "seq": 71,
+      "task": "T-001",
+      "model_a": "cursor-kimi-k3-max",
+      "model_b": "devin-gpt-6-astra-max-2",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-gpt-6-astra-max-2",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T15:27:41+03:00",
+      "status": "applied"
     }
   ],
   "elo_history": [
     {
-      "matchup": "general/001",
-      "after_matchup": "general/001",
+      "matchup": "T-001/001",
+      "after_matchup": "T-001/001",
       "seq": 1,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:04+00:00",
@@ -1047,8 +1112,8 @@
       }
     },
     {
-      "matchup": "general/002",
-      "after_matchup": "general/002",
+      "matchup": "T-001/002",
+      "after_matchup": "T-001/002",
       "seq": 2,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:05+00:00",
@@ -1067,8 +1132,8 @@
       }
     },
     {
-      "matchup": "general/003",
-      "after_matchup": "general/003",
+      "matchup": "T-001/003",
+      "after_matchup": "T-001/003",
       "seq": 3,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:06+00:00",
@@ -1087,8 +1152,8 @@
       }
     },
     {
-      "matchup": "general/004",
-      "after_matchup": "general/004",
+      "matchup": "T-001/004",
+      "after_matchup": "T-001/004",
       "seq": 4,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:07+00:00",
@@ -1107,8 +1172,8 @@
       }
     },
     {
-      "matchup": "general/005",
-      "after_matchup": "general/005",
+      "matchup": "T-001/005",
+      "after_matchup": "T-001/005",
       "seq": 5,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:08+00:00",
@@ -1127,8 +1192,8 @@
       }
     },
     {
-      "matchup": "general/006",
-      "after_matchup": "general/006",
+      "matchup": "T-001/006",
+      "after_matchup": "T-001/006",
       "seq": 6,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T00:00:09+00:00",
@@ -1147,8 +1212,8 @@
       }
     },
     {
-      "matchup": "general/007",
-      "after_matchup": "general/007",
+      "matchup": "T-001/007",
+      "after_matchup": "T-001/007",
       "seq": 7,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T22:04:12+03:00",
@@ -1167,8 +1232,8 @@
       }
     },
     {
-      "matchup": "general/008",
-      "after_matchup": "general/008",
+      "matchup": "T-001/008",
+      "after_matchup": "T-001/008",
       "seq": 8,
       "date": "2026-09-05",
       "recorded_at": "2026-09-05T23:52:53+03:00",
@@ -1187,8 +1252,8 @@
       }
     },
     {
-      "matchup": "general/009",
-      "after_matchup": "general/009",
+      "matchup": "T-001/009",
+      "after_matchup": "T-001/009",
       "seq": 9,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T00:01:18+03:00",
@@ -1207,8 +1272,8 @@
       }
     },
     {
-      "matchup": "general/010",
-      "after_matchup": "general/010",
+      "matchup": "T-001/010",
+      "after_matchup": "T-001/010",
       "seq": 10,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T00:06:33+03:00",
@@ -1227,8 +1292,8 @@
       }
     },
     {
-      "matchup": "general/011",
-      "after_matchup": "general/011",
+      "matchup": "T-001/011",
+      "after_matchup": "T-001/011",
       "seq": 11,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T00:20:00+03:00",
@@ -1247,8 +1312,8 @@
       }
     },
     {
-      "matchup": "general/012",
-      "after_matchup": "general/012",
+      "matchup": "T-001/012",
+      "after_matchup": "T-001/012",
       "seq": 12,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T00:51:58+03:00",
@@ -1267,8 +1332,8 @@
       }
     },
     {
-      "matchup": "general/013",
-      "after_matchup": "general/013",
+      "matchup": "T-001/013",
+      "after_matchup": "T-001/013",
       "seq": 13,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T01:00:24+03:00",
@@ -1287,8 +1352,8 @@
       }
     },
     {
-      "matchup": "general/014",
-      "after_matchup": "general/014",
+      "matchup": "T-001/014",
+      "after_matchup": "T-001/014",
       "seq": 14,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T01:12:18+03:00",
@@ -1307,8 +1372,8 @@
       }
     },
     {
-      "matchup": "general/015",
-      "after_matchup": "general/015",
+      "matchup": "T-001/015",
+      "after_matchup": "T-001/015",
       "seq": 15,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T01:35:03+03:00",
@@ -1327,8 +1392,8 @@
       }
     },
     {
-      "matchup": "general/016",
-      "after_matchup": "general/016",
+      "matchup": "T-001/016",
+      "after_matchup": "T-001/016",
       "seq": 16,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:07:34+03:00",
@@ -1347,8 +1412,8 @@
       }
     },
     {
-      "matchup": "general/017",
-      "after_matchup": "general/017",
+      "matchup": "T-001/017",
+      "after_matchup": "T-001/017",
       "seq": 17,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:15:04+03:00",
@@ -1367,8 +1432,8 @@
       }
     },
     {
-      "matchup": "general/018",
-      "after_matchup": "general/018",
+      "matchup": "T-001/018",
+      "after_matchup": "T-001/018",
       "seq": 18,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:20:37+03:00",
@@ -1387,8 +1452,8 @@
       }
     },
     {
-      "matchup": "general/019",
-      "after_matchup": "general/019",
+      "matchup": "T-001/019",
+      "after_matchup": "T-001/019",
       "seq": 19,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:29:15+03:00",
@@ -1407,8 +1472,8 @@
       }
     },
     {
-      "matchup": "general/020",
-      "after_matchup": "general/020",
+      "matchup": "T-001/020",
+      "after_matchup": "T-001/020",
       "seq": 20,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:33:35+03:00",
@@ -1427,8 +1492,8 @@
       }
     },
     {
-      "matchup": "general/021",
-      "after_matchup": "general/021",
+      "matchup": "T-001/021",
+      "after_matchup": "T-001/021",
       "seq": 21,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:40:56+03:00",
@@ -1447,8 +1512,8 @@
       }
     },
     {
-      "matchup": "general/022",
-      "after_matchup": "general/022",
+      "matchup": "T-001/022",
+      "after_matchup": "T-001/022",
       "seq": 22,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:46:22+03:00",
@@ -1467,8 +1532,8 @@
       }
     },
     {
-      "matchup": "general/023",
-      "after_matchup": "general/023",
+      "matchup": "T-001/023",
+      "after_matchup": "T-001/023",
       "seq": 23,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:50:29+03:00",
@@ -1487,8 +1552,8 @@
       }
     },
     {
-      "matchup": "general/024",
-      "after_matchup": "general/024",
+      "matchup": "T-001/024",
+      "after_matchup": "T-001/024",
       "seq": 24,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T02:57:07+03:00",
@@ -1507,8 +1572,8 @@
       }
     },
     {
-      "matchup": "general/025",
-      "after_matchup": "general/025",
+      "matchup": "T-001/025",
+      "after_matchup": "T-001/025",
       "seq": 25,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:01:43+03:00",
@@ -1527,8 +1592,8 @@
       }
     },
     {
-      "matchup": "general/026",
-      "after_matchup": "general/026",
+      "matchup": "T-001/026",
+      "after_matchup": "T-001/026",
       "seq": 26,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:06:45+03:00",
@@ -1547,8 +1612,8 @@
       }
     },
     {
-      "matchup": "general/027",
-      "after_matchup": "general/027",
+      "matchup": "T-001/027",
+      "after_matchup": "T-001/027",
       "seq": 27,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:10:20+03:00",
@@ -1567,8 +1632,8 @@
       }
     },
     {
-      "matchup": "general/028",
-      "after_matchup": "general/028",
+      "matchup": "T-001/028",
+      "after_matchup": "T-001/028",
       "seq": 28,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:14:18+03:00",
@@ -1587,8 +1652,8 @@
       }
     },
     {
-      "matchup": "general/029",
-      "after_matchup": "general/029",
+      "matchup": "T-001/029",
+      "after_matchup": "T-001/029",
       "seq": 29,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:19:43+03:00",
@@ -1607,8 +1672,8 @@
       }
     },
     {
-      "matchup": "general/030",
-      "after_matchup": "general/030",
+      "matchup": "T-001/030",
+      "after_matchup": "T-001/030",
       "seq": 30,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:24:07+03:00",
@@ -1627,8 +1692,8 @@
       }
     },
     {
-      "matchup": "general/031",
-      "after_matchup": "general/031",
+      "matchup": "T-001/031",
+      "after_matchup": "T-001/031",
       "seq": 31,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:29:37+03:00",
@@ -1647,8 +1712,8 @@
       }
     },
     {
-      "matchup": "general/032",
-      "after_matchup": "general/032",
+      "matchup": "T-001/032",
+      "after_matchup": "T-001/032",
       "seq": 32,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:33:06+03:00",
@@ -1667,8 +1732,8 @@
       }
     },
     {
-      "matchup": "general/033",
-      "after_matchup": "general/033",
+      "matchup": "T-001/033",
+      "after_matchup": "T-001/033",
       "seq": 33,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:36:08+03:00",
@@ -1687,8 +1752,8 @@
       }
     },
     {
-      "matchup": "general/034",
-      "after_matchup": "general/034",
+      "matchup": "T-001/034",
+      "after_matchup": "T-001/034",
       "seq": 34,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:40:10+03:00",
@@ -1707,8 +1772,8 @@
       }
     },
     {
-      "matchup": "general/035",
-      "after_matchup": "general/035",
+      "matchup": "T-001/035",
+      "after_matchup": "T-001/035",
       "seq": 35,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:48:13+03:00",
@@ -1727,8 +1792,8 @@
       }
     },
     {
-      "matchup": "general/036",
-      "after_matchup": "general/036",
+      "matchup": "T-001/036",
+      "after_matchup": "T-001/036",
       "seq": 36,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:53:29+03:00",
@@ -1747,8 +1812,8 @@
       }
     },
     {
-      "matchup": "general/037",
-      "after_matchup": "general/037",
+      "matchup": "T-001/037",
+      "after_matchup": "T-001/037",
       "seq": 37,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T04:00:11+03:00",
@@ -1767,8 +1832,8 @@
       }
     },
     {
-      "matchup": "general/038",
-      "after_matchup": "general/038",
+      "matchup": "T-001/038",
+      "after_matchup": "T-001/038",
       "seq": 38,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T04:12:31+03:00",
@@ -1787,8 +1852,8 @@
       }
     },
     {
-      "matchup": "general/039",
-      "after_matchup": "general/039",
+      "matchup": "T-001/039",
+      "after_matchup": "T-001/039",
       "seq": 39,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T04:15:31+03:00",
@@ -1807,8 +1872,8 @@
       }
     },
     {
-      "matchup": "general/040",
-      "after_matchup": "general/040",
+      "matchup": "T-001/040",
+      "after_matchup": "T-001/040",
       "seq": 40,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T04:19:47+03:00",
@@ -1827,8 +1892,8 @@
       }
     },
     {
-      "matchup": "general/041",
-      "after_matchup": "general/041",
+      "matchup": "T-001/041",
+      "after_matchup": "T-001/041",
       "seq": 41,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:11:17+03:00",
@@ -1847,8 +1912,8 @@
       }
     },
     {
-      "matchup": "general/042",
-      "after_matchup": "general/042",
+      "matchup": "T-001/042",
+      "after_matchup": "T-001/042",
       "seq": 42,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:14:40+03:00",
@@ -1867,8 +1932,8 @@
       }
     },
     {
-      "matchup": "general/043",
-      "after_matchup": "general/043",
+      "matchup": "T-001/043",
+      "after_matchup": "T-001/043",
       "seq": 43,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:17:17+03:00",
@@ -1887,8 +1952,8 @@
       }
     },
     {
-      "matchup": "general/044",
-      "after_matchup": "general/044",
+      "matchup": "T-001/044",
+      "after_matchup": "T-001/044",
       "seq": 44,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:22:47+03:00",
@@ -1907,8 +1972,8 @@
       }
     },
     {
-      "matchup": "general/045",
-      "after_matchup": "general/045",
+      "matchup": "T-001/045",
+      "after_matchup": "T-001/045",
       "seq": 45,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:29:47+03:00",
@@ -1927,8 +1992,8 @@
       }
     },
     {
-      "matchup": "general/046",
-      "after_matchup": "general/046",
+      "matchup": "T-001/046",
+      "after_matchup": "T-001/046",
       "seq": 46,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:33:20+03:00",
@@ -1947,8 +2012,8 @@
       }
     },
     {
-      "matchup": "general/047",
-      "after_matchup": "general/047",
+      "matchup": "T-001/047",
+      "after_matchup": "T-001/047",
       "seq": 47,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:43:42+03:00",
@@ -1967,8 +2032,8 @@
       }
     },
     {
-      "matchup": "general/048",
-      "after_matchup": "general/048",
+      "matchup": "T-001/048",
+      "after_matchup": "T-001/048",
       "seq": 48,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T12:59:46+03:00",
@@ -1987,8 +2052,8 @@
       }
     },
     {
-      "matchup": "general/049",
-      "after_matchup": "general/049",
+      "matchup": "T-001/049",
+      "after_matchup": "T-001/049",
       "seq": 49,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:09:08+03:00",
@@ -2007,8 +2072,8 @@
       }
     },
     {
-      "matchup": "general/050",
-      "after_matchup": "general/050",
+      "matchup": "T-001/050",
+      "after_matchup": "T-001/050",
       "seq": 50,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:16:58+03:00",
@@ -2027,8 +2092,8 @@
       }
     },
     {
-      "matchup": "general/051",
-      "after_matchup": "general/051",
+      "matchup": "T-001/051",
+      "after_matchup": "T-001/051",
       "seq": 51,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:29:29+03:00",
@@ -2047,8 +2112,8 @@
       }
     },
     {
-      "matchup": "general/052",
-      "after_matchup": "general/052",
+      "matchup": "T-001/052",
+      "after_matchup": "T-001/052",
       "seq": 52,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:32:29+03:00",
@@ -2067,8 +2132,8 @@
       }
     },
     {
-      "matchup": "general/053",
-      "after_matchup": "general/053",
+      "matchup": "T-001/053",
+      "after_matchup": "T-001/053",
       "seq": 53,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:35:46+03:00",
@@ -2087,8 +2152,8 @@
       }
     },
     {
-      "matchup": "general/054",
-      "after_matchup": "general/054",
+      "matchup": "T-001/054",
+      "after_matchup": "T-001/054",
       "seq": 54,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:40:42+03:00",
@@ -2107,8 +2172,8 @@
       }
     },
     {
-      "matchup": "general/055",
-      "after_matchup": "general/055",
+      "matchup": "T-001/055",
+      "after_matchup": "T-001/055",
       "seq": 55,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:44:18+03:00",
@@ -2127,8 +2192,8 @@
       }
     },
     {
-      "matchup": "general/056",
-      "after_matchup": "general/056",
+      "matchup": "T-001/056",
+      "after_matchup": "T-001/056",
       "seq": 56,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:48:23+03:00",
@@ -2147,8 +2212,8 @@
       }
     },
     {
-      "matchup": "general/057",
-      "after_matchup": "general/057",
+      "matchup": "T-001/057",
+      "after_matchup": "T-001/057",
       "seq": 57,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:51:17+03:00",
@@ -2167,8 +2232,8 @@
       }
     },
     {
-      "matchup": "general/058",
-      "after_matchup": "general/058",
+      "matchup": "T-001/058",
+      "after_matchup": "T-001/058",
       "seq": 58,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:53:48+03:00",
@@ -2187,8 +2252,8 @@
       }
     },
     {
-      "matchup": "general/059",
-      "after_matchup": "general/059",
+      "matchup": "T-001/059",
+      "after_matchup": "T-001/059",
       "seq": 59,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T13:57:29+03:00",
@@ -2207,8 +2272,8 @@
       }
     },
     {
-      "matchup": "general/060",
-      "after_matchup": "general/060",
+      "matchup": "T-001/060",
+      "after_matchup": "T-001/060",
       "seq": 60,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:03:29+03:00",
@@ -2227,8 +2292,8 @@
       }
     },
     {
-      "matchup": "general/061",
-      "after_matchup": "general/061",
+      "matchup": "T-001/061",
+      "after_matchup": "T-001/061",
       "seq": 61,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:06:51+03:00",
@@ -2247,8 +2312,8 @@
       }
     },
     {
-      "matchup": "general/062",
-      "after_matchup": "general/062",
+      "matchup": "T-001/062",
+      "after_matchup": "T-001/062",
       "seq": 62,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:11:30+03:00",
@@ -2267,8 +2332,8 @@
       }
     },
     {
-      "matchup": "general/063",
-      "after_matchup": "general/063",
+      "matchup": "T-001/063",
+      "after_matchup": "T-001/063",
       "seq": 63,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:18:25+03:00",
@@ -2287,8 +2352,8 @@
       }
     },
     {
-      "matchup": "general/064",
-      "after_matchup": "general/064",
+      "matchup": "T-001/064",
+      "after_matchup": "T-001/064",
       "seq": 64,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:22:42+03:00",
@@ -2307,8 +2372,8 @@
       }
     },
     {
-      "matchup": "general/065",
-      "after_matchup": "general/065",
+      "matchup": "T-001/065",
+      "after_matchup": "T-001/065",
       "seq": 65,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:27:19+03:00",
@@ -2327,8 +2392,8 @@
       }
     },
     {
-      "matchup": "general/066",
-      "after_matchup": "general/066",
+      "matchup": "T-001/066",
+      "after_matchup": "T-001/066",
       "seq": 66,
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T14:30:57+03:00",
@@ -2344,6 +2409,106 @@
         "before": 1089,
         "after": 1073,
         "delta": -16
+      }
+    },
+    {
+      "matchup": "T-001/067",
+      "after_matchup": "T-001/067",
+      "seq": 67,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:41:17+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1171,
+        "after": 1184,
+        "delta": 13
+      },
+      "elo_b": {
+        "before": 1106,
+        "after": 1090,
+        "delta": -16
+      }
+    },
+    {
+      "matchup": "T-001/068",
+      "after_matchup": "T-001/068",
+      "seq": 68,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:47:54+03:00",
+      "model_a_id": "devin-gpt-6-astra-max-2",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1243,
+        "after": 1259,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1177,
+        "after": 1164,
+        "delta": -13
+      }
+    },
+    {
+      "matchup": "T-001/069",
+      "after_matchup": "T-001/069",
+      "seq": 69,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T14:56:07+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1176,
+        "after": 1191,
+        "delta": 15
+      },
+      "elo_b": {
+        "before": 1090,
+        "after": 1075,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/070",
+      "after_matchup": "T-001/070",
+      "seq": 70,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T15:16:37+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1277,
+        "after": 1291,
+        "delta": 14
+      },
+      "elo_b": {
+        "before": 1164,
+        "after": 1153,
+        "delta": -11
+      }
+    },
+    {
+      "matchup": "T-001/071",
+      "after_matchup": "T-001/071",
+      "seq": 71,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T15:27:41+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-gpt-6-astra-max-2",
+      "winner": "b",
+      "elo_a": {
+        "before": 1161,
+        "after": 1149,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1259,
+        "after": 1274,
+        "delta": 15
       }
     }
   ]

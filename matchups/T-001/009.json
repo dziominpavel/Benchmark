@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 9,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "cursor-kimi-k3-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "cursor-kimi-k3-max",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T00:01:18+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1180,
+      "after": 1160,
+      "delta": -20
+    },
+    "cursor-kimi-k3-max": {
+      "before": 1180,
+      "after": 1200,
+      "delta": 20
+    }
+  }
+}

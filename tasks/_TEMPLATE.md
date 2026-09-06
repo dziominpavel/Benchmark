@@ -1,3 +1,4 @@
+<!-- Создание: python tools/register_task.py --title "..." [--slug ...] [--project ...] [--baseline ...] -->
 ---
 id: T-NNN
 title: ""

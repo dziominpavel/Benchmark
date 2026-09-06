@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 51,
+  "task": "T-001",
+  "model_a": "cursor-gemini-3-8-flash-high",
+  "model_b": "devin-gpt-6-astra-max-2",
+  "model_a_id": "cursor-gemini-3-8-flash-high",
+  "model_b_id": "devin-gpt-6-astra-max-2",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T13:29:29+03:00",
+  "elo": {
+    "cursor-gemini-3-8-flash-high": {
+      "before": 1186,
+      "after": 1171,
+      "delta": -15
+    },
+    "devin-gpt-6-astra-max-2": {
+      "before": 1200,
+      "after": 1219,
+      "delta": 19
+    }
+  }
+}

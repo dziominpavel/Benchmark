@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "seq": 5,
+  "task": "T-001",
+  "model_a": "devin-glm-5-3-flash-max",
+  "model_b": "devin-swe-1-7-max",
+  "winner": "a",
+  "date": "2026-09-05",
+  "recorded_at": "2026-09-05T00:00:08+00:00"
+}

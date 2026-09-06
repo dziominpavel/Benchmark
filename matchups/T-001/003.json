@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "seq": 3,
+  "task": "T-001",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "opencode-mimo-v2-5-free",
+  "winner": "a",
+  "date": "2026-09-05",
+  "recorded_at": "2026-09-05T00:00:06+00:00"
+}

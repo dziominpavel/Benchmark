@@ -1,6 +1,5 @@
 # Настройки бенчмарка: активные таски и текущая таска.
 # tasks: <id> -> active | inactive; без записи таска активна.
-current_task: general
+current_task: T-001
 tasks:
   T-001: active
-  general: active

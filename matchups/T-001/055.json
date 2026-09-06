@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 55,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6-low",
+  "model_b": "cursor-kimi-k3-max",
+  "model_a_id": "cursor-grok-4-6-low",
+  "model_b_id": "cursor-kimi-k3-max",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T13:44:18+03:00",
+  "elo": {
+    "cursor-grok-4-6-low": {
+      "before": 1179,
+      "after": 1199,
+      "delta": 20
+    },
+    "cursor-kimi-k3-max": {
+      "before": 1181,
+      "after": 1161,
+      "delta": -20
+    }
+  }
+}

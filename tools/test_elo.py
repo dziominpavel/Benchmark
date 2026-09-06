@@ -187,42 +187,41 @@ def test_settings_roundtrip():
         path = Path(td) / "settings.yaml"
         # Отсутствующий файл → дефолты
         s = load_settings(path)
-        assert s == {"current_task": "general", "tasks": {}}, s
+        assert s == {"current_task": "", "tasks": {}}, s
 
         save_settings({"current_task": "T-001",
-                       "tasks": {"general": "active", "T-001": "active",
-                                 "typo": "inactive"}}, path)
+                       "tasks": {"T-001": "active", "typo": "inactive"}}, path)
         s2 = load_settings(path)
         assert s2["current_task"] == "T-001", s2
         assert s2["tasks"]["typo"] == "inactive", s2
-        assert s2["tasks"]["general"] == "active", s2
+        assert s2["tasks"]["T-001"] == "active", s2
         # Без BOM
         assert not path.read_bytes().startswith(b"\xef\xbb\xbf")
     print("settings roundtrip: OK")
 
 
 def test_known_tasks():
-    """known_tasks объединяет matchups/, tasks/ и settings.tasks."""
+    """known_tasks включает только корректные T-NNN из директорий и settings."""
     from elo import known_tasks
-    tasks = known_tasks({"current_task": "general", "tasks": {"extra-1": "active"}})
-    assert "general" in tasks, f"ожидался general, получили {tasks}"
+    tasks = known_tasks({"current_task": "", "tasks": {"extra-1": "active"}})
     assert "T-001" in tasks, f"ожидался T-001, получили {tasks}"
-    assert "extra-1" in tasks, f"ожидался extra-1 из settings, получили {tasks}"
+    assert "general" not in tasks, f"general больше не таска: {tasks}"
+    assert "extra-1" not in tasks, f"extra-1 не T-NNN, не должен быть таской: {tasks}"
     print("known_tasks: OK")
 
 
 def test_active_and_current_task():
-    """Таска без записи активна; неактивный current_task → general."""
+    """Таска без записи активна; неактивный current_task → первая активная."""
     from elo import active_tasks, is_task_active, resolve_current_task, known_tasks
     s = {"current_task": "T-001",
-         "tasks": {"general": "active", "T-001": "inactive"}}
+         "tasks": {"T-002": "active", "T-001": "inactive"}}
     assert not is_task_active(s, "T-001")
     assert is_task_active(s, "never-seen")  # без записи → активна
     assert "T-001" in known_tasks(s)  # неактивная остаётся известной
     assert "T-001" not in active_tasks(s)
-    assert resolve_current_task(s) == "general"  # неактивный → fallback
-    s2 = {"current_task": "general", "tasks": {}}
-    assert resolve_current_task(s2) == "general"
+    assert resolve_current_task(s) == "T-002"  # неактивный → fallback
+    s2 = {"current_task": "", "tasks": {}}
+    assert resolve_current_task(s2) == "T-001"  # первая активная известная
     print("active/current task: OK")
 
 
@@ -231,36 +230,37 @@ def test_get_coverage():
     from elo import get_coverage
     models = [{"id": "A", "status": "active"}, {"id": "B", "status": "active"},
               {"id": "C", "status": "active"}, {"id": "D", "status": "archived"}]
-    settings = {"current_task": "general",
-                "tasks": {"general": "active", "T-001": "active",
+    settings = {"current_task": "T-001",
+                "tasks": {"T-001": "active", "T-002": "active",
                           "typo": "inactive"}}
     mus = [
-        # A-B: 3 игры в general → 1 ячейка; 1 игра в T-001 → ещё 1
-        {"task": "general", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "general/001"},
-        {"task": "general", "model_a_id": "B", "model_b_id": "A", "winner": "b", "_matchup_id": "general/002"},
-        {"task": "general", "model_a_id": "A", "model_b_id": "B", "winner": "draw", "_matchup_id": "general/003"},
+        # A-B: 3 игры в T-001 → 1 ячейка; 1 игра в T-002 → ещё 1
         {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-001/001"},
-        # A-C только в general; в неактивной таске — не считается
-        {"task": "general", "model_a_id": "A", "model_b_id": "C", "winner": "a", "_matchup_id": "general/004"},
+        {"task": "T-001", "model_a_id": "B", "model_b_id": "A", "winner": "b", "_matchup_id": "T-001/002"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "draw", "_matchup_id": "T-001/003"},
+        {"task": "T-002", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-002/001"},
+        # A-C в T-002
+        {"task": "T-002", "model_a_id": "A", "model_b_id": "C", "winner": "a", "_matchup_id": "T-002/002"},
+        # Не-T-NNN таска не считается
         {"task": "typo", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "typo/001"},
         # С архивной моделью D — не считается
-        {"task": "general", "model_a_id": "A", "model_b_id": "D", "winner": "a", "_matchup_id": "general/005"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "D", "winner": "a", "_matchup_id": "T-001/004"},
         # Аннулированный вердикт — не считается
-        {"task": "general", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "general/006"},
-        {"task": "general", "void_of": "general/006", "_matchup_id": "general/007"},
+        {"task": "T-001", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/005"},
+        {"task": "T-001", "void_of": "T-001/005", "_matchup_id": "T-001/006"},
     ]
     cov = get_coverage(settings, mus, models)
     # Активных моделей 3 → C(3,2)=3 пары; активных тасков 2 → total=6
-    # Ячейки: (general,A-B), (T-001,A-B), (general,A-C) = 3
+    # Ячейки: (T-001,A-B), (T-002,A-B), (T-002,A-C) = 3
     assert cov["total"] == 6, cov
     assert cov["filled"] == 3, cov
     assert abs(cov["percent"] - 50.0) < 0.01, cov
 
-    # Нет активных тасков → percent=None (general и T-001 из known_tasks
-    # помечены неактивными явно — без записи таска считалась бы активной)
-    cov_none = get_coverage({"current_task": "general",
-                             "tasks": {"general": "inactive",
-                                       "T-001": "inactive"}}, mus, models)
+    # Нет активных тасков → percent=None
+    cov_none = get_coverage({"current_task": "",
+                             "tasks": {"T-001": "inactive",
+                                       "T-002": "inactive",
+                                       "typo": "inactive"}}, mus, models)
     assert cov_none["percent"] is None, cov_none
 
     # <2 активных моделей → percent=None
