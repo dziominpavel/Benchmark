@@ -82,16 +82,16 @@ def get_model_name_map() -> dict[str, str]:
     return {m["id"]: m.get("name", m["id"]) for m in models}
 
 
-def get_all_matchup_pairs() -> set[frozenset[str]]:
-    """Возвращает множество всех уже сравнённых пар (frozenset{id_a, id_b}).
+def get_pair_game_counts() -> dict[frozenset[str], int]:
+    """Возвращает счётчик игр на пару: {frozenset{id_a, id_b}: число вердиктов}.
 
     Использует resolved ids (model_a_id/model_b_id) и пропускает
     tombstone- и аннулированные вердикты.
     """
     model_ids = {m["id"] for m in load_models_yaml()}
-    pairs = set()
+    counts: dict[frozenset[str], int] = {}
     if not MATCHUPS_DIR.exists():
-        return pairs
+        return counts
     matchups = load_matchups()
     voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
     for mu in matchups:
@@ -101,8 +101,9 @@ def get_all_matchup_pairs() -> set[frozenset[str]]:
             continue
         a, b = resolve_matchup_models(mu, model_ids)
         if a and b:
-            pairs.add(frozenset({a, b}))
-    return pairs
+            key = frozenset({a, b})
+            counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def is_model_active(model: dict) -> bool:
@@ -146,19 +147,22 @@ def update_model(model_id: str, name: str, status: str) -> bool:
 def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     """Рекомендует пары моделей для следующего прогона.
 
-    Алгоритм (двухуровневый):
-    1. Берём все пары моделей из index.json
-    2. Исключаем пары, которые уже сравнивались
-    3. Оставшиеся раскладываем по тирам калибровки (по min_games —
-       числу игр менее игранной модели в паре):
-       - тир 0: min_games == 0 (новая модель, ещё не играла)
-       - тир 1: min_games < 3 (мало игр, нужна калибровка)
-       - тир 2: остальные
-    4. Внутри тира сортируем по близости ELO (меньше elo_diff — выше):
-       самый равный бой в тире идёт первым
-    5. Возвращаем top_n (тир 0 всегда выше любого тира 1 и 2)
+    Алгоритм (трёхуровневый):
+    1. Берём все пары активных моделей из index.json
+    2. Сортировка лексикографическая:
+       - сначала pair_games по возрастанию (несыгранные пары выше
+         любых рематчей — круг завершается до начала повторов)
+       - затем тир калибровки (по min_games — числу игр менее
+         игранной модели в паре):
+         тир 0: min_games == 0 (новая модель, ещё не играла)
+         тир 1: min_games < 3 (мало игр, нужна калибровка)
+         тир 2: остальные
+       - внутри тира по близости ELO (меньше elo_diff — выше):
+         самый равный бой идёт первым
+    3. Возвращаем top_n
 
-    Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a, elo_b, reason}
+    Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a,
+    elo_b, elo_diff, pair_games, reason, tier, score}
     """
     models = index_data.get("models", {})
     name_map = get_model_name_map()
@@ -174,15 +178,14 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     elo_map = {mid: models[mid].get("elo", DEFAULT_ELO) for mid in model_ids}
     games_map = {mid: models[mid].get("games", 0) for mid in model_ids}
 
-    compared = get_all_matchup_pairs()
+    pair_counts = get_pair_game_counts()
 
     candidates = []
     for i in range(len(model_ids)):
         for j in range(i + 1, len(model_ids)):
             a, b = model_ids[i], model_ids[j]
             pair_key = frozenset({a, b})
-            if pair_key in compared:
-                continue
+            pair_games = pair_counts.get(pair_key, 0)
 
             elo_a = elo_map[a]
             elo_b = elo_map[b]
@@ -193,18 +196,24 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
             # калибрующаяся — выше сыгранных. Внутри тира — близость ELO.
             if min_games == 0:
                 tier = 0
-                reason = "новая модель, ещё не играла"
             elif min_games < 3:
                 tier = 1
-                reason = f"мало игр ({min_games}), нужна калибровка"
-            elif elo_diff < 50:
-                tier = 2
-                reason = f"близкий рейтинг (разница {elo_diff})"
-            elif elo_diff < 150:
-                tier = 2
-                reason = f"рейтинг различается умеренно (Δ{elo_diff})"
             else:
                 tier = 2
+
+            # Причина: для сыгранной пары — рематч, для несыгранной —
+            # диагностика по тиру калибровки и близости ELO
+            if pair_games > 0:
+                reason = f"рематч (встречались {pair_games} раз)"
+            elif min_games == 0:
+                reason = "новая модель, ещё не играла"
+            elif min_games < 3:
+                reason = f"мало игр ({min_games}), нужна калибровка"
+            elif elo_diff < 50:
+                reason = f"близкий рейтинг (разница {elo_diff})"
+            elif elo_diff < 150:
+                reason = f"рейтинг различается умеренно (Δ{elo_diff})"
+            else:
                 reason = f"разный уровень (Δ{elo_diff}) — проверить апсет"
 
             # score = близость ELO: монотонно убывает с ростом diff,
@@ -219,12 +228,13 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
                 "elo_a": elo_a,
                 "elo_b": elo_b,
                 "elo_diff": elo_diff,
+                "pair_games": pair_games,
                 "reason": reason,
                 "tier": tier,
                 "score": closeness,
             })
 
-    candidates.sort(key=lambda c: (c["tier"], -c["score"]))
+    candidates.sort(key=lambda c: (c["pair_games"], c["tier"], -c["score"]))
     return candidates[:top_n]
 
 
@@ -793,11 +803,6 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
         </div>
         {% endfor %}
-      </div>
-      {% elif models_count|int >= 2 %}
-      <div class="card" style="background: #1e293b; border-color: #334155;">
-        <h2 style="color: #94a3b8;">Все пары уже прогнаны</h2>
-        <div class="rec-reason" style="color: #64748b;">Все возможные пары моделей уже сравнены. Добавьте новую модель или повторите сравнение.</div>
       </div>
       {% endif %}
       <div class="card">

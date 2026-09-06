@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 32,
+  "task": "general",
+  "model_a": "cursor-gemini-3-8-flash-high",
+  "model_b": "devin-swe-1-7-max",
+  "model_a_id": "cursor-gemini-3-8-flash-high",
+  "model_b_id": "devin-swe-1-7-max",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T03:33:06+03:00",
+  "elo": {
+    "cursor-gemini-3-8-flash-high": {
+      "before": 1201,
+      "after": 1220,
+      "delta": 19
+    },
+    "devin-swe-1-7-max": {
+      "before": 1177,
+      "after": 1158,
+      "delta": -19
+    }
+  }
+}

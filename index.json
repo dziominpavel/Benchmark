@@ -1,25 +1,25 @@
 {
   "version": 2,
   "updated": "2026-09-06",
-  "matchups_digest": "ae4f5dc82190efa13cdadf375846fa51e269f08f7b241e2937deeb60b3fc7453",
+  "matchups_digest": "ce6a45a700be5ba26d81f335ac55b718cddd53032b15612f1360a756644a81ae",
   "models": {
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
       "provider": "",
       "status": "active",
-      "elo": 1160,
-      "games": 4,
-      "wins": 1,
-      "losses": 3,
+      "elo": 1141,
+      "games": 7,
+      "wins": 2,
+      "losses": 5,
       "draws": 0
     },
     "cursor-fable-5-1-1m-max": {
       "name": "Cursor Fable 5.1 1M Max",
       "provider": "",
       "status": "active",
-      "elo": 1281,
-      "games": 4,
-      "wins": 4,
+      "elo": 1315,
+      "games": 6,
+      "wins": 6,
       "losses": 0,
       "draws": 0
     },
@@ -27,49 +27,49 @@
       "name": "Cursor Gemini 3.8 Flash High",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 5,
-      "wins": 3,
-      "losses": 2,
+      "elo": 1205,
+      "games": 8,
+      "wins": 4,
+      "losses": 4,
       "draws": 0
     },
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6 Extra High",
       "provider": "",
       "status": "active",
-      "elo": 1239,
-      "games": 4,
-      "wins": 3,
-      "losses": 1,
+      "elo": 1256,
+      "games": 7,
+      "wins": 5,
+      "losses": 2,
       "draws": 0
     },
     "cursor-kimi-k3-max": {
       "name": "Cursor Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1160,
-      "games": 4,
-      "wins": 1,
-      "losses": 3,
+      "elo": 1181,
+      "games": 9,
+      "wins": 4,
+      "losses": 5,
       "draws": 0
     },
     "devin-glm-5-2-high": {
       "name": "Devin GLM-5.2 High",
       "provider": "",
       "status": "active",
-      "elo": 1161,
-      "games": 4,
+      "elo": 1122,
+      "games": 6,
       "wins": 1,
-      "losses": 3,
+      "losses": 5,
       "draws": 0
     },
     "devin-glm-5-3-flash-max": {
       "name": "Devin GLM-5.3 Flash Max",
       "provider": "",
       "status": "active",
-      "elo": 1220,
-      "games": 7,
-      "wins": 4,
+      "elo": 1239,
+      "games": 8,
+      "wins": 5,
       "losses": 3,
       "draws": 0
     },
@@ -77,9 +77,9 @@
       "name": "Devin GPT-5.6 Sol Max",
       "provider": "",
       "status": "active",
-      "elo": 1241,
-      "games": 4,
-      "wins": 3,
+      "elo": 1277,
+      "games": 6,
+      "wins": 5,
       "losses": 1,
       "draws": 0
     },
@@ -97,20 +97,20 @@
       "name": "Devin SWE-1.7 Max",
       "provider": "",
       "status": "active",
-      "elo": 1178,
-      "games": 5,
-      "wins": 2,
-      "losses": 3,
+      "elo": 1158,
+      "games": 8,
+      "wins": 3,
+      "losses": 5,
       "draws": 0
     },
     "opencode-mimo-v2-5-free": {
       "name": "OpenCode MiMo V2.5 Free",
       "provider": "",
       "status": "active",
-      "elo": 1140,
-      "games": 3,
+      "elo": 1106,
+      "games": 5,
       "wins": 0,
-      "losses": 3,
+      "losses": 5,
       "draws": 0
     },
     "opencode-muse-spark-1-3-free-xhigh": {
@@ -118,9 +118,9 @@
       "provider": "",
       "status": "active",
       "elo": 1200,
-      "games": 6,
-      "wins": 3,
-      "losses": 3,
+      "games": 10,
+      "wins": 5,
+      "losses": 5,
       "draws": 0
     }
   },
@@ -128,10 +128,7 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "answers": [
-        "modelA",
-        "modelB"
-      ],
+      "answers": [],
       "matchups_count": 0
     }
   },
@@ -459,6 +456,201 @@
       "winner": "b",
       "date": "2026-09-06",
       "recorded_at": "2026-09-06T03:01:43+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/026",
+      "seq": 26,
+      "task": "general",
+      "model_a": "cursor-composer-2-5",
+      "model_b": "devin-glm-5-2-high",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "devin-glm-5-2-high",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:06:45+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/027",
+      "seq": 27,
+      "task": "general",
+      "model_a": "cursor-composer-2-5",
+      "model_b": "devin-swe-1-7-max",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:10:20+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/028",
+      "seq": 28,
+      "task": "general",
+      "model_a": "cursor-kimi-k3-max",
+      "model_b": "devin-glm-5-2-high",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-glm-5-2-high",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:14:18+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/029",
+      "seq": 29,
+      "task": "general",
+      "model_a": "cursor-kimi-k3-max",
+      "model_b": "devin-swe-1-7-max",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:19:43+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/030",
+      "seq": 30,
+      "task": "general",
+      "model_a": "cursor-kimi-k3-max",
+      "model_b": "devin-glm-5-3-flash-max",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-glm-5-3-flash-max",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:24:07+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/031",
+      "seq": 31,
+      "task": "general",
+      "model_a": "cursor-gemini-3-8-flash-high",
+      "model_b": "devin-gpt-5-6-sol-max",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "devin-gpt-5-6-sol-max",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:29:37+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/032",
+      "seq": 32,
+      "task": "general",
+      "model_a": "cursor-gemini-3-8-flash-high",
+      "model_b": "devin-swe-1-7-max",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:33:06+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/033",
+      "seq": 33,
+      "task": "general",
+      "model_a": "cursor-grok-4-6",
+      "model_b": "opencode-muse-spark-1-3-free-xhigh",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:36:08+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/034",
+      "seq": 34,
+      "task": "general",
+      "model_a": "cursor-composer-2-5",
+      "model_b": "opencode-muse-spark-1-3-free-xhigh",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:40:10+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/035",
+      "seq": 35,
+      "task": "general",
+      "model_a": "cursor-fable-5-1-1m-max",
+      "model_b": "cursor-grok-4-6",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:48:13+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/036",
+      "seq": 36,
+      "task": "general",
+      "model_a": "cursor-kimi-k3-max",
+      "model_b": "opencode-mimo-v2-5-free",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:53:29+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/037",
+      "seq": 37,
+      "task": "general",
+      "model_a": "cursor-grok-4-6",
+      "model_b": "cursor-kimi-k3-max",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "cursor-kimi-k3-max",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:00:11+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/038",
+      "seq": 38,
+      "task": "general",
+      "model_a": "devin-gpt-5-6-sol-max",
+      "model_b": "opencode-muse-spark-1-3-free-xhigh",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:12:31+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/039",
+      "seq": 39,
+      "task": "general",
+      "model_a": "opencode-mimo-v2-5-free",
+      "model_b": "opencode-muse-spark-1-3-free-xhigh",
+      "model_a_id": "opencode-mimo-v2-5-free",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:15:31+03:00",
+      "status": "applied"
+    },
+    {
+      "id": "general/040",
+      "seq": 40,
+      "task": "general",
+      "model_a": "cursor-fable-5-1-1m-max",
+      "model_b": "cursor-gemini-3-8-flash-high",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "cursor-gemini-3-8-flash-high",
+      "winner": "a",
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:19:47+03:00",
       "status": "applied"
     }
   ],
@@ -961,6 +1153,306 @@
         "before": 1180,
         "after": 1200,
         "delta": 20
+      }
+    },
+    {
+      "matchup": "general/026",
+      "after_matchup": "general/026",
+      "seq": 26,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:06:45+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "devin-glm-5-2-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1160,
+        "after": 1180,
+        "delta": 20
+      },
+      "elo_b": {
+        "before": 1161,
+        "after": 1141,
+        "delta": -20
+      }
+    },
+    {
+      "matchup": "general/027",
+      "after_matchup": "general/027",
+      "seq": 27,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:10:20+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1180,
+        "after": 1160,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1178,
+        "after": 1198,
+        "delta": 20
+      }
+    },
+    {
+      "matchup": "general/028",
+      "after_matchup": "general/028",
+      "seq": 28,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:14:18+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-glm-5-2-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1160,
+        "after": 1179,
+        "delta": 19
+      },
+      "elo_b": {
+        "before": 1141,
+        "after": 1122,
+        "delta": -19
+      }
+    },
+    {
+      "matchup": "general/029",
+      "after_matchup": "general/029",
+      "seq": 29,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:19:43+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1179,
+        "after": 1200,
+        "delta": 21
+      },
+      "elo_b": {
+        "before": 1198,
+        "after": 1177,
+        "delta": -21
+      }
+    },
+    {
+      "matchup": "general/030",
+      "after_matchup": "general/030",
+      "seq": 30,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:24:07+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-glm-5-3-flash-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1200,
+        "after": 1181,
+        "delta": -19
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1239,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "general/031",
+      "after_matchup": "general/031",
+      "seq": 31,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:29:37+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "devin-gpt-5-6-sol-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1220,
+        "after": 1201,
+        "delta": -19
+      },
+      "elo_b": {
+        "before": 1241,
+        "after": 1260,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "general/032",
+      "after_matchup": "general/032",
+      "seq": 32,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:33:06+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1201,
+        "after": 1220,
+        "delta": 19
+      },
+      "elo_b": {
+        "before": 1177,
+        "after": 1158,
+        "delta": -19
+      }
+    },
+    {
+      "matchup": "general/033",
+      "after_matchup": "general/033",
+      "seq": 33,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:36:08+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1239,
+        "after": 1257,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1182,
+        "delta": -18
+      }
+    },
+    {
+      "matchup": "general/034",
+      "after_matchup": "general/034",
+      "seq": 34,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:40:10+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1160,
+        "after": 1141,
+        "delta": -19
+      },
+      "elo_b": {
+        "before": 1182,
+        "after": 1201,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "general/035",
+      "after_matchup": "general/035",
+      "seq": 35,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:48:13+03:00",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "cursor-grok-4-6",
+      "winner": "a",
+      "elo_a": {
+        "before": 1281,
+        "after": 1300,
+        "delta": 19
+      },
+      "elo_b": {
+        "before": 1257,
+        "after": 1238,
+        "delta": -19
+      }
+    },
+    {
+      "matchup": "general/036",
+      "after_matchup": "general/036",
+      "seq": 36,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T03:53:29+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1181,
+        "after": 1199,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1140,
+        "after": 1122,
+        "delta": -18
+      }
+    },
+    {
+      "matchup": "general/037",
+      "after_matchup": "general/037",
+      "seq": 37,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:00:11+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "cursor-kimi-k3-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1238,
+        "after": 1256,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1199,
+        "after": 1181,
+        "delta": -18
+      }
+    },
+    {
+      "matchup": "general/038",
+      "after_matchup": "general/038",
+      "seq": 38,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:12:31+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1260,
+        "after": 1277,
+        "delta": 17
+      },
+      "elo_b": {
+        "before": 1201,
+        "after": 1184,
+        "delta": -17
+      }
+    },
+    {
+      "matchup": "general/039",
+      "after_matchup": "general/039",
+      "seq": 39,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:15:31+03:00",
+      "model_a_id": "opencode-mimo-v2-5-free",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1122,
+        "after": 1106,
+        "delta": -16
+      },
+      "elo_b": {
+        "before": 1184,
+        "after": 1200,
+        "delta": 16
+      }
+    },
+    {
+      "matchup": "general/040",
+      "after_matchup": "general/040",
+      "seq": 40,
+      "date": "2026-09-06",
+      "recorded_at": "2026-09-06T04:19:47+03:00",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "cursor-gemini-3-8-flash-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1300,
+        "after": 1315,
+        "delta": 15
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1205,
+        "delta": -15
       }
     }
   ]

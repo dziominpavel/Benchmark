@@ -21,7 +21,49 @@ INDEX_PATH = REPO_ROOT / "index.json"
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from elo import generate_index, save_index, load_models_yaml
+import server
 from server import get_recommendations
+
+
+def test_rematch_recommendations() -> None:
+    """Все пары сыграны → рекомендуются рематчи с min pair_games."""
+    index_data = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+    models = index_data.get("models", {})
+    active_ids = sorted(
+        mid for mid, m in models.items()
+        if m.get("status", "active") != "archived"
+    )
+    if len(active_ids) < 2:
+        print("rematch: меньше двух активных моделей — пропуск")
+        return
+
+    # Подменяем счётчик: все пары сыграли по 2 раза, одна — 1 раз
+    fake_counts = {}
+    for i in range(len(active_ids)):
+        for j in range(i + 1, len(active_ids)):
+            fake_counts[frozenset({active_ids[i], active_ids[j]})] = 2
+    min_pair = frozenset({active_ids[0], active_ids[1]})
+    fake_counts[min_pair] = 1
+
+    real_fn = server.get_pair_game_counts
+    server.get_pair_game_counts = lambda: fake_counts
+    try:
+        recs = get_recommendations(index_data, top_n=3)
+    finally:
+        server.get_pair_game_counts = real_fn
+
+    assert recs, "рекомендации пусты при полном покрытии"
+    assert all(r["pair_games"] >= 1 for r in recs), (
+        f"ожидались только рематчи, получено: {recs}"
+    )
+    first = recs[0]
+    assert first["pair_games"] == 1, (
+        f"первой должна идти пара с min pair_games=1, получено: {first}"
+    )
+    assert frozenset({first["model_a"], first["model_b"]}) == min_pair
+    assert "рематч" in first["reason"], f"ожидалась причина-рематч: {first}"
+    print(f"rematch OK: первая рекомендация — рематч "
+          f"{first['model_a']} vs {first['model_b']} ({first['reason']})")
 
 
 def find_archiveable_model() -> str:
@@ -68,6 +110,8 @@ def main() -> int:
             )
 
         print(f"pairing filter OK: архивная {model_id} исключена, рекомендаций: {len(recs)}")
+
+        test_rematch_recommendations()
         return 0
     finally:
         run_archive(model_id, restore=True)

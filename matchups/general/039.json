@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 39,
+  "task": "general",
+  "model_a": "opencode-mimo-v2-5-free",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "model_a_id": "opencode-mimo-v2-5-free",
+  "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T04:15:31+03:00",
+  "elo": {
+    "opencode-mimo-v2-5-free": {
+      "before": 1122,
+      "after": 1106,
+      "delta": -16
+    },
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1184,
+      "after": 1200,
+      "delta": 16
+    }
+  }
+}

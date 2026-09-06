@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 37,
+  "task": "general",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "cursor-kimi-k3-max",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "cursor-kimi-k3-max",
+  "winner": "a",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T04:00:11+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1238,
+      "after": 1256,
+      "delta": 18
+    },
+    "cursor-kimi-k3-max": {
+      "before": 1199,
+      "after": 1181,
+      "delta": -18
+    }
+  }
+}

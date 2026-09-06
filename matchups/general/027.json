@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 27,
+  "task": "general",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "devin-swe-1-7-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "devin-swe-1-7-max",
+  "winner": "b",
+  "date": "2026-09-06",
+  "recorded_at": "2026-09-06T03:10:20+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1180,
+      "after": 1160,
+      "delta": -20
+    },
+    "devin-swe-1-7-max": {
+      "before": 1178,
+      "after": 1198,
+      "delta": 20
+    }
+  }
+}
