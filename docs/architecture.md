@@ -106,8 +106,8 @@
     Аннулирование: record_verdict.py --void T-001/001 --reason "..."
 
 ⑤ LEADERBOARD
-    localhost:5000 → таблица ELO + рекомендации + история
-    или: python tools/generate_html.py → leaderboard.html (только чтение)
+    localhost:5000 → таблица ELO + рекомендации + форма вердикта
+    История ELO: localhost:5000/history
     Проверка целостности журнала: python tools/elo.py --check
 ```
 
@@ -128,7 +128,7 @@
   (sha256 содержимого журнала — правка любого файла инвалидирует кэш)
 
 **Генерируется (не в git):**
-- `leaderboard.html` — статичный экспорт (добавлен в `.gitignore`)
+- Статичных артефактов нет; для просмотра используется веб-UI.
 
 ## ELO-движок
 
@@ -182,7 +182,7 @@ score = closeness = 1 / (1 + elo_diff / 100)   # близкий ELO — инфо
 
 - `status: archived` в models.yaml
 - История сохраняется, старые вердикты участвуют в пересчёте
-- Серверная таблица и `leaderboard.html` поддерживают фильтр active/all/archived
+- Серверная таблица поддерживает фильтр active/all/archived
 - Архивные модели исключаются из рекомендаций
 - `python tools/archive_model.py <id>` / `--restore <id>`
 
