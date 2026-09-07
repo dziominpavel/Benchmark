@@ -954,7 +954,6 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ loop.index }}</td>
                 <td class="model-cell">
                   <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
-                  <a href="/edit/{{ m.id }}" class="edit-link" style="font-size:0.75rem;color:#64748b;" title="Изменить модель">изменить</a>
                   {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
                 </td>
                 <td>{{ m.elo }}</td>
@@ -1196,7 +1195,11 @@ MODEL_TEMPLATE = """<!DOCTYPE html>
     <h1>{{ detail.name }}</h1>
     <span class="detail-elo">{{ detail.elo }}</span>
     {% if detail.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+    <a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>
   </div>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
   <div class="stats-grid">
     <div class="stat-card"><div class="stat-value">{{ detail.elo }}</div><div class="stat-label">ELO</div></div>
@@ -1342,7 +1345,7 @@ EDIT_TEMPLATE = """<!DOCTYPE html>
 <style>""" + CSS + """</style>
 </head>
 <body>
-<a href="/" class="back-link">&larr; Назад к рейтингу</a>
+<a href="/model/{{ model.id }}" class="back-link">&larr; Назад к модели</a>
 
 <div class="header">
   <h1>Редактировать модель</h1>
@@ -1371,7 +1374,7 @@ EDIT_TEMPLATE = """<!DOCTYPE html>
     </div>
     <div style="margin-top:16px;">
       <button type="submit" class="btn btn-primary">Сохранить</button>
-      <a href="/" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+      <a href="/model/{{ model.id }}" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
     </div>
   </form>
 </div>
@@ -1676,6 +1679,8 @@ def model_page(model_id: str):
         MODEL_TEMPLATE,
         detail=detail,
         chart_svg=build_elo_svg(detail["points"]),
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
     )
 
 
@@ -1955,8 +1960,8 @@ def edit_model(model_id: str):
 
     status_label = "активна" if status == "active" else "неактивна (архив)"
     return redirect(url_for(
-        "leaderboard",
-        filter="active",
+        "model_page",
+        model_id=model_id,
         success=f"Модель «{name}» обновлена, статус: {status_label}.",
     ))
 

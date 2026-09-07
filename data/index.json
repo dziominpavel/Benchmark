@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-09-08",
-  "matchups_digest": "f4c96a99b7e8555ace6065eaa099ccf7d36423cb732bce5e31b262affd95cc8f",
+  "matchups_digest": "f3bd69a49626d5705a72f4f01d2e98f9d381419d76779690c73f6fbec24828da",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -67,9 +67,9 @@
       "name": "Cursor Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1156,
-      "games": 13,
-      "wins": 5,
+      "elo": 1172,
+      "games": 14,
+      "wins": 6,
       "losses": 8,
       "draws": 0
     },
@@ -127,10 +127,10 @@
       "name": "Devin Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1158,
-      "games": 4,
+      "elo": 1138,
+      "games": 5,
       "wins": 1,
-      "losses": 3,
+      "losses": 4,
       "draws": 0
     },
     "devin-swe-1-7-max": {
@@ -169,12 +169,12 @@
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
       "answers": [],
-      "matchups_count": 88
+      "matchups_count": 89
     }
   },
   "matchups_summary": {
-    "total": 88,
-    "applied": 88,
+    "total": 89,
+    "applied": 89,
     "voided": 0,
     "tombstone": 0,
     "skipped": 0
@@ -1849,6 +1849,25 @@
       "elo_b": {
         "before": 1178,
         "after": 1158,
+        "delta": -20
+      }
+    },
+    {
+      "matchup": "T-001/089",
+      "seq": 89,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T01:10:04+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "devin-kimi-k3-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1156,
+        "after": 1172,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1158,
+        "after": 1138,
         "delta": -20
       }
     }
