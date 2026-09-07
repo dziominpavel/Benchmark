@@ -44,7 +44,9 @@ from register_task import (
     next_task_id, unique_slug_dir, fill_template, TEMPLATE_PATH, slugify as slugify_task,
 )
 
-from render_helpers import format_elo_history, format_winrate
+from render_helpers import (
+    format_elo_history, format_winrate, get_model_detail, build_elo_svg,
+)
 
 from register_model import parse_existing, format_model
 
@@ -393,6 +395,25 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     return candidates[:top_n]
 
 
+def format_reason(rec: dict) -> str:
+    """Строка-обоснование рекомендации (только отображение).
+
+    Вычисляется из готовых полей рекомендации; вывод get_recommendations
+    не меняется (поле reason в нём запрещено спекой pairing-algorithm).
+    """
+    games = rec.get("pair_games", 0)
+    diff = rec.get("elo_diff", 0)
+    if games == 0:
+        text = f"не встречались · Δ={diff}"
+        if rec.get("tier", 2) == 0:
+            text += " · новая модель"
+        return text
+    return (
+        f"счёт {rec.get('pair_wins_a', 0)}:{rec.get('pair_wins_b', 0)}"
+        f" · Δ={diff}"
+    )
+
+
 # ─── HTML: shared CSS ───────────────────────────────────────────────
 
 CSS = """
@@ -611,6 +632,53 @@ CSS = """
     font-size: 0.82rem;
     margin-top: 4px;
   }
+  .rec-reason {
+    color: #94a3b8;
+    font-size: 0.82rem;
+    margin-top: 2px;
+  }
+  .legend {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-top: 10px;
+  }
+  tr.top-1 td { background: rgba(52, 211, 153, 0.08); }
+  tr.top-2 td { background: rgba(129, 140, 248, 0.08); }
+  tr.top-3 td { background: rgba(251, 191, 36, 0.08); }
+  .medal { margin-right: 6px; }
+  .archived-section {
+    margin-top: 16px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #94a3b8;
+    font-size: 0.85rem;
+  }
+  .archived-section summary { cursor: pointer; font-weight: 600; }
+  .archived-section ul { list-style: none; margin: 8px 0 0; padding: 0; }
+  .archived-section li {
+    padding: 4px 0;
+    border-bottom: 1px solid #1e293b;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .detail-header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .detail-header h1 { margin: 0; }
+  .detail-elo { font-size: 1.4rem; font-weight: 700; color: #818cf8; }
+  .back-link { display: inline-block; color: #94a3b8; text-decoration: none; font-size: 0.9rem; margin-bottom: 16px; }
+  .back-link:hover { color: #e2e8f0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin: 20px 0 24px; }
+  .stat-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-card .stat-value { font-size: 1.25rem; font-weight: 700; }
+  .stat-card .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+  .chart { width: 100%; height: auto; }
+  .chart-line { stroke: #818cf8; stroke-width: 2; }
+  .chart-dot { fill: #818cf8; }
+  .chart-grid { stroke: #1e293b; stroke-width: 1; }
+  .chart-tick { fill: #64748b; font-size: 12px; }
+  .chart-mark { fill: #94a3b8; font-size: 12px; font-weight: 600; }
+  .chart-empty { color: #64748b; padding: 24px; text-align: center; }
   .rec-info {
     flex: 1;
     min-width: 0;
@@ -850,6 +918,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
     <div class="stats">
       Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Прогресс: {{ progress_label }} · Обновлено: {{ updated }}
     </div>
+    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5</div>
     <form method="GET" action="/" class="filter-bar">
       <label for="filter">Показывать</label>
       <select name="filter" id="filter" onchange="this.form.submit()">
@@ -881,10 +950,11 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             </thead>
             <tbody>
               {% for m in models_sorted %}
-              <tr class="{{ 'archived' if m.status == 'archived' }}">
-                <td class="rank">{{ loop.index }}</td>
+              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and filter != 'inactive' }}">
+                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ loop.index }}</td>
                 <td class="model-cell">
-                  <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                  <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                  <a href="/edit/{{ m.id }}" class="edit-link" style="font-size:0.75rem;color:#64748b;" title="Изменить модель">изменить</a>
                   {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
                 </td>
                 <td>{{ m.elo }}</td>
@@ -908,6 +978,16 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
           Нет моделей. Добавьте модель через «Настройки», чтобы начать.
           {% endif %}
         </div>
+        {% endif %}
+        {% if filter == 'active' and archived_list %}
+        <details class="archived-section">
+          <summary>Архивные модели ({{ archived_list|length }})</summary>
+          <ul>
+            {% for a in archived_list %}
+            <li><a href="/model/{{ a.id }}" class="edit-link">{{ a.name }}</a><span>{{ a.elo }}</span></li>
+            {% endfor %}
+          </ul>
+        </details>
         {% endif %}
       </div>
 
@@ -937,6 +1017,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
               <span class="rec-elo">{{ rec.elo_b }}</span>
             </div>
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
+            <div class="rec-reason">{{ rec.reason }}</div>
           </div>
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
         </div>
@@ -1089,6 +1170,99 @@ HISTORY_TEMPLATE = """<!DOCTYPE html>
     {% endif %}
     {% else %}
     <div class="empty-state">Нет истории</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+# ─── HTML: Model page ─────────────────────────────────────────────
+
+MODEL_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ detail.name }} — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+  <div class="detail-header">
+    <h1>{{ detail.name }}</h1>
+    <span class="detail-elo">{{ detail.elo }}</span>
+    {% if detail.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ detail.elo }}</div><div class="stat-label">ELO</div></div>
+    <div class="stat-card"><div class="stat-value">{{ detail.games }}</div><div class="stat-label">Матчей</div></div>
+    <div class="stat-card"><div class="stat-value">{{ detail.wins }}</div><div class="stat-label">Побед</div></div>
+    <div class="stat-card"><div class="stat-value">{{ detail.losses }}</div><div class="stat-label">Поражений</div></div>
+    <div class="stat-card"><div class="stat-value">{{ detail.draws }}</div><div class="stat-label">Ничьих</div></div>
+    <div class="stat-card"><div class="stat-value">{{ detail.winrate }}</div><div class="stat-label">Винрейт</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Динамика ELO</h2>
+    {{ chart_svg|safe }}
+  </div>
+
+  <div class="card">
+    <h2>Личные встречи</h2>
+    {% if detail.h2h %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Соперник</th><th>Встреч</th><th>W</th><th>L</th><th>D</th><th>Винрейт</th></tr>
+        </thead>
+        <tbody>
+          {% for r in detail.h2h %}
+          <tr>
+            <td><a href="/model/{{ r.id }}" class="edit-link">{{ r.name }}</a></td>
+            <td>{{ r.games }}</td>
+            <td class="wld w">{{ r.w }}</td>
+            <td class="wld l">{{ r.l }}</td>
+            <td class="wld d">{{ r.d }}</td>
+            <td class="winrate">{{ r.winrate }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Пока нет встреч</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>История матчей</h2>
+    {% if detail.history %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Соперник</th><th>Дата</th><th>Исход</th><th>ELO до</th><th>Δ</th><th>ELO после</th></tr>
+        </thead>
+        <tbody>
+          {% for h in detail.history %}
+          <tr>
+            <td><a href="/model/{{ h.opp_id }}" class="edit-link">{{ h.opp_name }}</a></td>
+            <td>{{ h.date_str }}</td>
+            <td>{{ h.outcome }}</td>
+            <td>{{ h.before }}</td>
+            <td class="{{ h.delta_class }}">{{ h.delta_str }}</td>
+            <td>{{ h.after }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Пока нет матчей</div>
     {% endif %}
   </div>
 </div>
@@ -1489,6 +1663,22 @@ def history_page():
     )
 
 
+@app.route("/model/<model_id>")
+def model_page(model_id: str):
+    index_data = ensure_index()
+    detail = get_model_detail(index_data, model_id)
+    if detail is None:
+        return render_template_string(
+            "<h1>404</h1><p>Модель не найдена</p>"
+            '<p><a href="/">Назад к рейтингу</a></p>'
+        ), 404
+    return render_template_string(
+        MODEL_TEMPLATE,
+        detail=detail,
+        chart_svg=build_elo_svg(detail["points"]),
+    )
+
+
 @app.route("/")
 def leaderboard():
     index_data = ensure_index()
@@ -1527,8 +1717,23 @@ def leaderboard():
         key=lambda x: x[1].lower(),
     )
 
-    # Рекомендации пар
+    # Рекомендации пар (+ строка-обоснование для отображения)
     recommendations = get_recommendations(index_data, top_n=3)
+    for rec in recommendations:
+        rec["reason"] = format_reason(rec)
+
+    # Топ-3 активных по ELO — для медалей; архивные — для секции
+    top_active = sorted(
+        (i for i in models.values() if is_model_active(i)),
+        key=lambda m: m.get("elo", DEFAULT_ELO),
+        reverse=True,
+    )
+    medals = {info["id"]: rank for rank, info in enumerate(top_active[:3], start=1)}
+    archived_list = sorted(
+        (info for info in models.values() if not is_model_active(info)),
+        key=lambda m: m.get("elo", DEFAULT_ELO),
+        reverse=True,
+    )
 
     # Настройки: текущая таска и прогресс покрытия
     settings = load_settings()
@@ -1543,15 +1748,25 @@ def leaderboard():
             f"(закрыто {coverage['filled']} из {coverage['total']})"
         )
 
+    # Счётчик вердиктов: новый агрегат, fallback на старый список
+    summary = index_data.get("matchups_summary", {})
+    if "total" in summary:
+        matchups_count = summary["total"]
+    else:
+        matchups_count = len(index_data.get("matchups_index", []))
+
     return render_template_string(
         INDEX_TEMPLATE,
         models_sorted=models_sorted,
         models_count=len(models),
         filtered_count=len(models_sorted),
-        matchups_count=len(index_data.get("matchups_index", [])),
+        matchups_count=matchups_count,
         updated=index_data.get("updated", ""),
         models_list=models_list,
         recommendations=recommendations,
+        medals=medals,
+        medal_icons=["🥇", "🥈", "🥉"],
+        archived_list=archived_list,
         current_task=current_task,
         task_options=task_options,
         progress_label=progress_label,

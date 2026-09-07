@@ -449,7 +449,6 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
 
         common = {
             "matchup": mu_id,
-            "after_matchup": mu_id,  # обратная совместимость
             "seq": mu.get("seq"),
             "date": mu.get("date", ""),
             "recorded_at": mu.get("recorded_at", ""),
@@ -644,36 +643,20 @@ def collect_tasks_info() -> dict:
     return tasks_info
 
 
-def build_matchups_index(matchups: list[dict], applied: set[str],
-                         voided: set[str], skipped: set[str]) -> list[dict]:
-    """Сводка вердиктов для index.json со статусом и resolved ids."""
-    model_ids = {m["id"] for m in load_models_yaml()}
-    result = []
-    for mu in matchups:
-        mu_id = mu.get("_matchup_id", "")
-        if mu.get("void_of"):
-            status = "tombstone"
-        elif mu_id in voided:
-            status = "voided"
-        elif mu_id in applied:
-            status = "applied"
-        else:
-            status = "skipped"
-        a_id, b_id = resolve_matchup_models(mu, model_ids)
-        result.append({
-            "id": mu_id,
-            "seq": mu.get("seq"),
-            "task": mu.get("task", ""),
-            "model_a": mu.get("model_a", ""),
-            "model_b": mu.get("model_b", ""),
-            "model_a_id": a_id or "",
-            "model_b_id": b_id or "",
-            "winner": mu.get("winner", ""),
-            "date": mu.get("date", ""),
-            "recorded_at": mu.get("recorded_at", ""),
-            "status": status,
-        })
-    return result
+def build_matchups_summary(applied: list[str], voided: list[str],
+                           tombstones: list[str], skipped: list[str],
+                           total: int) -> dict:
+    """Агрегат журнала для index.json: счётчики файлов по статусам.
+
+    Полный список не храним — детали только в файлах data/matchups/.
+    """
+    return {
+        "total": total,
+        "applied": len(applied),
+        "voided": len(voided),
+        "tombstone": len(tombstones),
+        "skipped": len(skipped),
+    }
 
 
 def generate_index() -> dict:
@@ -704,11 +687,12 @@ def generate_index() -> dict:
         }
 
     tasks_info = collect_tasks_info()
-    matchups_idx = build_matchups_index(
-        matchups,
-        set(elo_data["applied"]),
-        set(elo_data["voided"]),
-        set(elo_data["skipped"]),
+    matchups_summary = build_matchups_summary(
+        elo_data["applied"],
+        elo_data["voided"],
+        elo_data["tombstones"],
+        elo_data["skipped"],
+        len(matchups),
     )
 
     return {
@@ -717,7 +701,7 @@ def generate_index() -> dict:
         "matchups_digest": matchups_digest(),
         "models": models_out,
         "tasks": tasks_info,
-        "matchups_index": matchups_idx,
+        "matchups_summary": matchups_summary,
         "elo_history": elo_data["elo_history"],
     }
 
@@ -957,10 +941,9 @@ def main() -> int:
     save_index(data)
 
     models_count = len(data["models"])
-    matchups_count = len(data["matchups_index"])
-    applied = sum(1 for m in data["matchups_index"] if m["status"] == "applied")
-    print(f"index.json обновлён: {models_count} моделей, {matchups_count} вердиктов "
-          f"({applied} применено).")
+    summary = data["matchups_summary"]
+    print(f"index.json обновлён: {models_count} моделей, {summary['total']} вердиктов "
+          f"({summary['applied']} применено).")
     return 0
 
 
