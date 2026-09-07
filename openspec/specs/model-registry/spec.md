@@ -10,7 +10,7 @@ CLI (`tools/register_model.py`, включая саморегистрацию `-
 
 ### Requirement: Формат реестра
 
-Модели SHALL храниться в `models.yaml` списком `models:`. Каждая запись:
+Модели SHALL храниться в `data/models.yaml` списком `models:`. Каждая запись:
 `id` (slug, стабильный), `name` (человекочитаемое имя), опциональные `provider`,
 `version`, `released`, `notes`; `status`: `active` | `archived` (по умолчанию
 `active`). Комментарии-Шапка файла SHALL описывать формат и команды управления.
@@ -18,7 +18,7 @@ CLI (`tools/register_model.py`, включая саморегистрацию `-
 #### Scenario: Новая модель
 
 - **WHEN** модель регистрируется
-- **THEN** в `models.yaml` добавляется запись с id, name, status: active
+- **THEN** в `data/models.yaml` добавляется запись с id, name, status: active
 
 #### Scenario: Архивная модель
 
@@ -66,8 +66,8 @@ CLI (`tools/register_model.py`, включая саморегистрацию `-
 #### Scenario: Архивация
 
 - **WHEN** выполняется `archive_model.py claude-sonnet-4.5`
-- **THEN** status в `models.yaml` меняется на archived
-- **AND** старые вердикты остаются в `matchups/`
+- **THEN** status в `data/models.yaml` меняется на archived
+- **AND** старые вердикты остаются в `data/matchups/`
 
 #### Scenario: Архивация несуществующей модели
 
@@ -101,23 +101,23 @@ id модели SHALL быть неизменным после создания.
 
 ### Requirement: ELO не в models.yaml
 
-ELO и статистика (W/L/D, games) SHALL храниться только в `index.json`.
-`models.yaml` содержит только метаданные, поэтому ручное редактирование
+ELO и статистика (W/L/D, games) SHALL храниться только в `data/index.json`.
+`data/models.yaml` содержит только метаданные, поэтому ручное редактирование
 метаданных на ELO не влияет.
 
 #### Scenario: Ручное редактирование models.yaml
 
-- **WHEN** пользователь меняет notes/provider в `models.yaml`
+- **WHEN** пользователь меняет notes/provider в `data/models.yaml`
 - **THEN** ELO не затрагивается
-- **AND** следующий пересчёт строится из `matchups/`
+- **AND** следующий пересчёт строится из `data/matchups/`
 
 ### Requirement: Статус модели в index.json
 
-`index.json["models"][<id>]` SHALL содержать поле `status` (`active` | `archived`), скопированное из `models.yaml`. UI и алгоритм рекомендаций SHALL использовать это поле без повторного чтения `models.yaml`.
+`data/index.json["models"][<id>]` SHALL содержать поле `status` (`active` | `archived`), скопированное из `data/models.yaml`. UI и алгоритм рекомендаций SHALL использовать это поле без повторного чтения `data/models.yaml`.
 
 #### Scenario: Статус в index.json
 
-- **WHEN** `index.json` сгенерирован
+- **WHEN** `data/index.json` сгенерирован
 - **THEN** каждая модель содержит `status`
 - **AND** `pairing-algorithm` исключает модели со `status: archived`
 

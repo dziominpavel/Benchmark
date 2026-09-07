@@ -4,6 +4,6 @@ REM Запускает launch.vbs и сразу закрывается; серв
 
 cd /d "%~dp0"
 
-if not exist logs\ mkdir logs
+if not exist data\logs\ mkdir data\logs
 
 start "" wscript "%~dp0launch.vbs"

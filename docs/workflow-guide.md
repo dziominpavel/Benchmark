@@ -11,13 +11,13 @@ python tools/register_task.py --title "Bug Hunt — NewModule" \
     --project VoiceMind --baseline abc123
 ```
 
-Он создаёт `tasks/T-NNN-<slug>/task.md` из шаблона, активирует задачу
-и назначает её текущей в `settings.yaml`.
+Он создаёт `data/tasks/T-NNN-<slug>/task.md` из шаблона, активирует задачу
+и назначает её текущей в `data/settings.yaml`.
 
-Альтернатива — вручную: скопируй `tasks/_TEMPLATE.md` в `tasks/T-NNN-<slug>/task.md`,
+Альтернатива — вручную: скопируй `data/tasks/_TEMPLATE.md` в `data/tasks/T-NNN-<slug>/task.md`,
 заполни front matter (`id`, `title`, опционально `project` + `baseline_commit`)
 и разделы (описание, что искать, критерии полноты, ограничения).
-Пример готовой задачи: `tasks/T-001-recurrence-bugs/task.md`.
+Пример готовой задачи: `data/tasks/T-001-recurrence-bugs/task.md`.
 
 ### Шаг 2: Прогнать модели (skills)
 
@@ -30,13 +30,13 @@ python tools/register_task.py --title "Bug Hunt — NewModule" \
 
 Каждый skill сам: читает `task.md`, делает `git checkout <baseline_commit>`
 в проекте-референсе, анализирует код, пишет анонимный ответ
-(`answers/T-001/modelA.md` / `answers/T-001/modelB.md`) и чистит проект после.
+(`data/answers/T-001/modelA.md` / `data/answers/T-001/modelB.md`) и чистит проект после.
 В конце сообщает сколько багов найдено. Реальный `id` участника не пишется
 в файл ответа и не сохраняется рядом с ним.
 
 Прогон произвольной модели из реестра (например `opencode-mimo-v2-5-free`)
-готовым skill не покрыт — ответ пишется вручную по `answers/_TEMPLATE.md`
-в файл `answers/T-001/<model-id>.md`.
+готовым skill не покрыт — ответ пишется вручную по `data/answers/_TEMPLATE.md`
+в файл `data/answers/T-001/<model-id>.md`.
 
 ### Шаг 3: Судья (skill)
 
@@ -56,9 +56,9 @@ ELO выполняет координатор отдельным шагом.
 1. Открыть чат с любой LLM (судья).
 2. Скопировать промпт из [judge-prompt.md](judge-prompt.md).
 3. Дать судье:
-   - `tasks/T-001-<slug>/task.md` (задача)
-   - `answers/T-001/modelA.md` (ответ 1, анонимно)
-   - `answers/T-001/modelB.md` (ответ 2, анонимно)
+   - `data/tasks/T-001-<slug>/task.md` (задача)
+   - `data/answers/T-001/modelA.md` (ответ 1, анонимно)
+   - `data/answers/T-001/modelB.md` (ответ 2, анонимно)
 4. Судья отвечает: оценки, победитель, обоснование (2–3 предложения).
 5. Записать итог через веб-UI (шаг 4).
 
@@ -79,7 +79,7 @@ python tools/server.py
 3. Кнопка «Победила A» / «Победила B» / «Ничья»
    (кнопки активны только когда выбраны две разные модели и активный таск)
 4. Форма вызывает ту же `record_verdict` — вердикт получает seq,
-   recorded_at и ELO-снэпшот; index.json пересчитывается автоматически
+   recorded_at и ELO-снэпшот; data/index.json пересчитывается автоматически
 
 Или через CLI (без сервера):
 ```bash
@@ -116,7 +116,7 @@ python tools/record_verdict.py --void T-001/003 --reason "ошибка"
 python tools/register_model.py --auto --id gemini-3-pro --name "Gemini 3 Pro"
 ```
 
-Затем: ответ модели на существующую задачу (вручную в `answers/T-001/<id>.md`),
+Затем: ответ модели на существующую задачу (вручную в `data/answers/T-001/<id>.md`),
 судейство против уже оценённых моделей (калибровка) — веб-UI сам предложит
 пары с новой моделью первыми (у неё 0 игр).
 
@@ -159,10 +159,10 @@ python tools/register_task.py --title "Bug Hunt — NewModule" \
 Управлять активными задачами, текущей и описанием — в веб-UI:
 `http://localhost:5000/settings` → карточка «Таски».
 
-«Удаление» задачи в UI = деактивация: директория `tasks/`, ответы `answers/`
-и вердикты `matchups/` остаются. При повторной активации история снова
+«Удаление» задачи в UI = деактивация: директория `data/tasks/`, ответы `data/answers/`
+и вердикты `data/matchups/` остаются. При повторной активации история снова
 учитывается в прогрессе.
 
-При создании вручную: скопируй `tasks/_TEMPLATE.md` в `tasks/T-NNN-<slug>/task.md`
+При создании вручную: скопируй `data/tasks/_TEMPLATE.md` в `data/tasks/T-NNN-<slug>/task.md`
 и заполни. Модели **не сбрасывают ELO** — рейтинг переносится. Новая задача
 продолжает обновлять тот же глобальный ELO.

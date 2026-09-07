@@ -26,4 +26,4 @@ ehthumbs.db
 
 # Logs
 *.log
-logs/*.pid
+data/logs/*.pid

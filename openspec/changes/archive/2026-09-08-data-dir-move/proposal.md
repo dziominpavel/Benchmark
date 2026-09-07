@@ -25,6 +25,10 @@
 - `matchup-management`: путь журнала `matchups/` → `data/matchups/`.
 - `model-registry`: путь реестра `models.yaml` → `data/models.yaml`.
 - `benchmark-workflow`: сквозные пути прогона в описании workflow.
+- `elo-engine`: пути журнала и кэша (`matchups/`, `index.json`, `models.yaml`) → `data/`-префикс.
+- `pairing-algorithm`: пути источников (`index.json`, `matchups/*/`) → `data/`-префикс.
+- `leaderboard-ui`: пути в требованиях формы, настроек, добавления модели (`settings.yaml`, `models.yaml`, `index.json`, `matchups/`) → `data/`-префикс.
+- `run-progress`: пути покрытия (`models.yaml`, `matchups/`, `tasks/`, `settings.yaml`) → `data/`-префикс.
 
 ## Влияние
 

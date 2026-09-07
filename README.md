@@ -23,12 +23,12 @@
 
 ```
 ① Создать задачу          python tools/register_task.py --title "..." [--slug ...]
-                          (или вручную из tasks/_TEMPLATE.md)
+                           (или вручную из data/tasks/_TEMPLATE.md)
 ② Прогнать модели         @benchmark-run-a T-001, @benchmark-run-b T-001
 ③ Судья                   @benchmark-judge T-001 (или вручную по docs/judge-prompt.md)
                           → только выбор победителя
 ④ Записать вердикт        координатор: веб-UI localhost:5000 или record_verdict.py
-                          с явным --task T-NNN и --model-a/--model-b → matchups/T-NNN/NNN.json
+                           с явным --task T-NNN и --model-a/--model-b → data/matchups/T-NNN/NNN.json
 ⑤ Leaderboard             веб-UI (localhost:5000)
 ```
 
@@ -38,8 +38,8 @@
 
 | Skill | Что делает |
 |-------|-----------|
-| `@benchmark-run-a T-NNN` | Прогон слота A: читает task.md, изучает код, пишет `answers/T-NNN/modelA.md` |
-| `@benchmark-run-b T-NNN` | Прогон слота B: то же самое → `answers/T-NNN/modelB.md` |
+| `@benchmark-run-a T-NNN` | Прогон слота A: читает task.md, изучает код, пишет `data/answers/T-NNN/modelA.md` |
+| `@benchmark-run-b T-NNN` | Прогон слота B: то же самое → `data/answers/T-NNN/modelB.md` |
 | `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; не вызывает `record_verdict.py` |
 
 Skills продублированы для трёх сред: `.opencode/skills/`, `.cursor/skills/`, `.devin/skills/`.
@@ -52,25 +52,32 @@ Skills продублированы для трёх сред: `.opencode/skills/
 Benchmark/
 ├── AGENTS.md              # Протокол модели-участницы (слоты modelA/modelB)
 ├── README.md              # Этот файл
-├── models.yaml            # Реестр моделей (status: active/archived)
-├── judges.yaml            # Резерв пула судей (пока пуст, судейство — skill/вручную)
-├── index.json             # Кэш ELO + сводки (генерируется tools/elo.py, коммитится)
 ├── start.bat              # Запуск сервера в Windows (открывает localhost:5000)
+├── stop.bat               # Остановка сервера
+├── launch.vbs             # Скрытый запуск сервера (вызывается из start.bat)
 │
-├── tasks/
-│   ├── _TEMPLATE.md       # Шаблон задачи (создание — register_task.py или вручная копия)
-│   └── T-NNN-<slug>/
-│       └── task.md        # Описание + критерии + baseline_commit (опц.)
-│
-├── answers/               # Ответы: modelA.md / modelB.md (skills) или <model-id>.md (вручную)
-│   ├── _TEMPLATE.md
-│   └── T-NNN/
-│       ├── modelA.md
-│       └── modelB.md
-│
-├── matchups/              # Вердикты (попарные сравнения)
-│   └── T-NNN/
-│       └── NNN.json       # От record_verdict.py: task, model_a/b, winner, date, elo
+├── data/                  # Все данные прогонов
+│   ├── models.yaml        # Реестр моделей (status: active/archived)
+│   ├── judges.yaml        # Резерв пула судей (пока пуст, судейство — skill/вручную)
+│   ├── settings.yaml      # Статусы тасок и текущая таска
+│   ├── index.json         # Кэш ELO + сводки (генерируется tools/elo.py, коммитится)
+│   ├── logs/              # server.log, server.pid (создаются запуском)
+│   │
+│   ├── tasks/
+│   │   ├── _TEMPLATE.md   # Шаблон задачи (создание — register_task.py или вручная копия)
+│   │   └── T-NNN-<slug>/
+│   │       └── task.md    # Описание + критерии + baseline_commit (опц.)
+│   │
+│   ├── answers/           # Ответы: modelA.md / modelB.md (skills) или <model-id>.md (вручную)
+│   │   ├── _TEMPLATE.md
+│   │   └── T-NNN/
+│   │       ├── modelA.md
+│   │       └── modelB.md
+│   │
+│   └── matchups/          # Вердикты (попарные сравнения)
+│       ├── state.json     # Счётчик seq журнала
+│       └── T-NNN/
+│           └── NNN.json   # От record_verdict.py: task, model_a/b, winner, date, elo
 │
 ├── docs/
 │   ├── architecture.md    # Полная архитектура
@@ -79,7 +86,7 @@ Benchmark/
 │   └── judge-prompt.md    # Шаблон промпта судьи (ручное судейство)
 │
 ├── tools/
-│   ├── elo.py             # ELO-движок (пересчёт из matchups → index.json) + --check
+│   ├── elo.py             # ELO-движок (пересчёт из data/matchups → data/index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
 │   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
 │   ├── register_model.py  # Регистрация модели (в т.ч. --auto для саморегистрации)
@@ -89,8 +96,9 @@ Benchmark/
 │
 └── openspec/              # Спецификации системы (по факту кода MVP)
     ├── config.yaml
-    ├── specs/             # 9 capabilities: benchmark-workflow, task/answer/matchup-management,
-    │                      # elo-engine, pairing-algorithm, leaderboard-ui, model-registry, data-storage
+    ├── specs/             # 10 capabilities: benchmark-workflow, task/answer/matchup-management,
+    │                      # elo-engine, pairing-algorithm, leaderboard-ui, model-registry, data-storage,
+    │                      # run-progress
     └── changes/archive/   # История принятых изменений (активных changes нет)
 ```
 
@@ -126,5 +134,5 @@ python tools/archive_model.py --restore gpt-5
 - [docs/elo-mechanics.md](docs/elo-mechanics.md) — математика ELO
 - [docs/workflow-guide.md](docs/workflow-guide.md) — пошаговая инструкция
 - [docs/judge-prompt.md](docs/judge-prompt.md) — шаблон промпта судьи
-- [openspec/specs/](openspec/specs/) — нормативные спеки по факту кода MVP (9 capabilities)
+- [openspec/specs/](openspec/specs/) — нормативные спеки по факту кода MVP (10 capabilities)
 - [AGENTS.md](AGENTS.md) — протокол модели-участницы

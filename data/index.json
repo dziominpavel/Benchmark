@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-09-08",
-  "matchups_digest": "940f0f81b55ccb14735ad0694285743979c49a150431fe0c26b9dc8e8c69dba7",
+  "matchups_digest": "f4c96a99b7e8555ace6065eaa099ccf7d36423cb732bce5e31b262affd95cc8f",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -168,10 +168,7 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "answers": [
-        "modelA",
-        "modelB"
-      ],
+      "answers": [],
       "matchups_count": 88
     }
   },

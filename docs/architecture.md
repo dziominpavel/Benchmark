@@ -8,6 +8,10 @@
 
 ## Компоненты
 
+_На схеме ниже префикс `data/` опущен: `tasks/` = `data/tasks/`,
+`answers/` = `data/answers/`, `matchups/` = `data/matchups/`,
+`models.yaml` = `data/models.yaml`, `index.json` = `data/index.json`._
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    КОМПОНЕНТЫ СИСТЕМЫ                        │
@@ -78,11 +82,11 @@
 
 ```
 ① СОЗДАНИЕ ЗАДАЧИ (вручную)
-   tasks/_TEMPLATE.md → tasks/T-NNN-<slug>/task.md
+   data/tasks/_TEMPLATE.md → data/tasks/T-NNN-<slug>/task.md
 
 ② ПРОГОН МОДЕЛИ (skills)
-   @benchmark-run-a T-001 → answers/T-001/modelA.md
-   @benchmark-run-b T-001 → answers/T-001/modelB.md
+   @benchmark-run-a T-001 → data/answers/T-001/modelA.md
+   @benchmark-run-b T-001 → data/answers/T-001/modelB.md
    (каждый skill сам делает checkout baseline_commit и очистку после;
     участник не записывает свой реальный id)
 
@@ -101,8 +105,8 @@
                     (task из выпадающего списка активных тасок)
     - CLI вручную:  python tools/record_verdict.py --task T-001 \
                     --model-a <id> --model-b <id> --winner a
-    Каждый вызов: seq из matchups/state.json, recorded_at (системное
-    время), ELO-снэпшот (before/after/delta) в файл, пересчёт index.json.
+     Каждый вызов: seq из data/matchups/state.json, recorded_at (системное
+     время), ELO-снэпшот (before/after/delta) в файл, пересчёт data/index.json.
     Аннулирование: record_verdict.py --void T-001/001 --reason "..."
 
 ⑤ LEADERBOARD
@@ -113,18 +117,18 @@
 
 ## Хранение
 
-**Source of truth (в git):**
-- `models.yaml` — реестр моделей (id, name, provider, status)
-- `tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `tasks/_TEMPLATE.md`)
-- `answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
-  `answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
-- `matchups/T-NNN/NNN.json` — журнал вердиктов
+**Source of truth (в git, всё под `data/`):**
+- `data/models.yaml` — реестр моделей (id, name, provider, status)
+- `data/tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `data/tasks/_TEMPLATE.md`)
+- `data/answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
+  `data/answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
+- `data/matchups/T-NNN/NNN.json` — журнал вердиктов
   (append-only; поля: version, seq, task, model_a/b, model_a_id/b_id,
   winner, date, recorded_at, elo-снэпшот; tombstone — поле void_of)
-- `matchups/state.json` — счётчик seq (next_seq)
+- `data/matchups/state.json` — счётчик seq (next_seq)
 
 **Кэш (генерируется, в git):**
-- `index.json` — ELO + статистика + сводки + история + matchups_digest
+- `data/index.json` — ELO + статистика + сводки + история + matchups_digest
   (sha256 содержимого журнала — правка любого файла инвалидирует кэш)
 
 **Генерируется (не в git):**
@@ -136,7 +140,7 @@
 - **Адаптивный K-factor:** <10 игр → 40, 10–30 (включительно) → 32, >30 → 24;
   K применяется индивидуально к каждой модели в паре
 - **Пересчёт:** полный реплей журнала в порядке `seq` (глобальный
-  монотонный номер из `matchups/state.json`); легаси-вердикты без `seq`
+  монотонный номер из `data/matchups/state.json`); легаси-вердикты без `seq`
   идут первыми по (`date`, `<task-id>/<NNN>`). Вердикты с неразрешёнными
   моделями пропускаются с WARNING (не молча); аннулированные (`void_of`)
   и tombstone-события игр не создают
@@ -149,7 +153,7 @@
 ## Pairing algorithm
 
 Предлагает следующие пары для сравнения (топ-3, глобально по всем моделям,
-без разреза по задачам). Уже сравнённые пары (в любом `matchups/*/`) исключаются.
+без разреза по задачам). Уже сравнённые пары (в любом `data/matchups/*/`) исключаются.
 Ранжирование двухуровневое (`tools/server.py:get_recommendations`):
 сначала тир калибровки по `min_games` (0 — новая модель — выше всего,
 <3 — калибровка, остальные — ниже), внутри тира — близость ELO:
@@ -174,13 +178,13 @@ score = closeness = 1 / (1 + elo_diff / 100)   # близкий ELO — инфо
   20 записей истории
 - `GET /add`, `POST /add_model` — добавление модели по названию (slug генерируется)
 - `POST /verdict` — валидация (обе модели из реестра, A ≠ B, task —
-  активная таска T-NNN, winner ∈ a/b/draw) → `matchups/T-NNN/NNN.json` → пересчёт ELO
+  активная таска T-NNN, winner ∈ a/b/draw) → `data/matchups/T-NNN/NNN.json` → пересчёт ELO
 - Порт: 5000, при занятости — следующий свободный (до 10 попыток)
 - `start.bat` — запуск под Windows + открытие `localhost:5000` в браузере
 
 ## Архивация моделей
 
-- `status: archived` в models.yaml
+- `status: archived` в data/models.yaml
 - История сохраняется, старые вердикты участвуют в пересчёте
 - Серверная таблица поддерживает фильтр active/all/archived
 - Архивные модели исключаются из рекомендаций
@@ -191,7 +195,7 @@ score = closeness = 1 / (1 + elo_diff / 100)   # близкий ELO — инфо
 - 1–10 задач (создаются редко, 1 на 2–3 недели)
 - 5–30 моделей (растут медленно, архивируются)
 - 10–500 вердиктов
-- index.json ~5–50 KB
+- data/index.json ~5–50 KB
 
 ## Известные дефекты MVP (зафиксированы в спеках, исправляются отдельно)
 

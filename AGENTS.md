@@ -5,7 +5,7 @@
 
 ## Что делать
 
-1. **Прочитай задачу** — `tasks/T-NNN-<slug>/task.md`. Изучи: front matter,
+1. **Прочитай задачу** — `data/tasks/T-NNN-<slug>/task.md`. Изучи: front matter,
    описание, что искать, критерии полноты, ограничения.
 
 2. **Если есть baseline_commit** — перейди в папку проекта и сделай checkout:
@@ -19,11 +19,11 @@
 
 4. **Напиши ответ** — MD-файл своего слота:
    ```
-   answers/<task-id>/modelA.md   # если ты участник A (@benchmark-run-a)
-   answers/<task-id>/modelB.md   # если ты участник B (@benchmark-run-b)
-   ```
-   Ручной прогон произвольной модели из реестра — файл
-   `answers/<task-id>/<model-id>.md` по формату `answers/_TEMPLATE.md`.
+    data/answers/<task-id>/modelA.md   # если ты участник A (@benchmark-run-a)
+    data/answers/<task-id>/modelB.md   # если ты участник B (@benchmark-run-b)
+    ```
+    Ручной прогон произвольной модели из реестра — файл
+    `data/answers/<task-id>/<model-id>.md` по формату `data/answers/_TEMPLATE.md`.
 
 ## Формат ответа
 
@@ -75,7 +75,7 @@ date: YYYY-MM-DD
 
 ## Саморегистрация
 
-Если ты делаешь ручной прогон под своим `<model-id>`, а тебя нет в `models.yaml`,
+Если ты делаешь ручной прогон под своим `<model-id>`, а тебя нет в `data/models.yaml`,
 зарегистрируйся заранее:
 ```
 python tools/register_model.py --auto --id <slug> --name "<Имя Модели>"

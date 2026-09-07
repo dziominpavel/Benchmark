@@ -1,10 +1,4 @@
-# data-storage Specification
-
-## Purpose
-Гибридное хранение MVP: файлы — source of truth (коммитятся в git),
-`index.json` — генерируемый кэш для просмотра рейтинга без сервера.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Корень данных — data/
 Все файлы данных SHALL храниться под директорией `data/` в корне репозитория: `data/models.yaml`, `data/judges.yaml`, `data/settings.yaml`, `data/index.json`, `data/tasks/`, `data/answers/`, `data/matchups/` (включая `data/matchups/state.json`), `data/logs/`. Код SHALL находиться в `tools/`, лаунчеры (`start.bat`, `stop.bat`, `launch.vbs`) — в корне. Файлы данных вне `data/` MUST NOT использоваться.
@@ -13,6 +7,8 @@
 - **WHEN** пользователь открывает корень репозитория
 - **THEN** все данные прогонов находятся в `data/`
 - **AND** в корне нет `tasks/`, `answers/`, `matchups/`, `models.yaml`, `settings.yaml`, `index.json`
+
+## MODIFIED Requirements
 
 ### Requirement: Source of truth — файлы
 Исходные данные SHALL храниться в файлах: `data/models.yaml` (реестр), `data/tasks/T-NNN-<slug>/task.md` (задачи), `data/answers/T-NNN/*.md` (ответы: `modelA.md` / `modelB.md` от skills либо `<model-id>.md` вручную), `data/matchups/T-NNN/NNN.json` (вердикты), `data/settings.yaml` (настройки: статусы тасок и текущая таска). `data/matchups/general/` и `data/matchups/<non-T-NNN>/` MUST NOT использоваться. `data/answers/<task>/slots.json` MUST NOT использоваться. Эти файлы SHALL коммититься в git.

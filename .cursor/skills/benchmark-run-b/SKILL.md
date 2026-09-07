@@ -1,6 +1,6 @@
 ---
 name: benchmark-run-b
-description: "Прогон модели B на задаче бенчмарка. Читает task.md, изучает код проекта, находит баги, пишет ответ в answers/T-NNN/modelB.md. Используй когда нужно прогнать модель B."
+description: "Прогон модели B на задаче бенчмарка. Читает task.md, изучает код проекта, находит баги, пишет ответ в data/answers/T-NNN/modelB.md. Используй когда нужно прогнать модель B."
 license: MIT
 ---
 
@@ -15,7 +15,7 @@ license: MIT
 1. **Найди задачу:**
    - Пользователь указывает: `@benchmark-run-b T-001` (или просто `@benchmark-run-b`)
    - Если task-id не указан — используй последнюю созданную задачу
-   - Найди: `tasks/T-NNN-*/task.md`
+   - Найди: `data/tasks/T-NNN-*/task.md`
 
 2. **Прочитай task.md** — извлеки: id, title, project, baseline_commit,
    описание, что искать, критерии, ограничения.
@@ -31,7 +31,7 @@ license: MIT
 
 5. **Напиши ответ в файл:**
    ```
-   C:/projects/Benchmark/answers/<task-id>/modelB.md
+    C:/projects/Benchmark/data/answers/<task-id>/modelB.md
    ```
 
    Формат — Markdown с front matter:
@@ -71,7 +71,7 @@ license: MIT
    ```
 
 6. **После записи файла:**
-   - Скажи: "✓ Ответ модели B записан в `answers/<task-id>/modelB.md`"
+   - Скажи: "✓ Ответ модели B записан в `data/answers/<task-id>/modelB.md`"
    - Кратко перечисли сколько багов найдено
 
 8. **Очисти проект:**

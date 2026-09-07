@@ -1,8 +1,8 @@
 ' launch.vbs — скрытый запуск ELO Benchmark сервера
 '
 ' Запускает python tools/server.py в фоне, без видимого консольного окна,
-' перенаправляет stdout/stderr в logs/server.log, сохраняет PID запускающего
-' cmd в logs/server.pid и через 2 секунды открывает http://localhost:5000.
+' перенаправляет stdout/stderr в data/logs/server.log, сохраняет PID запускающего
+' cmd в data/logs/server.pid и через 2 секунды открывает http://localhost:5000.
 
 Option Explicit
 
@@ -14,7 +14,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 Set WshShell = CreateObject("WScript.Shell")
 
 root = fso.GetParentFolderName(WScript.ScriptFullName)
-logDir = root & "\logs"
+logDir = root & "\data\logs"
 logFile = logDir & "\server.log"
 pidFile = logDir & "\server.pid"
 
@@ -26,9 +26,9 @@ If fso.FileExists(logFile) Then fso.DeleteFile(logFile)
 If fso.FileExists(pidFile) Then fso.DeleteFile(pidFile)
 
 ' Запускаем сервер в скрытой консоли через cmd /c.
-' cmd ждёт завершения python, а stdout/stderr пишутся в logs/server.log.
+' cmd ждёт завершения python, а stdout/stderr пишутся в data/logs/server.log.
 ' Маркер BENCHMARK_SILENT_LAUNCHER помогает найти cmd в WMI.
-procCmd = "cmd /c " & Chr(34) & "cd /d " & Chr(34) & root & Chr(34) & " && python tools/server.py > " & Chr(34) & "logs/server.log" & Chr(34) & " 2>&1 && rem BENCHMARK_SILENT_LAUNCHER" & Chr(34)
+procCmd = "cmd /c " & Chr(34) & "cd /d " & Chr(34) & root & Chr(34) & " && python tools/server.py > " & Chr(34) & "data/logs/server.log" & Chr(34) & " 2>&1 && rem BENCHMARK_SILENT_LAUNCHER" & Chr(34)
 
 WshShell.Run procCmd, 0, False
 

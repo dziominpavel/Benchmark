@@ -14,7 +14,7 @@ license: MIT
 1. **Определи задачу:**
    - Пользователь указывает: `@benchmark-judge T-001` (или просто `@benchmark-judge`)
    - Если task-id не указан — используй последнюю задачу с двумя ответами
-   - Найди: `tasks/T-NNN-*/task.md`, `answers/T-NNN/modelA.md`, `answers/T-NNN/modelB.md`
+   - Найди: `data/tasks/T-NNN-*/task.md`, `data/answers/T-NNN/modelA.md`, `data/answers/T-NNN/modelB.md`
 
 2. **Проверь наличие обоих ответов:**
    - Если modelA.md нет → "Ответ модели A не найден. Запусти @benchmark-run-a сначала."
@@ -22,9 +22,9 @@ license: MIT
    - Если оба есть → продолжай
 
 3. **Прочитай все три файла:**
-   - `tasks/T-NNN-<slug>/task.md` — задача (что искали)
-   - `answers/T-NNN/modelA.md` — ответ A
-   - `answers/T-NNN/modelB.md` — ответ B
+   - `data/tasks/T-NNN-<slug>/task.md` — задача (что искали)
+   - `data/answers/T-NNN/modelA.md` — ответ A
+   - `data/answers/T-NNN/modelB.md` — ответ B
 
 4. **При необходимости изучи код проекта:**
    - Если ответы противоречат друг другу в фактах — проверь исходный код

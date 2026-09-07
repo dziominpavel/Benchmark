@@ -41,13 +41,14 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MATCHUPS_DIR = REPO_ROOT / "matchups"
-ANSWERS_DIR = REPO_ROOT / "answers"
-TASKS_DIR = REPO_ROOT / "tasks"
-INDEX_PATH = REPO_ROOT / "index.json"
-MODELS_PATH = REPO_ROOT / "models.yaml"
+DATA_DIR = REPO_ROOT / "data"
+MATCHUPS_DIR = DATA_DIR / "matchups"
+ANSWERS_DIR = DATA_DIR / "answers"
+TASKS_DIR = DATA_DIR / "tasks"
+INDEX_PATH = DATA_DIR / "index.json"
+MODELS_PATH = DATA_DIR / "models.yaml"
 STATE_PATH = MATCHUPS_DIR / "state.json"
-SETTINGS_PATH = REPO_ROOT / "settings.yaml"
+SETTINGS_PATH = DATA_DIR / "settings.yaml"
 
 DEFAULT_ELO = 1200
 VERDICT_VERSION = 2

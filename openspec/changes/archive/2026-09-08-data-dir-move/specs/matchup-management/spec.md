@@ -1,12 +1,4 @@
-# matchup-management Specification
-
-## Purpose
-Хранение попарных вердиктов: `tools/record_verdict.py` пишет
-`matchups/<task-id>/NNN.json` с явным `task` вида `T-NNN` (skill-путь и
-ручной UI через веб-форму). Вердикт — запись результата с
-ELO-снэпшотом, без обоснования и идентификации судьи.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Формат вердикта
 Каждый вердикт SHALL храниться в отдельном JSON-файле, созданном `tools/record_verdict.py` (или внутренним вызовом `record_verdict` из веб-UI). Файл SHALL содержать: `version`, `seq`, `task`, `model_a`, `model_b`, `model_a_id`, `model_b_id`, `winner` (`a` | `b` | `draw`), `date` (YYYY-MM-DD), `recorded_at` (ISO 8601 с таймзоной, обязательное) и `elo` — ELO-снэпшот обеих моделей (`before`, `after`, `delta`). Судья MUST NOT писать файл самостоятельно. Поля `model_a` и `model_b` SHALL содержать реальные `id` из `data/models.yaml`. Поле `task` SHALL содержать активную задачу вида `T-NNN`.
@@ -91,18 +83,6 @@ Skill `benchmark-judge` SHALL проверять наличие обоих фа�
 - **THEN** skill сообщает «Ответ модели B не найден. Запусти @benchmark-run-b сначала»
 - **AND** вердикт не создаётся
 
-### Requirement: Анонимность вердикта
-
-Вердикт MUST NOT содержать идентификатора судьи, обоснования или баллов.
-Только результат сравнения и ELO-снэпшот.
-
-#### Scenario: Содержимое вердикта
-
-- **WHEN** вердикт записан любым путём
-- **THEN** файл содержит: task, model_a, model_b, model_a_id, model_b_id,
-  winner, date, recorded_at, elo
-- **AND** не содержит: judge, reasoning, scores
-
 ### Requirement: Анонимность и разрешение идентификаторов
 
 Реальные `id` моделей SHALL появляться только в момент записи вердикта. `record_verdict.py` MUST NOT читать `data/answers/<task>/slots.json` и MUST NOT разрешать слоты `modelA`/`modelB`. Судья (skill или manual) MUST NOT читать `data/models.yaml`, `data/index.json`, `data/answers/<task>/slots.json` или любые другие источники, раскрывающие реальные id моделей. Связь слота `modelA`/`modelB` с реальным `id` устанавливается координатором до вызова `record_verdict`.
@@ -120,15 +100,6 @@ Skill `benchmark-judge` SHALL проверять наличие обоих фа�
 - **WHEN** `record_verdict.py` получает `model_a: "modelA"` или `model_b: "modelB"`
 - **THEN** запись отклоняется с ошибкой
 - **AND** `record_verdict.py` не читает `data/answers/<task>/slots.json`
-
-### Requirement: Хронологический порядок
-
-ELO-движок SHALL упорядочивать вердикты с `seq` по возрастанию `seq` как первичному ключу. Для вердиктов без `seq` (legacy) порядок SHALL определяться парой (`date`, `_matchup_id`). `recorded_at` SHALL использоваться только для проверки целостности, а не для определения порядка реплея.
-
-#### Scenario: Два вердикта в один день
-
-- **WHEN** записаны `T-001/001` и `T-001/002` с одинаковой датой
-- **THEN** `001` применяется раньше `002`
 
 ### Requirement: Привязка вердикта к активной задаче
 Каждый вердикт MUST быть привязан к активной задаче `T-NNN`. Система MUST NOT создавать вердикты в `data/matchups/general/` или других не-T-NNN директориях.
