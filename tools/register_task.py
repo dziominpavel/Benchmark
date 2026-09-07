@@ -27,7 +27,7 @@ if hasattr(sys.stderr, "reconfigure"):
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from elo import (
-    REPO_ROOT,
+    TASKS_DIR,
     TASK_ID_RE,
     generate_index,
     known_tasks,
@@ -36,7 +36,6 @@ from elo import (
     save_settings,
 )
 
-TASKS_DIR = REPO_ROOT / "tasks"
 TEMPLATE_PATH = TASKS_DIR / "_TEMPLATE.md"
 
 

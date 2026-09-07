@@ -14,13 +14,9 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MODELS_PATH = REPO_ROOT / "models.yaml"
-INDEX_PATH = REPO_ROOT / "index.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-sys.path.insert(0, str(REPO_ROOT / "tools"))
-
-from elo import generate_index, save_index, load_models_yaml
+from elo import generate_index, save_index, load_models_yaml, REPO_ROOT, MODELS_PATH, INDEX_PATH
 import server
 from server import get_recommendations
 

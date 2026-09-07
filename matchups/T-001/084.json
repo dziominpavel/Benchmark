@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 84,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "devin-kimi-k3-max",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "devin-kimi-k3-max",
+  "winner": "b",
+  "date": "2026-09-07",
+  "recorded_at": "2026-09-07T23:10:16+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1180,
+      "after": 1160,
+      "delta": -20
+    },
+    "devin-kimi-k3-max": {
+      "before": 1179,
+      "after": 1199,
+      "delta": 20
+    }
+  }
+}

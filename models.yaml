@@ -24,6 +24,11 @@
 # Старую версию можно заархивировать (status: archived) — ELO сохранится, новые пары не предлагаются.
 
 models:
+  - id: codex-gpt-5-6-terra-09-2026
+    name: "Codex GPT-5.6-Terra High 09-2026"
+    provider: 
+    version: 
+    status: active
   - id: cursor-composer-2-5
     name: "Cursor Composer 2.5"
     provider: 

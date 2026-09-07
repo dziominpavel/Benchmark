@@ -36,7 +36,8 @@ from elo import (
     is_index_stale, record_verdict, resolve_matchup_models,
     load_settings, save_settings, known_tasks, active_tasks, is_task_active,
     resolve_current_task, get_coverage, is_valid_task_id,
-    DEFAULT_ELO, REPO_ROOT,
+    DEFAULT_ELO,
+    ANSWERS_DIR, MATCHUPS_DIR, TASKS_DIR, INDEX_PATH, MODELS_PATH,
 )
 
 from register_task import (
@@ -51,10 +52,6 @@ from flask import Flask, request, redirect, url_for, render_template_string
 
 app = Flask(__name__)
 
-ANSWERS_DIR = REPO_ROOT / "answers"
-MATCHUPS_DIR = REPO_ROOT / "matchups"
-TASKS_DIR = REPO_ROOT / "tasks"
-
 
 # ─── Helpers ────────────────────────────────────────────────────────
 
@@ -65,7 +62,7 @@ def ensure_index() -> dict:
         data = generate_index()
         save_index(data)
         return data
-    return json.loads((REPO_ROOT / "index.json").read_text(encoding="utf-8"))
+    return json.loads(INDEX_PATH.read_text(encoding="utf-8"))
 
 
 def slugify(name: str, existing_ids: list[str]) -> str:
@@ -269,7 +266,7 @@ def set_current_task(task_id: str) -> bool:
 
 def update_model(model_id: str, name: str, status: str) -> bool:
     """Редактирует name и status модели в models.yaml и пересчитывает index."""
-    models_path = REPO_ROOT / "models.yaml"
+    models_path = MODELS_PATH
     if not models_path.exists():
         return False
 
@@ -1596,7 +1593,7 @@ def add_model():
     if not name:
         return redirect(url_for("add_page", error="Введите название модели"))
 
-    models_path = REPO_ROOT / "models.yaml"
+    models_path = MODELS_PATH
     if not models_path.exists():
         return redirect(url_for("add_page", error="models.yaml не найден"))
 

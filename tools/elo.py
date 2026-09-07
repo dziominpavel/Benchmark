@@ -45,6 +45,7 @@ MATCHUPS_DIR = REPO_ROOT / "matchups"
 ANSWERS_DIR = REPO_ROOT / "answers"
 TASKS_DIR = REPO_ROOT / "tasks"
 INDEX_PATH = REPO_ROOT / "index.json"
+MODELS_PATH = REPO_ROOT / "models.yaml"
 STATE_PATH = MATCHUPS_DIR / "state.json"
 SETTINGS_PATH = REPO_ROOT / "settings.yaml"
 
@@ -551,7 +552,7 @@ def verify_snapshots(matchups: list[dict], model_ids: list[str]) -> list[str]:
 
 def load_models_yaml() -> list[dict]:
     """Парсит models.yaml — возвращает список моделей (id, name, provider, status)."""
-    models_path = REPO_ROOT / "models.yaml"
+    models_path = MODELS_PATH
     if not models_path.exists():
         return []
 
@@ -596,9 +597,9 @@ def load_models_yaml() -> list[dict]:
 
 def collect_tasks_info() -> dict:
     """Собирает сводку по задачам из tasks/ и answers/."""
-    tasks_dir = REPO_ROOT / "tasks"
-    answers_dir = REPO_ROOT / "answers"
-    matchups_dir = REPO_ROOT / "matchups"
+    tasks_dir = TASKS_DIR
+    answers_dir = ANSWERS_DIR
+    matchups_dir = MATCHUPS_DIR
 
     tasks_info = {}
 

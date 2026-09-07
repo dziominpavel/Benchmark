@@ -26,11 +26,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MODELS_PATH = REPO_ROOT / "models.yaml"
-
-sys.path.insert(0, str(REPO_ROOT / "tools"))
-from elo import generate_index, save_index
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from elo import generate_index, save_index, MODELS_PATH
 from register_model import parse_existing, format_model
 
 
