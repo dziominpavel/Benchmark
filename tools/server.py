@@ -122,6 +122,41 @@ def is_model_active(model: dict) -> bool:
     return model.get("status", "active") != "archived"
 
 
+def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
+    """Возвращает {frozenset{id_a, id_b}: set(task_id)} с тасками,
+    в которых у пары есть неаннулированный вердикт.
+
+    Использует resolved ids (model_a_id/model_b_id) и пропускает
+    tombstone- и аннулированные вердикты.
+    """
+    model_ids = {m["id"] for m in load_models_yaml()}
+    verdicts: dict[frozenset[str], set[str]] = {}
+    if not MATCHUPS_DIR.exists():
+        return verdicts
+    matchups = load_matchups()
+    voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+    for mu in matchups:
+        if mu.get("void_of"):
+            continue
+        if mu.get("_matchup_id") in voided:
+            continue
+        a, b = resolve_matchup_models(mu, model_ids)
+        if a and b:
+            key = frozenset({a, b})
+            task = mu.get("task")
+            if not task:
+                task = str(mu.get("_matchup_id", "")).split("/", 1)[0]
+            if task:
+                verdicts.setdefault(key, set()).add(task)
+    return verdicts
+
+
+def has_answer(model_id: str, task_id: str, index_data: dict) -> bool:
+    """Проверяет, есть ли ответ модели на таске."""
+    answers = index_data.get("tasks", {}).get(task_id, {}).get("answers", [])
+    return model_id in answers
+
+
 def find_task_dir(task_id: str) -> Path | None:
     """Находит директорию tasks/T-NNN-<slug> по id."""
     if not TASKS_DIR.exists():
@@ -318,7 +353,7 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
 
     Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a,
     elo_b, elo_diff, pair_games, pair_wins_a, pair_wins_b, h2h_label,
-    tier, score}
+    tier, score, recommended_task}
     """
     models = index_data.get("models", {})
     name_map = get_model_name_map()
@@ -335,6 +370,8 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     games_map = {mid: models[mid].get("games", 0) for mid in model_ids}
 
     pair_stats = get_pair_stats()
+    pair_task_verdicts = get_pair_task_verdicts()
+    active_task_ids = active_tasks(load_settings())
 
     candidates = []
     for i in range(len(model_ids)):
@@ -375,6 +412,17 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
             # внутри тира больший score идёт первым
             closeness = 1.0 / (1.0 + elo_diff / 100.0)
 
+            # Первый активный таск по порядку T-NNN, в котором у пары
+            # нет вердикта. Если все заполнены — берём первый активный.
+            verdict_tasks = pair_task_verdicts.get(pair_key, set())
+            if active_task_ids:
+                recommended_task = next(
+                    (t for t in active_task_ids if t not in verdict_tasks),
+                    active_task_ids[0],
+                )
+            else:
+                recommended_task = ""
+
             candidates.append({
                 "model_a": a,
                 "model_b": b,
@@ -389,6 +437,7 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
                 "h2h_label": h2h_label,
                 "tier": tier,
                 "score": closeness,
+                "recommended_task": recommended_task,
             })
 
     candidates.sort(key=lambda c: (c["pair_games"], c["tier"], -c["score"]))
@@ -637,6 +686,15 @@ CSS = """
     font-size: 0.82rem;
     margin-top: 2px;
   }
+  .rec-task {
+    color: #94a3b8;
+    font-size: 0.82rem;
+    margin-top: 2px;
+  }
+  .rec-task .rec-missing {
+    color: #f87171;
+    font-weight: 600;
+  }
   .legend {
     color: #64748b;
     font-size: 0.8rem;
@@ -824,6 +882,39 @@ CSS = """
   .tasks-table .title-col .status-pill { margin-left: 8px; white-space: nowrap; }
   .tasks-table .actions-col { text-align: right; white-space: nowrap; padding-left: 12px; }
 
+  /* Settings page: раскрываемые группы моделей */
+  .model-groups > .model-row { border-bottom: 1px solid #334155; }
+  .model-groups > div.model-row,
+  .model-groups > details.model-row > summary {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 14px;
+  }
+  .model-groups summary { cursor: pointer; list-style: none; }
+  .model-groups summary::-webkit-details-marker { display: none; }
+  .model-groups summary:hover { background: #334155; }
+  .model-groups summary .mg-label::before {
+    content: "\25B8";
+    display: inline-block;
+    margin-right: 6px;
+    color: #64748b;
+  }
+  .model-groups details[open] > summary .mg-label::before { content: "\25BE"; }
+  .model-groups .model-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 14px 12px 28px;
+  }
+  .model-groups .model-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid #334155;
+  }
+  .model-groups .model-list li:last-child { border-bottom: none; }
+  .model-groups .model-empty { color: #64748b; }
+
   .table-wrap {
     overflow-x: auto;
     margin: 0 -24px;
@@ -877,6 +968,82 @@ CSS = """
   .pagination span.current { background: #6366f1; border-color: #6366f1; }
   .pagination .disabled { opacity: 0.4; pointer-events: none; }
 
+  /* Progress status bar */
+  .progress-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 18px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .progress-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .progress-pct {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .progress-track {
+    height: 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #10b981);
+    transition: width 0.4s ease;
+    position: relative;
+  }
+  .progress-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      -45deg,
+      rgba(255,255,255,0.15) 0 8px,
+      transparent 8px 16px
+    );
+    animation: progress-stripes 1.2s linear infinite;
+  }
+  @keyframes progress-stripes {
+    from { background-position: 0 0; }
+    to { background-position: 22.63px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill::after { animation: none; }
+    .progress-fill { transition: none; }
+  }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
+  .progress-card--empty .progress-pct { color: #64748b; }
+  .progress-card--empty .progress-track { opacity: 0.5; }
+  .progress-card--done .progress-fill { background: #10b981; }
+  .progress-card--done .progress-fill::after { display: none; }
+  .progress-card--done .progress-pct { color: #34d399; }
+
   /* Responsive */
   @media (max-width: 900px) {
     .content-grid {
@@ -914,9 +1081,29 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
   {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
+  <div class="progress-card{% if coverage_pct is none %} progress-card--empty{% elif coverage_done %} progress-card--done{% endif %}">
+    <div class="progress-head">
+      <span class="progress-title">Прогресс прогона</span>
+      <span class="progress-pct">{% if coverage_pct is none %}—{% else %}{{ coverage_pct }}%{% endif %}</span>
+    </div>
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"{% if coverage_pct is not none %} aria-valuenow="{{ coverage_pct }}"{% endif %} aria-label="Прогресс прогона">
+      <div class="progress-fill" style="width: {{ coverage.percent or 0 }}%"></div>
+    </div>
+    <div class="progress-meta">
+      {% if coverage_pct is none %}
+      <span>Нет данных о покрытии</span>
+      {% elif coverage_done %}
+      <span>Все пары закрыты</span>
+      {% else %}
+      <span>закрыто {{ coverage.filled }} из {{ coverage.total }}</span>
+      <span>осталось {{ remaining }}</span>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="controls">
     <div class="stats">
-      Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Прогресс: {{ progress_label }} · Обновлено: {{ updated }}
+      Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
     <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5</div>
     <form method="GET" action="/" class="filter-bar">
@@ -1017,8 +1204,9 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
             <div class="rec-reason">{{ rec.reason }}</div>
+            <div class="rec-task">таск: {{ rec.recommended_task }}{% if not (rec.has_answer_a and rec.has_answer_b) %} <span class="rec-missing">· нужны ответы</span>{% endif %}</div>
           </div>
-          <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}')">Прогнать</button>
+          <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}', '{{ rec.recommended_task }}')">Прогнать</button>
         </div>
         {% endfor %}
       </div>
@@ -1099,9 +1287,10 @@ function validate() {
   document.getElementById('btnDraw').disabled = !ok;
 }
 
-function usePair(a, b) {
+function usePair(a, b, task) {
   document.getElementById('modelA').value = a;
   document.getElementById('modelB').value = b;
+  document.getElementById('taskField').value = task;
   validate();
 }
 </script>
@@ -1514,13 +1703,44 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
   <div class="settings-grid">
     <div class="card">
       <h2>Модели</h2>
-      <table class="tasks-table">
-        <tbody>
-          <tr><td>Всего в реестре</td><td>{{ models_total }}</td></tr>
-          <tr><td>Активных</td><td>{{ models_active }}</td></tr>
-          <tr><td>Неактивных (архив)</td><td>{{ models_archived }}</td></tr>
-        </tbody>
-      </table>
+      <div class="model-groups">
+        <div class="model-row">
+          <span>Всего в реестре</span>
+          <span>{{ models_total }}</span>
+        </div>
+        <details class="model-row">
+          <summary>
+            <span class="mg-label">Активных</span>
+            <span>{{ models_active }}</span>
+          </summary>
+          <ul class="model-list">
+            {% for m in models_active_list %}
+            <li>
+              <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+              <span>{{ m.elo }}</span>
+            </li>
+            {% else %}
+            <li class="model-empty">Нет активных моделей</li>
+            {% endfor %}
+          </ul>
+        </details>
+        <details class="model-row">
+          <summary>
+            <span class="mg-label">Неактивных (архив)</span>
+            <span>{{ models_archived }}</span>
+          </summary>
+          <ul class="model-list">
+            {% for m in models_archived_list %}
+            <li>
+              <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+              <span>{{ m.elo }}</span>
+            </li>
+            {% else %}
+            <li class="model-empty">Нет неактивных моделей</li>
+            {% endfor %}
+          </ul>
+        </details>
+      </div>
       <div class="hint">
         Модель добавляется одним полем — названием; id генерируется
         автоматически. Изменить или архивировать — по ссылке «Изменить»
@@ -1722,10 +1942,13 @@ def leaderboard():
         key=lambda x: x[1].lower(),
     )
 
-    # Рекомендации пар (+ строка-обоснование для отображения)
+    # Рекомендации пар (+ строка-обоснование и флаги ответов для отображения)
     recommendations = get_recommendations(index_data, top_n=3)
     for rec in recommendations:
         rec["reason"] = format_reason(rec)
+        task = rec.get("recommended_task", "")
+        rec["has_answer_a"] = has_answer(rec["model_a"], task, index_data)
+        rec["has_answer_b"] = has_answer(rec["model_b"], task, index_data)
 
     # Топ-3 активных по ELO — для медалей; архивные — для секции
     top_active = sorted(
@@ -1745,13 +1968,13 @@ def leaderboard():
     current_task = resolve_current_task(settings)
     task_options = active_tasks(settings)
     coverage = get_coverage(settings)
-    if coverage["percent"] is None:
-        progress_label = "—"
-    else:
-        progress_label = (
-            f"{coverage['percent']:.0f}% "
-            f"(закрыто {coverage['filled']} из {coverage['total']})"
-        )
+    coverage_pct = None
+    coverage_done = False
+    if coverage["percent"] is not None:
+        coverage_done = coverage["filled"] >= coverage["total"]
+        # Незавершённый прогресс не округляем до «100%» — показываем 99
+        coverage_pct = 100 if coverage_done else min(99, round(coverage["percent"]))
+    remaining = coverage["total"] - coverage["filled"]
 
     # Счётчик вердиктов: новый агрегат, fallback на старый список
     summary = index_data.get("matchups_summary", {})
@@ -1774,7 +1997,10 @@ def leaderboard():
         archived_list=archived_list,
         current_task=current_task,
         task_options=task_options,
-        progress_label=progress_label,
+        coverage=coverage,
+        coverage_pct=coverage_pct,
+        coverage_done=coverage_done,
+        remaining=remaining,
         filter=filter_mode,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
@@ -1906,14 +2132,29 @@ def settings_page():
             "active": is_task_active(settings, t),
             "current": t == current,
         })
-    models = load_models_yaml()
-    models_active = sum(1 for m in models if is_model_active(m))
+    index_data = ensure_index()
+    models = index_data.get("models", {})
+    models_active_list, models_archived_list = [], []
+    for mid, info in models.items():
+        entry = {
+            "id": mid,
+            "name": info.get("name", mid),
+            "elo": info.get("elo", DEFAULT_ELO),
+        }
+        if is_model_active(info):
+            models_active_list.append(entry)
+        else:
+            models_archived_list.append(entry)
+    models_active_list.sort(key=lambda m: m["elo"], reverse=True)
+    models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
     return render_template_string(
         SETTINGS_TEMPLATE,
         tasks_list=tasks_list,
         models_total=len(models),
-        models_active=models_active,
-        models_archived=len(models) - models_active,
+        models_active=len(models_active_list),
+        models_archived=len(models_archived_list),
+        models_active_list=models_active_list,
+        models_archived_list=models_archived_list,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
     )

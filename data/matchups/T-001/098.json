@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 98,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-mimo-v2-5-free",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-mimo-v2-5-free",
+  "winner": "a",
+  "date": "2026-09-08",
+  "recorded_at": "2026-09-08T22:49:41+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1138,
+      "after": 1152,
+      "delta": 14
+    },
+    "opencode-mimo-v2-5-free": {
+      "before": 1034,
+      "after": 1023,
+      "delta": -11
+    }
+  }
+}

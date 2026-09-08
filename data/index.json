@@ -1,26 +1,26 @@
 {
   "version": 2,
   "updated": "2026-09-08",
-  "matchups_digest": "f3bd69a49626d5705a72f4f01d2e98f9d381419d76779690c73f6fbec24828da",
+  "matchups_digest": "db7ed975222501353ff1ec570e231f311018c5111bd4b9ba8cee0a985ec4803c",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
       "provider": "",
       "status": "active",
-      "elo": 1120,
-      "games": 4,
-      "wins": 0,
-      "losses": 4,
+      "elo": 1079,
+      "games": 8,
+      "wins": 1,
+      "losses": 7,
       "draws": 0
     },
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
       "provider": "",
       "status": "active",
-      "elo": 1089,
-      "games": 11,
-      "wins": 2,
-      "losses": 9,
+      "elo": 1091,
+      "games": 13,
+      "wins": 3,
+      "losses": 10,
       "draws": 0
     },
     "cursor-fable-5-1-1m-max": {
@@ -47,9 +47,9 @@
       "name": "Cursor Grok 4.6 Extra High",
       "provider": "",
       "status": "active",
-      "elo": 1261,
-      "games": 13,
-      "wins": 9,
+      "elo": 1272,
+      "games": 14,
+      "wins": 10,
       "losses": 4,
       "draws": 0
     },
@@ -77,19 +77,19 @@
       "name": "Devin GLM-5.2 High",
       "provider": "",
       "status": "active",
-      "elo": 1062,
-      "games": 10,
-      "wins": 1,
-      "losses": 9,
+      "elo": 1066,
+      "games": 12,
+      "wins": 2,
+      "losses": 10,
       "draws": 0
     },
     "devin-glm-5-3-flash-max": {
       "name": "Devin GLM-5.3 Flash Max",
       "provider": "",
       "status": "active",
-      "elo": 1243,
-      "games": 13,
-      "wins": 8,
+      "elo": 1255,
+      "games": 14,
+      "wins": 9,
       "losses": 5,
       "draws": 0
     },
@@ -127,19 +127,19 @@
       "name": "Devin Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1138,
-      "games": 5,
-      "wins": 1,
-      "losses": 4,
+      "elo": 1141,
+      "games": 11,
+      "wins": 4,
+      "losses": 7,
       "draws": 0
     },
     "devin-swe-1-7-max": {
       "name": "Devin SWE-1.7 Max",
       "provider": "",
       "status": "active",
-      "elo": 1145,
-      "games": 14,
-      "wins": 5,
+      "elo": 1175,
+      "games": 16,
+      "wins": 7,
       "losses": 9,
       "draws": 0
     },
@@ -147,10 +147,10 @@
       "name": "OpenCode MiMo V2.5 Free",
       "provider": "",
       "status": "active",
-      "elo": 1054,
-      "games": 9,
+      "elo": 1023,
+      "games": 11,
       "wins": 0,
-      "losses": 9,
+      "losses": 11,
       "draws": 0
     },
     "opencode-muse-spark-1-3-free-xhigh": {
@@ -168,13 +168,16 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "answers": [],
-      "matchups_count": 89
+      "answers": [
+        "modelA",
+        "modelB"
+      ],
+      "matchups_count": 99
     }
   },
   "matchups_summary": {
-    "total": 89,
-    "applied": 89,
+    "total": 99,
+    "applied": 99,
     "voided": 0,
     "tombstone": 0,
     "skipped": 0
@@ -1869,6 +1872,196 @@
         "before": 1158,
         "after": 1138,
         "delta": -20
+      }
+    },
+    {
+      "matchup": "T-001/090",
+      "seq": 90,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T21:16:02+03:00",
+      "model_a_id": "devin-kimi-k3-max",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1138,
+        "after": 1118,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1145,
+        "after": 1161,
+        "delta": 16
+      }
+    },
+    {
+      "matchup": "T-001/091",
+      "seq": 91,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T21:25:31+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "devin-kimi-k3-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1089,
+        "after": 1074,
+        "delta": -15
+      },
+      "elo_b": {
+        "before": 1118,
+        "after": 1136,
+        "delta": 18
+      }
+    },
+    {
+      "matchup": "T-001/092",
+      "seq": 92,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T21:40:04+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "devin-swe-1-7-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1120,
+        "after": 1102,
+        "delta": -18
+      },
+      "elo_b": {
+        "before": 1161,
+        "after": 1175,
+        "delta": 14
+      }
+    },
+    {
+      "matchup": "T-001/093",
+      "seq": 93,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T21:44:41+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "cursor-composer-2-5",
+      "winner": "b",
+      "elo_a": {
+        "before": 1102,
+        "after": 1080,
+        "delta": -22
+      },
+      "elo_b": {
+        "before": 1074,
+        "after": 1091,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/094",
+      "seq": 94,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:22:09+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "devin-glm-5-2-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1080,
+        "after": 1059,
+        "delta": -21
+      },
+      "elo_b": {
+        "before": 1062,
+        "after": 1079,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/095",
+      "seq": 95,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:33:32+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1059,
+        "after": 1079,
+        "delta": 20
+      },
+      "elo_b": {
+        "before": 1054,
+        "after": 1034,
+        "delta": -20
+      }
+    },
+    {
+      "matchup": "T-001/096",
+      "seq": 96,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:37:20+03:00",
+      "model_a_id": "devin-glm-5-2-high",
+      "model_b_id": "devin-kimi-k3-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1079,
+        "after": 1066,
+        "delta": -13
+      },
+      "elo_b": {
+        "before": 1136,
+        "after": 1153,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/097",
+      "seq": 97,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:42:35+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "devin-kimi-k3-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1243,
+        "after": 1255,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1153,
+        "after": 1138,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/098",
+      "seq": 98,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:49:41+03:00",
+      "model_a_id": "devin-kimi-k3-max",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1138,
+        "after": 1152,
+        "delta": 14
+      },
+      "elo_b": {
+        "before": 1034,
+        "after": 1023,
+        "delta": -11
+      }
+    },
+    {
+      "matchup": "T-001/099",
+      "seq": 99,
+      "date": "2026-09-08",
+      "recorded_at": "2026-09-08T22:58:32+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "devin-kimi-k3-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1261,
+        "after": 1272,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1152,
+        "after": 1141,
+        "delta": -11
       }
     }
   ]

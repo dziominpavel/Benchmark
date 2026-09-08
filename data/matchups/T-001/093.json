@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 93,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "cursor-composer-2-5",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "cursor-composer-2-5",
+  "winner": "b",
+  "date": "2026-09-08",
+  "recorded_at": "2026-09-08T21:44:41+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1102,
+      "after": 1080,
+      "delta": -22
+    },
+    "cursor-composer-2-5": {
+      "before": 1074,
+      "after": 1091,
+      "delta": 17
+    }
+  }
+}
