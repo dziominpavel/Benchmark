@@ -1,0 +1,8 @@
+[project]
+name = "benchmark-elo"
+version = "0.1.0"
+description = "ELO Benchmark web server (tools/server.py)"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+]

@@ -104,28 +104,32 @@ Benchmark/
 
 ## Запуск
 
+Зависимости описаны в `pyproject.toml`, окружение — `.venv`, создаётся через `uv sync`
+(требуется [uv](https://docs.astral.sh/uv/)). Далее команды запускаются через `uv run`
+(сам активирует `.venv`) или напрямую `.venv\Scripts\python.exe`.
+
 ```bash
 # Запустить веб-сервер (leaderboard + рекомендации + ввод вердиктов + добавление модели)
-python tools/server.py
+uv run python tools/server.py
 # → http://localhost:5000 (при занятом порте — следующий свободный, см. вывод в консоли)
-# Windows: start.bat (открывает браузер на localhost:5000)
+# Windows: start.bat (создаст .venv при первом запуске и откроет браузер на localhost:5000)
 
 # Пересчитать ELO вручную / проверить свежесть кэша
-python tools/elo.py
-python tools/elo.py --check
+uv run python tools/elo.py
+uv run python tools/elo.py --check
 
 # Юнит-тесты движка
-python tools/test_elo.py
+uv run python tools/test_elo.py
 
 # Зарегистрировать модель
-python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
+uv run python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
 
 # Зарегистрировать задачу
-python tools/register_task.py --title "Bug Hunt — NewModule" --project VoiceMind --baseline abc123
+uv run python tools/register_task.py --title "Bug Hunt — NewModule" --project VoiceMind --baseline abc123
 
 # Заархивировать / разархивировать модель
-python tools/archive_model.py gpt-5
-python tools/archive_model.py --restore gpt-5
+uv run python tools/archive_model.py gpt-5
+uv run python tools/archive_model.py --restore gpt-5
 ```
 
 ## Документация
