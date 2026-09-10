@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 113,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "devin-swe-2-max",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "devin-swe-2-max",
+  "winner": "b",
+  "date": "2026-09-10",
+  "recorded_at": "2026-09-10T22:03:37+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1155,
+      "after": 1142,
+      "delta": -13
+    },
+    "devin-swe-2-max": {
+      "before": 1218,
+      "after": 1234,
+      "delta": 16
+    }
+  }
+}

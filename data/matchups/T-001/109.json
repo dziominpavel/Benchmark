@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 109,
+  "task": "T-001",
+  "model_a": "devin-glm-5-3-flash-max",
+  "model_b": "devin-swe-2-max",
+  "model_a_id": "devin-glm-5-3-flash-max",
+  "model_b_id": "devin-swe-2-max",
+  "winner": "a",
+  "date": "2026-09-10",
+  "recorded_at": "2026-09-10T21:25:35+03:00",
+  "elo": {
+    "devin-glm-5-3-flash-max": {
+      "before": 1255,
+      "after": 1270,
+      "delta": 15
+    },
+    "devin-swe-2-max": {
+      "before": 1238,
+      "after": 1219,
+      "delta": -19
+    }
+  }
+}

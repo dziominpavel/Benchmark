@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 103,
+  "task": "T-001",
+  "model_a": "cursor-gemini-3-8-flash-high",
+  "model_b": "devin-deepseek-v4-pro-max",
+  "model_a_id": "cursor-gemini-3-8-flash-high",
+  "model_b_id": "devin-deepseek-v4-pro-max",
+  "winner": "a",
+  "date": "2026-09-10",
+  "recorded_at": "2026-09-10T20:15:25+03:00",
+  "elo": {
+    "cursor-gemini-3-8-flash-high": {
+      "before": 1185,
+      "after": 1201,
+      "delta": 16
+    },
+    "devin-deepseek-v4-pro-max": {
+      "before": 1180,
+      "after": 1160,
+      "delta": -20
+    }
+  }
+}

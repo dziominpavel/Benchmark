@@ -1,333 +1,350 @@
 ---
 task: T-001
-model: modelB
-date: 2026-09-05
+model: modelA
+date: 2026-09-06
 ---
 
 # Ответ на задачу T-001
 
 ## Анализ
 
-Разобраны `RecurrenceCalculator.kt` и `RecurrenceRule.kt` на коммите `ce2d3f66`. Контракт `nextOccurrence`: одно ближайшее срабатывание **строго после** `fromMillis` (без «догоняющих» пропущенных слотов). `fromMillis` — UTC-instant, локальные поля считаются в переданном `zone`. Время суток в правиле **не хранится**: час/минута копируются с `from` через `withSameTime`.
+Проверены только `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt` и `RecurrenceRule.kt` на коммите `ce2d3f66b2089c7b60073dc2a96899aaa006c9ce`. Ниже пути сокращены до имён файлов; номера строк относятся к этому коммиту.
 
-Проверены: DAILY / WEEKDAYS / WEEKENDS / WEEKLY / MONTHLY, `interval` 0 и отрицательный, `dayOfWeek` вне 1–7, `dayOfMonth` 31 в коротком месяце, високосный февраль, DST-разрыв и overlap, конвертация instant↔зона, `parse`/`serialize`, циклы WEEKDAYS/WEEKENDS.
+Найдено **8 проблем**: невалидный интервал, два пропуска ближайшего срабатывания, перенос DST-сдвига с промежуточной даты, невалидные дни, несогласованные подписи для отсутствующего дня, молчаливое исправление повреждённой сериализации, потеря интервала для WEEKDAYS/WEEKENDS. Последние две требуют явного решения о допустимом формате/семантике. Отдельно описаны ограничения контракта, диапазона и DST-политики — они не выданы за дополнительные безусловные баги.
 
-Главный дефект WEEKLY/MONTHLY: сначала делается `plusWeeks`/`plusMonths(interval)`, потом выравнивание по целевому дню. Из-за этого пропускается ближайший слот в текущей неделе/месяце. Для `interval >= 1` ветки `if (!candidate.isAfter(from))` почти мёртвые — компенсация «не после from» не срабатывает.
+Воспроизведение: в JShell на Java 25.0.2 выполнены эквиваленты операций исходного Kotlin-кода над `java.time`. Подтверждены результаты для WEEKLY, MONTHLY, нулевого/отрицательного интервала, DST и високосного февраля. Семь проверок предложенных календарных алгоритмов прошли. Это проверка алгоритмов `java.time`, а не запуск Android-тестов или компиляция Kotlin-патча. Проект не изменялся.
 
 ## Находки
 
-### 1. WEEKLY пропускает ближайший целевой день недели
+### 1. Нулевой и отрицательный interval нарушают «строго после»
 
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:49`
-**Критичность:** критичный
-**Описание:** `nextWeekly` сначала сдвигает `from` на `interval` недель и только потом доводит дату до `dayOfWeek`. «Каждый вторник» с понедельника должно дать **ближайший** вторник, а не вторник через 8 дней. Дельта `(target - current + 7) % 7` считается уже от даты через N недель, поэтому к интервалу добавляется ещё 0–6 дней.
+**Файл:** `RecurrenceRule.kt:11–16,49–64`; `RecurrenceCalculator.kt:29–30,49–58,61–71`.
+**Критичность:** критичный.
 
-Ветка `isAfter` для `interval >= 1` не спасает: кандидат уже минимум на неделю впереди.
-
-При `interval > 1` ошибка удваивается: с понедельника «каждые 2 недели во вторник» прыгает на вторник через ~15 дней, минуя ближайший вторник.
+**Описание:** ни конструктор, ни parse не требуют положительного интервала. `toIntOrNull()` принимает `0` и отрицательные числа. DAILY сразу возвращает прежнее или прошедшее время. Дополнительные проверки WEEKLY/MONTHLY не спасают: они ещё раз прибавляют тот же нулевой/отрицательный интервал. Это может передать планировщику уже наступившее время; поведение самого планировщика здесь не анализировалось.
 
 **Пример:**
-- `from` = понедельник 2026-06-22 09:00 (`Europe/Moscow`)
-- `RecurrenceRule(WEEKLY, dayOfWeek=2, interval=1)` — каждый вторник
-- Ожидание: 2026-06-23 09:00 (завтра)
-- Факт: `plusWeeks(1)` → 2026-06-29 (пн), `delta=1` → **2026-06-30 09:00** (вторник через 8 дней)
 
-Ещё: среда 2026-06-24, цель понедельник (`dayOfWeek=1`) → должно быть 2026-06-29, код даёт 2026-07-06.
+| Правило | from, UTC | Фактический результат |
+|---|---|---|
+| DAILY, interval=0 | 2024-01-01 09:00 | 2024-01-01 09:00 |
+| DAILY, interval=-1 | 2024-01-01 09:00 | 2023-12-31 09:00 |
+| WEEKLY, dayOfWeek=1, interval=0 | 2024-01-01 09:00 | то же время |
+| WEEKLY, dayOfWeek=1, interval=-1 | 2024-01-01 09:00 | 2023-12-18 09:00 |
+| MONTHLY, dayOfMonth=15, interval=0 | 2024-03-15 09:00 | то же время |
+| MONTHLY, dayOfMonth=15, interval=-1 | 2024-03-15 09:00 | 2024-01-15 09:00 |
 
-Совпадение дня недели работает случайно: пятница→пятница, `delta=0`, `plusWeeks(1)` — ровно следующая пятница.
+При interval=0 и целевом дне позже исходного WEEKLY/MONTHLY иногда возвращают будущее. Это не делает interval=0 корректным: поведение зависит от даты. `parse("DAILY:0")`, `parse("WEEKLY:1:-1")`, `parse("MONTHLY:15:0")` создают такие правила.
 
-**Исправление:** сначала выровнять на целевой DOW относительно `from`, и только если кандидат не строго после `from` — добавить `interval` недель.
+**Исправление:** защитить саму модель, чтобы проверка действовала и для прямого создания, и для `copy`. Парсер должен возвращать null для нарушений, а не выпускать исключение наружу (код в находке 7).
+
+```kotlin
+init {
+    require(interval > 0) { "Интервал должен быть положительным" }
+}
+```
+
+Дополнительная защитная проверка перед возвратом из `nextOccurrence`:
+
+```kotlin
+check(candidate.isAfter(from)) { "Следующее срабатывание должно быть в будущем" }
+return candidate.toInstant().toEpochMilli()
+```
+
+Это страховка, не замена исправлению календарных алгоритмов.
+
+### 2. WEEKLY сначала пропускает целую неделю и лишь затем ищет нужный день
+
+**Файл:** `RecurrenceCalculator.kt:49–54`.
+**Критичность:** средний.
+
+**Описание:** при interval=1 метод прибавляет неделю независимо от того, есть ли нужный день завтра. Соответствует последовательному вычислению от уже выровненного срабатывания, но не общему контракту «ближайшее будущее» от произвольного fromMillis.
+
+**Пример:** from=`2024-01-01T09:00Z` (понедельник), WEEKLY/dayOfWeek=2/interval=1. Ожидается вторник 2 января, фактически 9 января. От среды 3 января до понедельника ожидается 8 января, исходный код возвращает 15 января. Если from уже вторник, переход к следующему вторнику корректен.
+
+**Исправление:** сначала найти ближайший целевой день строго позже, затем прибавить дополнительные недели. Для interval>1 здесь явно выбрана семантика «ближайший целевой день + interval−1 недель». Для сохранения фазы ранее созданной серии нужен отдельный якорь, которого текущий API не имеет.
 
 ```kotlin
 private fun nextWeekly(from: ZonedDateTime, dayOfWeek: Int, interval: Int): ZonedDateTime {
-    val step = interval.coerceAtLeast(1).toLong()
-    val targetDow = dayOfWeek.coerceIn(1, 7)
-    val delta = (targetDow - from.dayOfWeek.value + 7) % 7
-    var candidate = from.plusDays(delta.toLong()).withSameTime(from)
-    if (!candidate.isAfter(from)) {
-        candidate = candidate.plusWeeks(step)
-    }
-    return candidate
+    require(dayOfWeek in 1..7 && interval > 0)
+    val delta = (dayOfWeek - from.dayOfWeek.value + 7) % 7
+    val days = (if (delta == 0) 7L else delta.toLong()) + 7L * (interval - 1)
+    return from.toLocalDate().plusDays(days)
+        .atTime(from.toLocalTime()).atZone(from.zone)
 }
 ```
 
-После срабатывания во вторник (`from` уже вторник, то же локальное время) `delta=0`, `!isAfter` → `plusWeeks(step)` — интервал сохраняется.
+`7L` предотвращает переполнение Int при больших положительных interval. Построение итоговой даты до привязки зоны также устраняет промежуточный DST-сдвиг из находки 4.
 
----
+### 3. MONTHLY пропускает подходящий день текущего месяца
 
-### 2. MONTHLY пропускает ближайший день текущего месяца
+**Файл:** `RecurrenceCalculator.kt:61–65`.
+**Критичность:** средний.
 
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:61`
-**Критичность:** критичный
-**Описание:** Та же схема: `plusMonths(interval)` **до** `withDayOfMonth`. Если `from` ещё до целевого дня этого месяца, слот месяца пропускается.
+**Описание:** безусловный `plusMonths(interval)` не рассматривает целевой день текущего месяца, хотя тот может ещё не наступить.
 
-`plusMonths` с 31-го числа сначала ужимает дату (31 янв → 28/29 фев), затем день ставится уже в **следующем** месяце. Для «31-е каждого месяца» с 10 января это даёт конец февраля вместо **31 января**.
+**Пример:** from=`2024-01-10T09:00Z`, MONTHLY/dayOfMonth=20/interval=1: ожидается 20 января, получается 20 февраля. from=10 апреля, dayOfMonth=31: при принятом в коде ограничении последним днём месяца ожидается 30 апреля, получается 31 мая.
 
-`coerceIn(1, lengthOfMonth)` сам по себе корректен (короткий месяц не бросает `DateTimeException`), но применяется не к тому месяцу.
-
-**Пример:**
-- `from` = 2026-01-10 10:00, `MONTHLY, dayOfMonth=31, interval=1`
-- Ожидание: 2026-01-31 10:00
-- Факт: янв+1 мес → 10 фев, `31.coerceIn(1, 28)` → **2026-02-28 10:00**
-
-Високос: `from` = 2024-02-10 10:00, `dayOfMonth=29` → должно быть 2024-02-29, код: март 10 + день 29 → **2024-03-29** (29 февраля високосного года пропущен).
-
-`from` = 15-е, цель 15-е: `plusMonths(1)` совпадает с ожиданием — тесты `monthly_sameDay` / `monthly_31st_coerces` этот класс ошибок не ловят.
-
-**Исправление:** поставить день в текущем месяце; если не строго после `from` — перенести на `interval` месяцев и снова ужать день.
+**Исправление:** проверить целевой день текущего месяца, после этого сдвигать месяц. Для interval>1 используется та же явно выбранная семантика ближайшего кандидата с дополнительными interval−1 периодами.
 
 ```kotlin
 private fun nextMonthly(from: ZonedDateTime, dayOfMonth: Int, interval: Int): ZonedDateTime {
-    val step = interval.coerceAtLeast(1).toLong()
-    fun atTargetDay(base: ZonedDateTime): ZonedDateTime {
-        val maxDay = base.toLocalDate().lengthOfMonth()
-        val targetDay = dayOfMonth.coerceIn(1, maxDay)
-        return base.withSameTime(from).withDayOfMonth(targetDay)
-    }
-    var candidate = atTargetDay(from)
-    if (!candidate.isAfter(from)) {
-        candidate = atTargetDay(from.plusMonths(step))
-    }
-    return candidate
+    require(dayOfMonth in 1..31 && interval > 0)
+    var month = java.time.YearMonth.from(from)
+    val currentCandidate = month.atDay(minOf(dayOfMonth, month.lengthOfMonth()))
+        .atTime(from.toLocalTime()).atZone(from.zone)
+    if (!currentCandidate.isAfter(from)) month = month.plusMonths(1)
+    month = month.plusMonths(interval.toLong() - 1)
+    return month.atDay(minOf(dayOfMonth, month.lengthOfMonth()))
+        .atTime(from.toLocalTime()).atZone(from.zone)
 }
 ```
 
-Цепочка 31 янв → 28 фев (2026) → 31 мар сохраняется: с `from`=31 янв кандидат января не после `from`, февраль ужимает 31→28; со `from`=28 фев и правилом 31 марта даёт 31 (берётся `dayOfMonth` правила, а не день кандидата).
+Исходный `dayOfMonth` сохраняется: 31 января → 29 февраля 2024 → 31 марта, а не 29 марта.
 
----
+### 4. DST на промежуточной дате меняет час итогового срабатывания
 
-### 3. `interval <= 0` ломает контракт «строго после»
+**Файл:** `RecurrenceCalculator.kt:33–37,49–54,61–65,74–78`.
+**Критичность:** средний.
 
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:29` (также 49, 61)
-**Критичность:** критичный
-**Описание:** Ни калькулятор, ни `parse` не требуют `interval >= 1`.
+**Описание:** арифметика выполняется на ZonedDateTime. Когда промежуточная дата попадает в DST-gap, `java.time` сдвигает локальное время вперёд. Последующие `plusDays`/`withDayOfMonth` переносят уже изменённый час на итоговую дату, где исходное время существует. `withSameTime` применяется до выбора окончательной даты и не устраняет этот эффект.
 
-| Тип | `interval=0` | `interval < 0` |
-|---|---|---|
-| DAILY | `plusDays(0)` → тот же instant, **нет** проверки `isAfter` | дата в прошлом |
-| WEEKLY | если сегодня уже целевой DOW: `plusWeeks(0)` дважды → тот же instant | уход в прошлое, `isAfter` добавляет ещё отрицательные недели |
-| MONTHLY | тот же день месяца и время → тот же instant; если целевой день уже прошёл — кандидат **раньше** `from`, `plusMonths(0)` не лечит | то же |
+**Пример (America/New_York, весенний переход 10 марта 2024, 02:00 → 03:00):**
 
-Повторный `nextFireAt ≈ fromMillis` для будильника даёт немедленный повтор → риск цикла.
+- WEEKDAYS от пятницы `2024-03-08T02:30-05:00`: суббота 02:30 → воскресенье 03:30 → понедельник **03:30**. Ожидается понедельник 11 марта **02:30**.
+- WEEKLY/dayOfWeek=1 от воскресенья `2024-03-03T02:30-05:00`: `plusWeeks(1)` даёт 10 марта 03:30, затем понедельник 11 марта **03:30**, хотя 02:30 в понедельник существует. Это отдельная ошибка часа, помимо пропуска недели из находки 2.
+- MONTHLY/dayOfMonth=20 от `2024-02-10T02:30-05:00`: промежуточное 10 марта попадает в gap, результат — **20 марта 03:30**. Даже если оставить прежнюю семантику выбора следующего месяца, итоговый час должен быть 02:30.
 
-**Пример:**
-- `DAILY:0`, `from` = 2026-06-19 08:00 → результат **2026-06-19 08:00** (не строго после)
-- `WEEKLY:2:0` (вторник), `from` = вторник 09:00 → тот же вторник 09:00
-- `MONTHLY:10:0`, `from` = 2026-06-20 10:00, цель 10-е → 2026-06-10 10:00 (**в прошлом**)
-- `DAILY:-3` → 16 июня, сразу «просрочено»
+Все три результата подтверждены выполнением исходной последовательности операций.
 
-**Исправление:** защитный шаг в каждом методе (`coerceAtLeast(1)`, см. фрагменты выше) плюс отсечение в `parse` (находка 4). Для DAILY:
+**Исправление:** сначала выбрать итоговую LocalDate, затем один раз объединить её с исходным LocalTime и зоной. WEEKLY/MONTHLY исправлены выше. Для фильтров дней:
 
 ```kotlin
-private fun nextDaily(from: ZonedDateTime, interval: Int): ZonedDateTime {
-    val step = interval.coerceAtLeast(1).toLong()
-    return from.plusDays(step).withSameTime(from)
+private fun nextWeekdays(from: ZonedDateTime): ZonedDateTime {
+    var date = from.toLocalDate().plusDays(1)
+    while (date.dayOfWeek.value > 5) date = date.plusDays(1)
+    return date.atTime(from.toLocalTime()).atZone(from.zone)
+}
+
+private fun nextWeekends(from: ZonedDateTime): ZonedDateTime {
+    var date = from.toLocalDate().plusDays(1)
+    while (date.dayOfWeek.value < 6) date = date.plusDays(1)
+    return date.atTime(from.toLocalTime()).atZone(from.zone)
 }
 ```
 
-Страховка на выходе `nextOccurrence`:
+Если gap находится на самой итоговой дате, `atZone` всё равно сдвинет время. Это нормальная явно выбранная политика, а не устранимое «сохранение несуществующего часа». Политика полного пропуска даты требует отдельного решения (см. граничные случаи).
+
+### 5. Невалидные номера дней молча превращаются в другие расписания
+
+**Файл:** `RecurrenceRule.kt:14–15,55–64`; `RecurrenceCalculator.kt:51,64,69`.
+**Критичность:** средний.
+
+**Описание:** dayOfWeek=0/8 и dayOfMonth=0/32 разрешены моделью и парсером. `coerceIn` скрывает ошибку вместо валидации. Значения в модели, подписи и фактическом календаре перестают соответствовать друг другу.
+
+**Пример:** `parse("WEEKLY:8:1")` создаёт день 8, подпись `еженедельно ()`, а вычисление использует воскресенье. `parse("MONTHLY:0:1")` показывает число 0, но срабатывает 1-го; `MONTHLY:32:1` становится последним днём месяца.
+
+Важно различать **невалидное число 32** и **валидное число 31 в коротком месяце**: второе можно обоснованно ограничить длиной месяца, первое следует отклонить.
+
+**Исправление:** дополнить `init` модели проверками и использовать строгий parse из находки 7:
 
 ```kotlin
-require(candidate.isAfter(from)) { "nextOccurrence must be strictly after from" }
+require(dayOfWeek == null || dayOfWeek in 1..7) { "День недели должен быть от 1 до 7" }
+require(dayOfMonth == null || dayOfMonth in 1..31) { "День месяца должен быть от 1 до 31" }
 ```
 
----
+После валидации WEEKLY не нуждается в `coerceIn`; MONTHLY оставляет только `minOf(dayOfMonth, maxDay)` для реальных коротких месяцев. Null разрешён в соответствии с существующим fallback на 1.
 
-### 4. `RecurrenceRule.parse` не валидирует interval / dayOfWeek / dayOfMonth
+### 6. Значения дня по умолчанию расходятся с подписью
 
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceRule.kt:45`
-**Критичность:** критичный
-**Описание:** `toIntOrNull() ?: 1` подставляет дефолт только при нечисле. Нуль, отрицательные и выход за диапазон проходят в правило и в `serialize` (round-trip сохраняет мусор). Конструктор `data class` тоже без инвариантов.
+**Файл:** `RecurrenceRule.kt:23–30,39–40`; `RecurrenceCalculator.kt:23–24`.
+**Критичность:** низкий.
 
-**Пример:**
-- `"DAILY:0"` → `interval=0` (находка 3)
-- `"DAILY:-5"` → `interval=-5`
-- `"WEEKLY:0:1"` → `dayOfWeek=0` → в калькуляторе `coerceIn` превратит в понедельник **без ошибки**
-- `"WEEKLY:9:1"` → `dayOfWeek=9` → воскресенье
-- `"MONTHLY:0:1"` / `"MONTHLY:32:1"` → 0 или 32, дальше тихое `coerceIn`
-- `"DAILY:abc"` → 1 (скрытый fallback, не баг контракта, но маскирует опечатку)
+**Описание:** null — допустимое значение конструктора. Калькулятор и сериализатор трактуют его как понедельник/первое число, а `toLabel()` показывает пустой день или буквальное `null`.
 
-**Исправление:** точечная проверка после сборки правила, без переписывания `when`:
+**Пример:** `RecurrenceRule(RecurrenceType.WEEKLY).toLabel()` → `еженедельно ()`, сериализация → `WEEKLY:1:1`. Для MONTHLY подпись → `ежемесячно (null)`, фактическое число — 1. После serialize/parse подпись меняется при неизменном расписании.
+
+**Исправление:** применить одинаковые fallback в двух ветках `toLabel`:
+
+```kotlin
+RecurrenceType.WEEKLY -> {
+    val dayName = when (dayOfWeek ?: 1) {
+        1 -> "пн"
+        2 -> "вт"
+        3 -> "ср"
+        4 -> "чт"
+        5 -> "пт"
+        6 -> "сб"
+        7 -> "вс"
+        else -> error("Некорректный день недели")
+    }
+    if (interval == 1) "еженедельно ($dayName)" else "каждые $interval нед. ($dayName)"
+}
+RecurrenceType.MONTHLY -> {
+    val day = dayOfMonth ?: 1
+    if (interval == 1) "ежемесячно ($day)" else "каждые $interval мес. ($day)"
+}
+```
+
+### 7. parse не отличает отсутствующие поля от повреждённых и игнорирует хвост
+
+**Файл:** `RecurrenceRule.kt:47–64`.
+**Критичность:** средний.
+
+**Описание:** `toIntOrNull() ?: 1` превращает некорректное число и переполнение Int в рабочее расписание с периодом/днём 1. Количество полей вообще не проверяется. Null возвращается для неизвестного типа, но повреждённые записи известного типа часто принимаются.
+
+**Пример:** `DAILY:abc`, `DAILY:2147483648`, `DAILY:` → ежедневное правило; `WEEKLY:abc:2` → каждые две недели по понедельникам; `MONTHLY:15:abc` → ежемесячно 15-го; `DAILY:2:garbage` → каждые два дня; `WEEKDAYS:999` → обычные будни.
+
+Это дефект при ожидаемом строгом чтении сохранённого формата. Если исторически предусмотрен permissive parsing, это нужно документировать как сознательную политику восстановления, а не считать любое преобразование безусловно неверным. Отсутствующие поля можно сохранить как legacy-формат, не принимая присутствующие повреждённые поля.
+
+**Исправление:** точечная замена только `parse`, совместимая с пропущенными полями, но отклоняющая невалидные значения и лишние поля. Работает вместе с `init` из находок 1, 5 и 8:
 
 ```kotlin
 fun parse(serialized: String?): RecurrenceRule? {
     if (serialized.isNullOrBlank()) return null
     val parts = serialized.split(":")
-    val rule = when (parts[0]) {
-        "DAILY" -> RecurrenceRule(
-            type = RecurrenceType.DAILY,
-            interval = parts.getOrNull(1)?.toIntOrNull() ?: 1,
-        )
-        "WEEKDAYS" -> RecurrenceRule(type = RecurrenceType.WEEKDAYS)
-        "WEEKENDS" -> RecurrenceRule(type = RecurrenceType.WEEKENDS)
-        "WEEKLY" -> RecurrenceRule(
-            type = RecurrenceType.WEEKLY,
-            dayOfWeek = parts.getOrNull(1)?.toIntOrNull() ?: 1,
-            interval = parts.getOrNull(2)?.toIntOrNull() ?: 1,
-        )
-        "MONTHLY" -> RecurrenceRule(
-            type = RecurrenceType.MONTHLY,
-            dayOfMonth = parts.getOrNull(1)?.toIntOrNull() ?: 1,
-            interval = parts.getOrNull(2)?.toIntOrNull() ?: 1,
-        )
+    val type = RecurrenceType.entries.firstOrNull { it.name == parts[0] } ?: return null
+    val maxParts = when (type) {
+        RecurrenceType.DAILY -> 2
+        RecurrenceType.WEEKLY, RecurrenceType.MONTHLY -> 3
+        RecurrenceType.WEEKDAYS, RecurrenceType.WEEKENDS -> 1
+    }
+    if (parts.size > maxParts) return null
+    fun number(index: Int): Int? =
+        if (index >= parts.size) 1 else parts[index].toIntOrNull()
+
+    val interval = when (type) {
+        RecurrenceType.DAILY -> number(1) ?: return null
+        RecurrenceType.WEEKLY, RecurrenceType.MONTHLY -> number(2) ?: return null
+        RecurrenceType.WEEKDAYS, RecurrenceType.WEEKENDS -> 1
+    }
+    if (interval <= 0) return null
+    val day = when (type) {
+        RecurrenceType.WEEKLY, RecurrenceType.MONTHLY -> number(1) ?: return null
         else -> null
-    } ?: return null
-    if (rule.interval < 1) return null
-    if (rule.type == RecurrenceType.WEEKLY && rule.dayOfWeek !in 1..7) return null
-    if (rule.type == RecurrenceType.MONTHLY && rule.dayOfMonth !in 1..31) return null
-    return rule
-}
-```
-
----
-
-### 5. DST: `withSameTime` ставит несуществующий локальный час
-
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:74`
-**Критичность:** средний
-**Описание:** `withHour` / `withMinute` на `ZonedDateTime` в **gap** (перевод часов вперёд) сдвигает локальное время на длину разрыва. Напоминание «каждый день в 02:30» в день spring-forward превращается в 03:30.
-
-Если следующий вызов берёт уже 03:30 как `from`, сдвиг **залипает** на все последующие дни: исходные 02:30 в правиле нигде не хранятся.
-
-Overlap (перевод назад): 01:30 существует дважды; `withHour` обычно берёт **ранний** offset — одно срабатывание, но UTC-instant может быть не тем, который ждал пользователь.
-
-`plusDays` сам по себе уже резолвит gap; последующий `withSameTime` снова навязывает исходный час и повторяет резолв.
-
-**Пример:**
-- `zone` = `America/New_York`, 2026-03-08 02:00 → 03:00 (разрыва нет 02:00–03:00)
-- `from` = 2026-03-07 02:30 EST, `DAILY interval=1`
-- `plusDays(1)` + `withHour(2).withMinute(30)` → **2026-03-08 03:30 EDT**, не 02:30 и не «пропустить день»
-
-**Исправление:** собирать локальную дату+время явно; в gap брать первый валидный момент после перехода, в overlap — более ранний offset (одно срабатывание в календарные сутки):
-
-```kotlin
-private fun ZonedDateTime.withSameTime(other: ZonedDateTime): ZonedDateTime {
-    val ldt = this.toLocalDate().atTime(other.toLocalTime())
-    val rules = this.zone.rules
-    val offsets = rules.getValidOffsets(ldt)
-    return when {
-        offsets.size == 1 -> ZonedDateTime.of(ldt, this.zone)
-        offsets.size > 1 -> ZonedDateTime.ofLocal(ldt, this.zone, offsets.first())
-        else -> {
-            val gap = rules.getTransition(ldt)
-            if (gap != null && gap.isGap) {
-                gap.dateTimeAfter.atZone(this.zone)
-            } else {
-                ldt.atZone(this.zone)
-            }
-        }
     }
+    if (type == RecurrenceType.WEEKLY && (day == null || day !in 1..7)) return null
+    if (type == RecurrenceType.MONTHLY && (day == null || day !in 1..31)) return null
+    return RecurrenceRule(
+        type = type,
+        interval = interval,
+        dayOfWeek = day.takeIf { type == RecurrenceType.WEEKLY },
+        dayOfMonth = day.takeIf { type == RecurrenceType.MONTHLY },
+    )
 }
 ```
 
-В gap 02:30 → 03:00 (`dateTimeAfter`), а не 03:30. Полностью убрать «залипание» 03:30 в следующих вызовах можно только храня `LocalTime` в правиле (находка 6).
+Если версия Kotlin не поддерживает `entries`, можно использовать `RecurrenceType.values()`. Зависимости проекта в рамках двухфайлового анализа не проверялись.
 
----
+### 8. WEEKDAYS/WEEKENDS принимают interval, но не используют и не сохраняют его
 
-### 6. В правиле нет времени суток — слот привязан к часам `fromMillis`
+**Файл:** `RecurrenceRule.kt:13,20–21,37–38,53–54`; `RecurrenceCalculator.kt:21–22,33–47`.
+**Критичность:** средний.
 
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceRule.kt:11` и `RecurrenceCalculator.kt:18`
-**Критичность:** средний
-**Описание:** Сценарий задачи — «каждый вторник в **9:00**». В `RecurrenceRule` есть тип, interval, день недели/месяца, но не `LocalTime`. Калькулятор берёт час из `from`. Тогда «ближайшее будущее после now» в 15:07 даёт вторник **15:07**, а не 09:00. Поздний/ранний вызов (doze, reschedule просроченного) сдвигает серию.
+**Описание:** публичная модель позволяет указать interval=2 для этих типов, но календарь, подпись и сериализация его игнорируют. После round-trip interval становится 1.
 
-Конвертация `Instant.ofEpochMilli(fromMillis)` → `ZonedDateTime(..., zone)` при этом **корректна**: epoch всегда UTC, `zone` задаёт локальные поля. Баг не в UTC vs local, а в отсутствии времени в правиле.
+**Пример:** `RecurrenceRule(RecurrenceType.WEEKDAYS, interval=2)` от понедельника 1 января 2024 возвращает вторник 2 января, сериализуется в `WEEKDAYS`, после parse имеет interval=1. Аналогично WEEKENDS от субботы возвращает воскресенье независимо от interval.
 
-**Пример:** правило `WEEKLY, dayOfWeek=2`, пользователь создал «вт 09:00». Вызов `nextOccurrence(rule, now)` в понедельник 15:07 → даже после фикса находки 1 получится вторник **15:07**.
+Сами по себе ежедневные повторы по будням/выходным корректны. Проблема — молчаливое принятие неподдерживаемого параметра. Из этих двух файлов нельзя определить, должно ли «2» означать каждый второй допустимый день или каждые вторые будни/выходные по неделям. Не следует самовольно выбирать один вариант.
 
-**Исправление:** хранить время в правиле и применять его вместо часов `from`:
+**Исправление:** минимально запретить неподдерживаемые состояния в `init`, сохранив текущую семантику и формат:
 
 ```kotlin
-data class RecurrenceRule(
-    val type: RecurrenceType,
-    val interval: Int = 1,
-    val dayOfWeek: Int? = null,
-    val dayOfMonth: Int? = null,
-    val hour: Int = 0,
-    val minute: Int = 0,
-)
+require(
+    (type != RecurrenceType.WEEKDAYS && type != RecurrenceType.WEEKENDS) || interval == 1
+) { "Для будней и выходных поддерживается только интервал 1" }
 ```
 
-Сериализация, например `WEEKLY:2:1:9:0`. В калькуляторе: `from.withHour(rule.hour).withMinute(rule.minute).withSecond(0).withNano(0)`, затем логика «строго после» из находок 1–2. Пока поля нет — вызывающая сторона должна передавать `fromMillis` с нужным локальным временем (предыдущий слот), а не «сейчас».
-
----
-
-### 7. Невалидные `dayOfWeek` / `dayOfMonth` тихо ужимаются
-
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:51` и `:64`
-**Критичность:** средний
-**Описание:** `coerceIn(1, 7)` и `coerceIn(1, maxDay)` маскируют ошибки парсера/конструктора. `0` и отрицательные дни становятся 1-м; `8+` для недели — воскресеньем; `32` для месяца — последним днём **того** месяца, в котором оказался кандидат (ещё и не того, см. находку 2). Пользователь получает чужой день без сигнала.
-
-`toLabel` для `dayOfWeek` вне 1–7 даёт пустое имя: `"еженедельно ()"`. Для `dayOfMonth=null` — `"ежемесячно (null)"`.
-
-**Пример:** `WEEKLY, dayOfWeek=0` → понедельник; `MONTHLY, dayOfMonth=0` → 1-е число.
-
-**Исправление:** валидация в `parse` (находка 4). В калькуляторе оставить `coerceIn` только как защиту от `DateTimeException` на коротком месяце для легального `dayOfMonth` 29–31.
-
-Для подписи:
-
-```kotlin
-val dayName = when (dayOfWeek) {
-    1 -> "пн"; 2 -> "вт"; 3 -> "ср"; 4 -> "чт"
-    5 -> "пт"; 6 -> "сб"; 7 -> "вс"
-    else -> dayOfWeek?.toString() ?: "?"
-}
-```
-
----
-
-### 8. WEEKDAYS/WEEKENDS: в цикле не возвращается исходное локальное время
-
-**Файл:** `app/src/main/java/com/example/voicemind/data/RecurrenceCalculator.kt:35` и `:43`
-**Критичность:** средний
-**Описание:** `withSameTime` вызывается один раз на `from.plusDays(1)`. Дальнейшие `plusDays(1)` в `while` оставляют время, уже сдвинутое DST. Пятница 02:30 перед воскресеньем с gap → понедельник может стать 03:30, хотя понедельник вне разрыва и 02:30 там валиден.
-
-Зацикливания нет: `DayOfWeek.value` всегда 1–7; WEEKDAYS сходит с 6–7 максимум за 2 шага, WEEKENDS набирает 6–7 максимум за 6 шагов.
-
-**Пример:** пятница 2026-03-06 02:30 `America/New_York`, WEEKDAYS → суббота 02:30 → воскресенье 03:30 (gap) → понедельник **03:30** вместо 02:30.
-
-**Исправление:**
-
-```kotlin
-private fun nextWeekdays(from: ZonedDateTime): ZonedDateTime {
-    var candidate = from.plusDays(1).withSameTime(from)
-    while (candidate.dayOfWeek.value > 5) {
-        candidate = candidate.plusDays(1).withSameTime(from)
-    }
-    return candidate
-}
-
-private fun nextWeekends(from: ZonedDateTime): ZonedDateTime {
-    var candidate = from.plusDays(1).withSameTime(from)
-    while (candidate.dayOfWeek.value < 6) {
-        candidate = candidate.plusDays(1).withSameTime(from)
-    }
-    return candidate
-}
-```
-
----
+Если такие интервалы — требование продукта, понадобятся согласованные изменения вычисления, подписи и сериализации; одно добавление параметра в цикл недостаточно.
 
 ## Граничные случаи (проверено, не баг)
 
-- **Часовой пояс / UTC:** `ZonedDateTime.ofInstant(Instant.ofEpochMilli(fromMillis), zone)` и `toInstant().toEpochMilli()` корректны. `fromMillis` — epoch UTC; `zone` только проецирует локальные поля. Расхождение «millis посчитали как local, zone другая» — ошибка вызывающего кода, не этих двух файлов.
-- **DAILY `interval=1`:** `from + 1` календарный день, то же локальное время. Контракт «строго после» выполняется (кроме DST-gap, находка 5).
-- **DAILY `interval=2`:** через два календарных дня, без накопления пропущенных суток — соответствует «ближайшее будущее, не пачка слотов».
-- **WEEKDAYS:** пт→пн, пн→вт, сб→пн, вс→пн. ISO: 1=пн … 5=пт. Цикл конечен.
-- **WEEKENDS:** пт→сб, сб→вс, вс→следующая сб (серия сб+вс). Цикл конечен.
-- **WEEKLY, `from` уже в целевой день, то же время:** следующая неделя — верно для «строго после» (после фикса находки 1 поведение на этом входе совпадает с текущим).
-- **MONTHLY, `from` уже в целевой день:** следующий месяц — верно. 31 янв 2026 + правило 31 → 28 фев (`plusMonths` + `coerceIn`) — разумный clamp, `DateTimeException` нет. В марте 31 восстанавливается, потому что `withDayOfMonth` берёт `dayOfMonth` правила, а не 28.
-- **Невисокосный февраль и `dayOfMonth=29/31` при `from` уже 31 янв / 28 фев:** ужим до 28. Баг — только если 29/31 **ещё впереди** в текущем месяце (находка 2).
-- **`dayOfWeek ?: 1` / `dayOfMonth ?: 1`:** при `null` — пн / 1-е; согласовано с `serialize`.
-- **`serialize`/`parse` для валидных значений:** `DAILY:2`, `WEEKLY:2:1`, `MONTHLY:15:1`, `WEEKDAYS`, `WEEKENDS` — round-trip.
-- **Неизвестный тип / blank:** `parse` → `null`.
-- **WEEKDAYS/WEEKENDS и `interval` в конструкторе:** serialize interval не пишет; для голосовых правил interval не используется. Игнор `interval=2` — ограничение модели, не бесконечный цикл.
-- **Значение `DayOfWeek`:** ISO совпадает с подписями пн=1 … вс=7 в `toLabel`.
+### Короткие месяцы, високосные годы, смена года
+
+- MONTHLY/dayOfMonth=31 от 31 января 2023 даёт 28 февраля, от 31 января 2024 — 29 февраля. `plusMonths` сам корректирует промежуточную дату, а `coerceIn(1, maxDay)` не позволяет `withDayOfMonth(31)` упасть в феврале. Здесь нет заявленного иногда исключения DateTimeException.
+- От 29 февраля 2024 с dayOfMonth=31 получается 31 марта: исходное правило сохраняет число 31, промежуточный февраль не вызывает постоянного дрейфа на 29-е.
+- Число 31 в апреле корректируется до 30; dayOfMonth=29 в феврале невисокосного года — до 28. Это выбранная политика «последний доступный день», а не «пропустить месяц». Если нужна вторая, это другое требование.
+- DAILY от 31 декабря, WEEKLY через границу года, месячный переход декабрь → январь обслуживаются java.time; самостоятельной ошибки в этих границах нет.
+- Gregorian-правила високосности, включая 2100 (не високосный) и 2000 (високосный), делегированы стандартной библиотеке.
+
+### «Строго после» при допустимых интервалах
+
+- DAILY с interval>=1 идёт к будущей календарной дате. Это не обязательно ровно 24 часа в миллисекундах.
+- WEEKLY при совпадении целевого дня с исходным и interval=1 правильно переходит на неделю вперёд; при interval=2 — на две недели.
+- MONTHLY от уже наступившего целевого дня при interval=1 переходит к следующему месяцу. При dayOfMonth=31 восстановление конца месяца корректно.
+- В исходных WEEKLY/MONTHLY с положительным interval обычные календарные даты действительно строго будущие, хотя не всегда ближайшие. Проверки `if (!candidate.isAfter(from))` не исправляют пропуск ближайшего кандидата.
+
+### WEEKDAYS/WEEKENDS: логика и завершение циклов
+
+- WEEKDAYS: понедельник → вторник, пятница → понедельник, суббота → понедельник, воскресенье → понедельник. Начальный `plusDays(1)` исключает возврат той же даты.
+- WEEKENDS: пятница → суббота, суббота → воскресенье, воскресенье → суббота; понедельник → суббота.
+- Для обычного календаря цикл WEEKDAYS делает не более двух дополнительных итераций, WEEKENDS — не более пяти. Они не могут зациклиться из-за interval=0: interval вообще не участвует в этих циклах. Исключения диапазона дат — не бесконечный цикл.
+- DST-сдвиг часа в цикле — отдельная находка 4, а не неверный выбор номера дня недели.
+
+### UTC и локальная зона
+
+`fromMillis` — абсолютный instant, у epoch milliseconds нет собственной локальной зоны. `ZonedDateTime.ofInstant(Instant.ofEpochMilli(fromMillis), zone)` в строке 18 корректен, как и обратный `toInstant().toEpochMilli()` в строке 26. Например, `2024-01-01T23:30Z` в Asia/Tokyo — уже 2 января 08:30; календарь должен работать с этой локальной датой. Нет двойного применения смещения.
+
+Переданная `zone` имеет приоритет над системной. Если аргумент не передавать, смена часового пояса устройства меняет локальную интерпретацию будущих вычислений — это ожидаемая семантика `systemDefault`, а не ошибка преобразования. Требование закрепить зону напоминания потребует хранить её отдельно.
+
+### DST на итоговой дате и неоднозначный час
+
+- America/New_York: DAILY от `2024-03-09T02:30-05:00` даёт `2024-03-10T03:30-04:00`, поскольку 02:30 10 марта не существует. `withHour(2)` не создаст несуществующий ZonedDateTime и не обязан бросать исключение: java.time разрешает gap сдвигом вперёд.
+- При возврате к зимнему времени один локальный час бывает дважды. java.time старается сохранять подходящий предыдущий offset при операциях с ZonedDateTime; `LocalDateTime.atZone` выбирает ранний offset по умолчанию. Следует зафиксировать политику «одно срабатывание, ранний offset» либо «поздний offset» (`withLaterOffsetAtOverlap`). Само наличие двух offset не является доказательством дублирования alarm.
+- Предложенные локальные исправления используют стандартный gap-shift и ранний offset. Они не обещают два запуска за повторяющийся час.
+- Интервал в календарных днях/неделях сохраняет локальные часы и может занимать 23/25 часов на DST-переходе — правильно для голосового «каждый день в 9:00». Замена на фиксированные миллисекунды внесёт ошибку.
+
+### Сериализация
+
+- null, пустая строка и строка из пробелов возвращают null; неизвестный тип тоже возвращает null, без исключения enum-парсинга.
+- Для корректных DAILY/WEEKLY/MONTHLY с явно заданными релевантными полями serialize/parse сохраняет расписание.
+- Null day превращается в 1 после round-trip: структурное равенство data class теряется, но календарная семантика сохраняется. Ошибка подписи выделена отдельно.
+- Отсутствующие числовые поля (`DAILY`, `WEEKLY:2`, `MONTHLY`) получают значения по умолчанию. Это может быть сознательная совместимость, в отличие от присутствующего `abc` или переполненного числа.
+- Lowercase и пробелы вокруг непустой записи не нормализуются. Для внутреннего формата с точными токенами это не баг без дополнительного требования.
 
 ## Дополнительные находки
 
-- **Неиспользуемый импорт** `java.time.temporal.ChronoUnit` в `RecurrenceCalculator.kt:5` (низкий). Удалить либо заменить `plusDays` на `ChronoUnit.DAYS.addTo` — на семантику не влияет.
-- **`nextDaily` без `isAfter`:** в отличие от WEEKLY/MONTHLY. При `interval >= 1` и без отрицательного шага результат и так после `from`; асимметрия всплывает только вместе с находкой 3.
-- **Порядок `withHour` → `withMinute`:** в overlap/gap промежуточное `withHour(2)` уже резолвит дату, затем минуты ставятся на сдвинутый час. Явная сборка `LocalDate + LocalTime` (находка 5) это снимает.
-- **`toLabel` для WEEKLY с `dayOfWeek=null`:** пустые скобки; для MONTHLY с `null` — литерал `"null"` в UI. Низкий, чинится в находке 7.
-- **Экстремальный `interval` (Int.MAX_VALUE):** `plusWeeks`/`plusMonths` могут выйти за диапазон `ZonedDateTime` (`DateTimeException`). Низкий; после `coerceAtLeast(1)` отрицательный край пропадает, верхний лучше ограничить разумным максимумом в `parse` (например `interval in 1..365`).
-- **Пробелы в сериализации** (`"DAILY: 2"`): `toIntOrNull` → `null` → interval=1. Низкий; при желании `trim()` каждой части.
+### Неиспользуемый импорт
+
+**Файл:** `RecurrenceCalculator.kt:5`.
+**Критичность:** низкий, стиль, не ошибка вычислений.
+
+`import java.time.temporal.ChronoUnit` не используется. Точечное исправление — удалить эту строку; переписывать алгоритм ради применения импорта не нужно.
+
+### Недостаточно данных для восстановления пропущенной серии и исходного часа
+
+**Файл:** `RecurrenceCalculator.kt:9–18`; `RecurrenceRule.kt:11–16`.
+
+Комментарий обещает ближайшее будущее для пропущенных срабатываний, но API не принимает ни `nowMillis`, ни якорь серии, ни исходное LocalTime. Если передать старое срабатывание DAILY от 1 января, когда сейчас 10 января, метод вернёт 2 января: он гарантирует только «после аргумента», не «после реального текущего времени». Если вместо этого передать текущее время 10 января 12:17, потеряется исходное расписание 09:00. Для каждых двух недель дополнительно теряется фаза серии.
+
+Также после фактического DAILY-срабатывания в DST-gap в 03:30 следующий вызов с этим timestamp уже не может восстановить исходные 02:30 и вернёт 03:30 следующего дня. Локальное исправление промежуточных дат из находки 4 этого не решает.
+
+Это ограничение представления данных, а не повод придумывать скрытую зависимость от системных часов. Необходимо либо сузить документацию до вычисления следующего шага от запланированного времени, либо расширить контракт явными якорем/временем/порогом. Минимальная форма дополнительных данных для такой задачи:
+
+```kotlin
+data class RecurrenceAnchor(
+    val date: java.time.LocalDate,
+    val time: java.time.LocalTime,
+    val zone: ZoneId,
+)
+```
+
+Затем выбор календарного кандидата должен опираться на anchor, а сравнение — на отдельный afterMillis. Это не предлагается как переписывание двух файлов в рамках точечного исправления; без утверждённого контракта достоверно реализовать catch-up невозможно.
+
+### Полностью пропущенные локальные даты
+
+Не все переходы зоны равны одному часу. В Pacific/Apia отсутствовало 30 декабря 2011. Например, MONTHLY/dayOfMonth=30 от 30 ноября 2011 09:00 может разрешиться в 31 декабря 09:00. WEEKLY, целящийся в пропущенную пятницу, также может оказаться в субботе. Простое `atZone` в предложенных исправлениях сохраняет эту политику разрешения gap.
+
+Если день недели/число обязаны соблюдаться даже при таком историческом переходе, после разрешения зоны нужно проверять, что дата не изменилась, и пропускать отсутствующую дату в пользу следующего периода. Это отдельное продуктовое решение; утверждать, что восстановленное 30 декабря можно представить валидным ZonedDateTime, нельзя.
+
+### Границы Long и диапазона дат
+
+**Файл:** `RecurrenceCalculator.kt:18,26,30,50,62`.
+
+`fromMillis=Long.MAX_VALUE`, DAILY/interval=1 приводит к `ArithmeticException: long overflow` при `toEpochMilli()`; подтверждено в JShell. Для любого метода, возвращающего Long строго больше такого аргумента, результата принципиально нет. Большие интервалы вместе с крайними датами могут также выйти за диапазон java.time. Это следует обозначить в контракте как недопустимый диапазон или возвращать отдельный результат «следующего представимого времени нет», но нельзя исправлять возвратом исходного времени или Long.MAX_VALUE: это нарушит «строго после».
+
+Практический контроль допустимого диапазона продукта можно поставить до вычисления, не выбирая произвольный предел без требований. Обычные даты напоминаний и большой положительный Int interval не обязательно переполняются: преобразование `interval.toLong()` перед plusDays/plusWeeks/plusMonths в исходном коде выполнено правильно.
+
+### План регрессионных проверок
+
+При применении точечных исправлений нужны проверки: interval 0/-1 для конструктора, copy и parse; дни 0/8 и 0/32; null day и согласованные подписи; пропущенные/пустые/лишние/нечисловые поля; переполнение Int; будни и выходные для всех семи исходных дней; WEEKLY до/в/после целевого дня; MONTHLY до/в/после целевого числа; 28/29/30/31 и 2100/2000; interval=2; UTC и зоны с другой локальной датой; DST-gap как промежуточный и итоговый день; DST-overlap; отрицательный epoch; граница Long. Отдельно зафиксировать требования к catch-up, якорю серии и пропущенным локальным датам.

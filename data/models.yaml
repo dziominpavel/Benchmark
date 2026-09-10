@@ -17,6 +17,9 @@
 # Архивация через tools/archive_model.py:
 #   python tools/archive_model.py <slug>           # заархивировать
 #   python tools/archive_model.py --restore <slug> # разархивировать
+# Правила архивации (жёсткий блок в tools/archive_model.py):
+#   - минимум 10 вердиктов (пока меньше — ELO в провизорной зоне K=40);
+#   - только нижние 3 активных по ELO. Разархивация не ограничена.
 #
 # id должен быть уникальным и стабильным — на него ссылаются файлы в answers/ и matchups/.
 # Если у модели выходит новая версия (например, claude-sonnet-4.5 → 4.6),
@@ -59,6 +62,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: devin-deepseek-v4-pro-max
+    name: "Devin DeepSeek V4 Pro Max"
+    provider:
+    version:
+    status: active
   - id: devin-glm-5-2-high
     name: "Devin GLM-5.2 High"
     provider: 
@@ -94,11 +102,16 @@ models:
     provider: 
     version: 
     status: active
+  - id: devin-swe-2-max
+    name: "Devin SWE-2 Max"
+    provider:
+    version:
+    status: active
   - id: opencode-mimo-v2-5-free
     name: "OpenCode MiMo V2.5 Free"
     provider: 
     version: 
-    status: active
+    status: archived
   - id: opencode-muse-spark-1-3-free-xhigh
     name: "OpenCode Muse Spark 1.3 Free Xhigh"
     provider: 
