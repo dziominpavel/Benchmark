@@ -1,3 +1,29 @@
 # Ручной учёт наличия ответов: task -> model -> true. Отсутствие = нет ответа.
 # Тексты ответов хранятся вне проекта; здесь только флаги.
-answer_flags: {}
+answer_flags:
+  T-001:
+    codex-gpt-5-6-terra-09-2026: true
+    cursor-composer-2-5: true
+    cursor-fable-5-1-1m-max: true
+    cursor-gemini-3-8-flash-high: true
+    cursor-grok-4-6: true
+    cursor-grok-4-6-low: true
+    cursor-kimi-k3-max: true
+    devin-deepseek-v4-1-flash-max: true
+    devin-deepseek-v4-pro-max: true
+    devin-glm-5-2-high: true
+    devin-glm-5-3-flash-max: true
+    devin-gpt-5-6-sol-max: true
+    devin-gpt-6-astra-max: true
+    devin-gpt-6-astra-max-2: true
+    devin-kimi-k3-max: true
+    devin-swe-1-7-max: true
+    devin-swe-2-max: true
+    opencode-mimo-v2-5-free: true
+    opencode-muse-spark-1-3-free-xhigh: true
+  T-002:
+    devin-deepseek-v4-1-flash-max: true
+    devin-glm-5-2-high: true
+    devin-glm-5-3-flash-max: true
+    devin-swe-2-max: true
+    opencode-muse-spark-1-3-free-xhigh: true
