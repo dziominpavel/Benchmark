@@ -123,6 +123,12 @@ def is_model_active(model: dict) -> bool:
     return model.get("status", "active") != "archived"
 
 
+def valid_answer_filter(value: str | None) -> str:
+    """Валидирует фильтр матрицы ответов; невалидное → 'active'."""
+    v = (value or "active").strip().lower()
+    return v if v in ("active", "all", "inactive") else "active"
+
+
 def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
     """Возвращает {frozenset{id_a, id_b}: set(task_id)} с тасками,
     в которых у пары есть неаннулированный вердикт.
@@ -1789,9 +1795,11 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
             </td>
             <td class="actions-col">
               <form method="POST" action="/task/{{ t.id }}/current" style="display:inline;">
+                <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
                 <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
               </form>
               <form method="POST" action="/task/{{ t.id }}/toggle" style="display:inline;margin-left:6px;">
+                <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
                 <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">
                   {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
                 </button>
@@ -1826,10 +1834,20 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
     <div class="hint">
       Тексты ответов хранятся вне проекта; здесь только флаги «ответ получен».
       Новая модель и новый таск по умолчанию считаются долгом.
-      Флаги архивных моделей и неактивных тасков сохраняются, но скрыты.
+      Флаги моделей вне фильтра и неактивных тасков сохраняются без изменений.
     </div>
-    {% if answer_active_tasks and answer_rows %}
-    <form method="POST" action="/answer_flags" id="flagsForm">
+    {% if answer_active_tasks %}
+    <form method="GET" action="/settings" class="filter-bar">
+      <label for="answer_filter">Показывать</label>
+      <select name="answer_filter" id="answer_filter" onchange="this.form.submit()">
+        <option value="active" {% if answer_filter == 'active' %}selected{% endif %}>Только активные</option>
+        <option value="all" {% if answer_filter == 'all' %}selected{% endif %}>Все</option>
+        <option value="inactive" {% if answer_filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
+      </select>
+    </form>
+    {% if answer_rows %}
+    <form method="POST" action="/answer_flags?answer_filter={{ answer_filter }}" id="flagsForm">
+      <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
       <div class="flags-bar">
         <label><input type="checkbox" id="onlyDebts"> только долги</label>
         <span id="flagsCounter"></span>
@@ -1851,8 +1869,8 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
           </thead>
           <tbody>
             {% for r in answer_rows %}
-            <tr data-debt="{{ r.debt }}">
-              <td class="model-cell">{{ r.name }}</td>
+            <tr data-debt="{{ r.debt }}" class="{{ 'archived' if r.status == 'archived' }}">
+              <td class="model-cell">{{ r.name }}{% if r.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}</td>
               {% for t in answer_active_tasks %}
               <td><input type="checkbox" name="flag" value="{{ r.id }}||{{ t }}" data-col="{{ t }}" {% if r.cells[t] %}checked{% endif %}></td>
               {% endfor %}
@@ -1863,27 +1881,6 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
           </tbody>
         </table>
       </div>
-      {% if answer_archived_rows %}
-      <details class="archived-section">
-        <summary>Архивные модели ({{ answer_archived_rows|length }}) — скрыты, флаги сохраняются</summary>
-        <div class="table-wrap">
-          <table class="flags-table">
-            <tbody>
-              {% for r in answer_archived_rows %}
-              <tr data-debt="{{ r.debt }}" class="archived">
-                <td class="model-cell">{{ r.name }}<span class="status-pill status-archived">неактивна</span></td>
-                {% for t in answer_active_tasks %}
-                <td><input type="checkbox" name="flag" value="{{ r.id }}||{{ t }}" data-col="{{ t }}" {% if r.cells[t] %}checked{% endif %}></td>
-                {% endfor %}
-                <td>{{ r.debt }}</td>
-                <td><button type="button" class="btn btn-secondary col-btn" onclick="rowToggle(this)">строка</button></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </details>
-      {% endif %}
       {% if answer_inactive_tasks %}
       <div class="hint">Неактивные таски скрыты: {{ answer_inactive_tasks|join(', ') }}. Их флаги сохраняются без изменений.</div>
       {% endif %}
@@ -1891,6 +1888,17 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
         <button type="submit" class="btn btn-primary">Сохранить</button>
       </div>
     </form>
+    {% else %}
+    <div class="empty-state">
+      {% if answer_filter == 'inactive' %}
+      Нет неактивных моделей для учёта.
+      {% elif answer_filter == 'all' %}
+      Нет моделей для учёта.
+      {% else %}
+      Нет активных моделей для учёта.
+      {% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">Нет активных моделей или активных тасков для учёта.</div>
     {% endif %}
@@ -2282,8 +2290,14 @@ def settings_page():
     models_active_list.sort(key=lambda m: m["elo"], reverse=True)
     models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
     matrix = get_answer_matrix(settings)
-    answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
-    answer_archived_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
+    # Фильтр строк матрицы: active / all / inactive (по умолчанию active)
+    answer_filter = valid_answer_filter(request.args.get("answer_filter"))
+    if answer_filter == "active":
+        answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
+    elif answer_filter == "inactive":
+        answer_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
+    else:
+        answer_rows = list(matrix["rows"])
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     return render_template_string(
         SETTINGS_TEMPLATE,
@@ -2294,7 +2308,7 @@ def settings_page():
         models_active_list=models_active_list,
         models_archived_list=models_archived_list,
         answer_rows=answer_rows,
-        answer_archived_rows=answer_archived_rows,
+        answer_filter=answer_filter,
         answer_active_tasks=matrix["active_tasks"],
         answer_inactive_tasks=answer_inactive,
         answer_filled=matrix["filled"],
@@ -2318,19 +2332,31 @@ def save_answer_flags_route():
     from elo import load_models_yaml as _load_models
 
     settings = load_settings()
-    model_ids = {m["id"] for m in _load_models()}
+    all_models = _load_models()
+    model_ids = {m["id"] for m in all_models}
     tasks_all = known_tasks(settings)
     active_set = set(active_tasks(settings))
+
+    # Модели вне текущего фильтра в форме скрыты — сохраняем как было.
+    answer_filter = valid_answer_filter(
+        request.args.get("answer_filter") or request.form.get("answer_filter")
+    )
+    if answer_filter == "active":
+        visible = {m["id"] for m in all_models if m.get("status", "active") != "archived"}
+    elif answer_filter == "inactive":
+        visible = {m["id"] for m in all_models if m.get("status", "active") == "archived"}
+    else:
+        visible = set(model_ids)
 
     submitted = set(request.form.getlist("flag"))
     existing = load_answer_flags()
     new_flags: dict = {}
     for tid in tasks_all:
         for mid in model_ids:
-            if tid in active_set:
+            if tid in active_set and mid in visible:
                 val = f"{mid}||{tid}" in submitted
             else:
-                # Неактивные таски в форме скрыты — сохраняем как было.
+                # Неактивные таски и скрытые фильтром модели — сохраняем как было.
                 val = bool((existing.get(tid) or {}).get(mid, False))
             if val:
                 new_flags.setdefault(tid, {})[mid] = True
@@ -2339,6 +2365,7 @@ def save_answer_flags_route():
     matrix = get_answer_matrix(settings)
     return redirect(url_for(
         "settings_page",
+        answer_filter=answer_filter,
         success=f"Учёт ответов сохранён: закрыто {matrix['filled']} из {matrix['total']}.",
     ))
 
@@ -2443,18 +2470,20 @@ def edit_task(task_id: str):
 
 @app.route("/task/<task_id>/toggle", methods=["POST"])
 def toggle_task(task_id: str):
+    answer_filter = valid_answer_filter(request.form.get("answer_filter"))
     if not toggle_task_status(task_id):
-        return redirect(url_for("settings_page", error="Не удалось переключить статус"))
+        return redirect(url_for("settings_page", answer_filter=answer_filter, error="Не удалось переключить статус"))
     index_data = generate_index()
     save_index(index_data)
-    return redirect(url_for("settings_page", success=f"Статус {task_id} изменён"))
+    return redirect(url_for("settings_page", answer_filter=answer_filter, success=f"Статус {task_id} изменён"))
 
 
 @app.route("/task/<task_id>/current", methods=["POST"])
 def set_current_task_route(task_id: str):
+    answer_filter = valid_answer_filter(request.form.get("answer_filter"))
     if not set_current_task(task_id):
-        return redirect(url_for("settings_page", error="Таска должна быть активной"))
-    return redirect(url_for("settings_page", success=f"Текущая таска: {task_id}"))
+        return redirect(url_for("settings_page", answer_filter=answer_filter, error="Таска должна быть активной"))
+    return redirect(url_for("settings_page", answer_filter=answer_filter, success=f"Текущая таска: {task_id}"))
 
 
 # ─── Port handling ──────────────────────────────────────────────────

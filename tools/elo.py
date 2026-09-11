@@ -946,8 +946,8 @@ def get_answer_matrix(
     Источник — data/answer_flags.yaml (отсутствие = false). Записи для
     неизвестных модели/таска игнорируются. Сводка считается только по
     активным моделям × активным таскам; архивные/неактивные возвращаются
-    в строках/столбцах со статусом для UI-фильтра. Строки отсортированы:
-    сначала должники (больше false в активных тасках), затем по имени.
+    в строках/столбцах со статусом для UI-фильтра. Строки отсортированы
+    по имени модели (case-insensitive, по алфавиту).
     """
     if settings is None:
         settings = load_settings()
@@ -975,7 +975,7 @@ def get_answer_matrix(
             "debt": debt,
             "cells": cells,
         })
-    rows.sort(key=lambda r: (-r["debt"], r["name"].lower()))
+    rows.sort(key=lambda r: r["name"].lower())
 
     n_active_models = sum(1 for r in rows if r["status"] != "archived")
     total = n_active_models * len(active_task_ids)
