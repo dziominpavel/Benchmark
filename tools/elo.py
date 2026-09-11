@@ -49,6 +49,7 @@ INDEX_PATH = DATA_DIR / "index.json"
 MODELS_PATH = DATA_DIR / "models.yaml"
 STATE_PATH = MATCHUPS_DIR / "state.json"
 SETTINGS_PATH = DATA_DIR / "settings.yaml"
+ANSWER_FLAGS_PATH = DATA_DIR / "answer_flags.yaml"
 
 DEFAULT_ELO = 1200
 VERDICT_VERSION = 2
@@ -596,9 +597,12 @@ def load_models_yaml() -> list[dict]:
 
 
 def collect_tasks_info() -> dict:
-    """Собирает сводку по задачам из tasks/ и answers/."""
+    """Собирает сводку по задачам из tasks/ и matchups/.
+
+    Наличие ответов здесь не учитывается: тексты хранятся вне проекта,
+    учёт ведётся вручную в data/answer_flags.yaml (см. answer-coverage).
+    """
     tasks_dir = TASKS_DIR
-    answers_dir = ANSWERS_DIR
     matchups_dir = MATCHUPS_DIR
 
     tasks_info = {}
@@ -618,15 +622,6 @@ def collect_tasks_info() -> dict:
                 if m2:
                     title = m2.group(1).strip().strip('"').strip("'")
 
-            answers = []
-            if answers_dir.exists():
-                task_answers = answers_dir / task_id
-                if task_answers.exists():
-                    answers = sorted(
-                        f.stem for f in task_answers.glob("*.md")
-                        if not f.name.startswith("_")
-                    )
-
             matchups_count = 0
             if matchups_dir.exists():
                 task_matchups = matchups_dir / task_id
@@ -636,7 +631,6 @@ def collect_tasks_info() -> dict:
             tasks_info[task_id] = {
                 "slug": d.name,
                 "title": title,
-                "answers": answers,
                 "matchups_count": matchups_count,
             }
 
@@ -766,6 +760,83 @@ def save_settings(settings: dict, path: Path = SETTINGS_PATH) -> None:
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
+def load_answer_flags(path: Path = ANSWER_FLAGS_PATH) -> dict:
+    """Читает answer_flags.yaml → {task_id: {model_id: bool}}.
+
+    Разреженный формат: отсутствие записи = false (нет ответа).
+    Неизвестные task/model (опечатки, удалённые) возвращаются как есть —
+    фильтрация по реестру выполняется при построении матрицы, запись
+    таких id никогда не падает.
+    """
+    flags: dict = {}
+    if not path.exists():
+        return flags
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return flags
+
+    in_flags = False
+    current_task: str | None = None
+    for raw in lines:
+        if not raw.strip() or raw.strip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" \t"))
+        key, sep, val = raw.strip().partition(":")
+        if not sep:
+            continue
+        key, val = key.strip(), _unquote(val).strip()
+        if indent == 0:
+            in_flags = key == "answer_flags"
+            current_task = None
+            if in_flags and val not in ("", "{}"):
+                in_flags = False
+        elif in_flags and indent == 2 and current_task is None:
+            # Строка таска — только при отступе ровно 2 от answer_flags.
+            # Вложенность глубже без таска игнорируется.
+            if val == "":
+                current_task = key
+                flags.setdefault(key, {})
+            elif val == "{}":
+                flags.setdefault(key, {})
+        elif in_flags and indent >= 4 and current_task is not None:
+            flags.setdefault(current_task, {})[key] = val.lower() in (
+                "true", "yes", "1", "on",
+            )
+        elif in_flags and indent == 2:
+            # Новый таск после моделей предыдущего.
+            current_task = None
+            if val == "":
+                current_task = key
+                flags.setdefault(key, {})
+            elif val == "{}":
+                flags.setdefault(key, {})
+    return flags
+
+
+def save_answer_flags(flags: dict, path: Path = ANSWER_FLAGS_PATH) -> None:
+    """Записывает answer_flags.yaml (UTF-8 без BOM, детерминированный вид).
+
+    Пишет только true-записи, отсортированные по task и model;
+    отсутствие = false. Вызывающая сторона передаёт только известные
+    id (матрица строится по реестру), поэтому мусорные записи при
+    сохранении через UI исчезают.
+    """
+    out = ["# Ручной учёт наличия ответов: task -> model -> true. Отсутствие = нет ответа.",
+           "# Тексты ответов хранятся вне проекта; здесь только флаги."]
+    tasks = sorted(t for t, m in flags.items() if any(bool(v) for v in (m or {}).values()))
+    if not tasks:
+        out.append("answer_flags: {}")
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        return
+    out.append("answer_flags:")
+    for tid in tasks:
+        out.append(f"  {tid}:")
+        for mid in sorted(m for m, v in flags[tid].items() if v):
+            out.append(f"    {mid}: true")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
 def is_valid_task_id(task: str) -> bool:
     """Проверяет, что task — корректный идентификатор вида T-NNN."""
     return bool(TASK_ID_RE.fullmatch(task or ""))
@@ -862,6 +933,64 @@ def get_coverage(
         "filled": filled,
         "total": total,
         "percent": min(100.0, filled / total * 100),
+    }
+
+
+def get_answer_matrix(
+    settings: dict | None = None,
+    models: list[dict] | None = None,
+    flags: dict | None = None,
+) -> dict:
+    """Ручной учёт наличия ответов: матрица модель × таск.
+
+    Источник — data/answer_flags.yaml (отсутствие = false). Записи для
+    неизвестных модели/таска игнорируются. Сводка считается только по
+    активным моделям × активным таскам; архивные/неактивные возвращаются
+    в строках/столбцах со статусом для UI-фильтра. Строки отсортированы:
+    сначала должники (больше false в активных тасках), затем по имени.
+    """
+    if settings is None:
+        settings = load_settings()
+    if models is None:
+        models = load_models_yaml()
+    if flags is None:
+        flags = load_answer_flags()
+
+    tasks_all = known_tasks(settings)
+    active_task_ids = active_tasks(settings)
+    active_set = set(active_task_ids)
+
+    rows = []
+    for m in models:
+        mid = m["id"]
+        status = m.get("status", "active")
+        cells = {
+            t: bool((flags.get(t) or {}).get(mid, False)) for t in tasks_all
+        }
+        debt = sum(1 for t in active_task_ids if not cells.get(t, False))
+        rows.append({
+            "id": mid,
+            "name": m.get("name", mid),
+            "status": status,
+            "debt": debt,
+            "cells": cells,
+        })
+    rows.sort(key=lambda r: (-r["debt"], r["name"].lower()))
+
+    n_active_models = sum(1 for r in rows if r["status"] != "archived")
+    total = n_active_models * len(active_task_ids)
+    filled = sum(
+        1 for r in rows if r["status"] != "archived"
+        for t in active_task_ids if r["cells"].get(t, False)
+    )
+    return {
+        "tasks": tasks_all,
+        "active_tasks": active_task_ids,
+        "rows": rows,
+        "filled": filled,
+        "total": total,
+        "remaining": total - filled,
+        "has_active": bool(active_set) and n_active_models > 0,
     }
 
 

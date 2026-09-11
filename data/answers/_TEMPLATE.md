@@ -1,6 +1,5 @@
 ---
 task: T-NNN
-model: model-id
 date: YYYY-MM-DD
 ---
 

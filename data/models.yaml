@@ -62,10 +62,15 @@ models:
     provider: 
     version: 
     status: active
+  - id: devin-deepseek-v4-1-flash-max
+    name: "Devin DeepSeek V4.1 Flash Max"
+    provider: 
+    version: 
+    status: active
   - id: devin-deepseek-v4-pro-max
     name: "Devin DeepSeek V4 Pro Max"
-    provider:
-    version:
+    provider: 
+    version: 
     status: active
   - id: devin-glm-5-2-high
     name: "Devin GLM-5.2 High"
@@ -104,14 +109,14 @@ models:
     status: active
   - id: devin-swe-2-max
     name: "Devin SWE-2 Max"
-    provider:
-    version:
+    provider: 
+    version: 
     status: active
   - id: opencode-mimo-v2-5-free
     name: "OpenCode MiMo V2.5 Free"
     provider: 
     version: 
-    status: archived
+    status: active
   - id: opencode-muse-spark-1-3-free-xhigh
     name: "OpenCode Muse Spark 1.3 Free Xhigh"
     provider: 
