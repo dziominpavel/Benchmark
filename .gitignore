@@ -27,3 +27,6 @@ ehthumbs.db
 # Logs
 *.log
 data/logs/*.pid
+
+# Benchmark answers (modelA/modelB outputs stay local, _TEMPLATE.md tracked)
+data/answers/*/
