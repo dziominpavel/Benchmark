@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 117,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "devin-swe-2-max",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "devin-swe-2-max",
+  "winner": "b",
+  "date": "2026-09-10",
+  "recorded_at": "2026-09-10T23:53:42+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1126,
+      "after": 1114,
+      "delta": -12
+    },
+    "devin-swe-2-max": {
+      "before": 1217,
+      "after": 1232,
+      "delta": 15
+    }
+  }
+}

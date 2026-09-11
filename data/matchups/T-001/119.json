@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 119,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "devin-deepseek-v4-pro-max",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "devin-deepseek-v4-pro-max",
+  "winner": "a",
+  "date": "2026-09-11",
+  "recorded_at": "2026-09-11T00:28:37+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1286,
+      "after": 1297,
+      "delta": 11
+    },
+    "devin-deepseek-v4-pro-max": {
+      "before": 1184,
+      "after": 1170,
+      "delta": -14
+    }
+  }
+}

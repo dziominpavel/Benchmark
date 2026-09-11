@@ -36,8 +36,9 @@ from elo import (
     is_index_stale, record_verdict, resolve_matchup_models,
     load_settings, save_settings, known_tasks, active_tasks, is_task_active,
     resolve_current_task, get_coverage, is_valid_task_id,
+    load_answer_flags, save_answer_flags, get_answer_matrix,
     DEFAULT_ELO,
-    ANSWERS_DIR, MATCHUPS_DIR, TASKS_DIR, INDEX_PATH, MODELS_PATH,
+    MATCHUPS_DIR, TASKS_DIR, INDEX_PATH, MODELS_PATH,
 )
 
 from register_task import (
@@ -149,12 +150,6 @@ def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
             if task:
                 verdicts.setdefault(key, set()).add(task)
     return verdicts
-
-
-def has_answer(model_id: str, task_id: str, index_data: dict) -> bool:
-    """Проверяет, есть ли ответ модели на таске."""
-    answers = index_data.get("tasks", {}).get(task_id, {}).get("answers", [])
-    return model_id in answers
 
 
 def find_task_dir(task_id: str) -> Path | None:
@@ -691,10 +686,6 @@ CSS = """
     font-size: 0.82rem;
     margin-top: 2px;
   }
-  .rec-task .rec-missing {
-    color: #f87171;
-    font-weight: 600;
-  }
   .legend {
     color: #64748b;
     font-size: 0.8rem;
@@ -894,12 +885,12 @@ CSS = """
   .model-groups summary::-webkit-details-marker { display: none; }
   .model-groups summary:hover { background: #334155; }
   .model-groups summary .mg-label::before {
-    content: "\25B8";
+    content: "\\25B8";
     display: inline-block;
     margin-right: 6px;
     color: #64748b;
   }
-  .model-groups details[open] > summary .mg-label::before { content: "\25BE"; }
+  .model-groups details[open] > summary .mg-label::before { content: "\\25BE"; }
   .model-groups .model-list {
     list-style: none;
     margin: 0;
@@ -938,6 +929,34 @@ CSS = """
   }
   .model-cell .status-pill {
     white-space: nowrap;
+  }
+  .flags-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
+  .flags-bar label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .flags-table input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+  .flags-table th, .flags-table td { text-align: center; }
+  .flags-table th:first-child, .flags-table td:first-child { text-align: left; }
+  .flags-table .col-btn {
+    padding: 2px 8px;
+    font-size: 0.75rem;
   }
 
 
@@ -1204,7 +1223,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
             <div class="rec-reason">{{ rec.reason }}</div>
-            <div class="rec-task">таск: {{ rec.recommended_task }}{% if not (rec.has_answer_a and rec.has_answer_b) %} <span class="rec-missing">· нужны ответы</span>{% endif %}</div>
+            <div class="rec-task">таск: {{ rec.recommended_task }}</div>
           </div>
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}', '{{ rec.recommended_task }}')">Прогнать</button>
         </div>
@@ -1796,7 +1815,125 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
   </div>
+
+  <div class="card" id="answer-coverage">
+    <h2>Наличие ответов</h2>
+    {% if answer_has_active %}
+    <div class="stats">ответы: закрыто {{ answer_filled }} из {{ answer_total }} · осталось {{ answer_remaining }}</div>
+    {% else %}
+    <div class="stats">ответы: — (нет активных моделей или активных тасков)</div>
+    {% endif %}
+    <div class="hint">
+      Тексты ответов хранятся вне проекта; здесь только флаги «ответ получен».
+      Новая модель и новый таск по умолчанию считаются долгом.
+      Флаги архивных моделей и неактивных тасков сохраняются, но скрыты.
+    </div>
+    {% if answer_active_tasks and answer_rows %}
+    <form method="POST" action="/answer_flags" id="flagsForm">
+      <div class="flags-bar">
+        <label><input type="checkbox" id="onlyDebts"> только долги</label>
+        <span id="flagsCounter"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="flags-table">
+          <thead>
+            <tr>
+              <th>Модель</th>
+              {% for t in answer_active_tasks %}
+              <th>{{ t }}<br>
+                <button type="button" class="btn btn-secondary col-btn" onclick="colSet('{{ t }}', true)">все</button>
+                <button type="button" class="btn btn-secondary col-btn" onclick="colSet('{{ t }}', false)">сброс</button>
+              </th>
+              {% endfor %}
+              <th>Долг</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in answer_rows %}
+            <tr data-debt="{{ r.debt }}">
+              <td class="model-cell">{{ r.name }}</td>
+              {% for t in answer_active_tasks %}
+              <td><input type="checkbox" name="flag" value="{{ r.id }}||{{ t }}" data-col="{{ t }}" {% if r.cells[t] %}checked{% endif %}></td>
+              {% endfor %}
+              <td>{{ r.debt }}</td>
+              <td><button type="button" class="btn btn-secondary col-btn" onclick="rowToggle(this)">строка</button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if answer_archived_rows %}
+      <details class="archived-section">
+        <summary>Архивные модели ({{ answer_archived_rows|length }}) — скрыты, флаги сохраняются</summary>
+        <div class="table-wrap">
+          <table class="flags-table">
+            <tbody>
+              {% for r in answer_archived_rows %}
+              <tr data-debt="{{ r.debt }}" class="archived">
+                <td class="model-cell">{{ r.name }}<span class="status-pill status-archived">неактивна</span></td>
+                {% for t in answer_active_tasks %}
+                <td><input type="checkbox" name="flag" value="{{ r.id }}||{{ t }}" data-col="{{ t }}" {% if r.cells[t] %}checked{% endif %}></td>
+                {% endfor %}
+                <td>{{ r.debt }}</td>
+                <td><button type="button" class="btn btn-secondary col-btn" onclick="rowToggle(this)">строка</button></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+      {% if answer_inactive_tasks %}
+      <div class="hint">Неактивные таски скрыты: {{ answer_inactive_tasks|join(', ') }}. Их флаги сохраняются без изменений.</div>
+      {% endif %}
+      <div class="card-actions">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="empty-state">Нет активных моделей или активных тасков для учёта.</div>
+    {% endif %}
+  </div>
 </div>
+
+<script>
+// Матрица наличия ответов: фильтр «только долги», счётчик, bulk по строке/столбцу.
+function flagsVisibleRows() {
+  return Array.from(document.querySelectorAll('#flagsForm tbody tr'));
+}
+function updateFlagsCounter() {
+  const rows = flagsVisibleRows();
+  const shown = rows.filter((tr) => tr.style.display !== 'none').length;
+  const el = document.getElementById('flagsCounter');
+  if (el) el.textContent = 'показано ' + shown + ' из ' + rows.length + ' моделей';
+}
+function applyDebtsFilter() {
+  const only = document.getElementById('onlyDebts');
+  const hide = only && only.checked;
+  flagsVisibleRows().forEach((tr) => {
+    tr.style.display = (hide && tr.dataset.debt === '0') ? 'none' : '';
+  });
+  updateFlagsCounter();
+}
+function rowToggle(btn) {
+  const boxes = btn.closest('tr').querySelectorAll('input[name="flag"]');
+  const target = Array.from(boxes).some((cb) => !cb.checked);
+  boxes.forEach((cb) => { cb.checked = target; });
+}
+function colSet(task, val) {
+  document.querySelectorAll('#flagsForm input[name="flag"][data-col="' + task + '"]').forEach((cb) => {
+    const tr = cb.closest('tr');
+    if (tr && tr.style.display === 'none') return;
+    cb.checked = val;
+  });
+}
+(function initFlags() {
+  const only = document.getElementById('onlyDebts');
+  if (only) only.addEventListener('change', applyDebtsFilter);
+  updateFlagsCounter();
+})();
+</script>
 
 <script>
 // Снятие «активна» отключает и сбрасывает радио «текущая» у этой таски.
@@ -1942,13 +2079,10 @@ def leaderboard():
         key=lambda x: x[1].lower(),
     )
 
-    # Рекомендации пар (+ строка-обоснование и флаги ответов для отображения)
+    # Рекомендации пар (+ строка-обоснование для отображения)
     recommendations = get_recommendations(index_data, top_n=3)
     for rec in recommendations:
         rec["reason"] = format_reason(rec)
-        task = rec.get("recommended_task", "")
-        rec["has_answer_a"] = has_answer(rec["model_a"], task, index_data)
-        rec["has_answer_b"] = has_answer(rec["model_b"], task, index_data)
 
     # Топ-3 активных по ELO — для медалей; архивные — для секции
     top_active = sorted(
@@ -2147,6 +2281,10 @@ def settings_page():
             models_archived_list.append(entry)
     models_active_list.sort(key=lambda m: m["elo"], reverse=True)
     models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
+    matrix = get_answer_matrix(settings)
+    answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
+    answer_archived_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
+    answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     return render_template_string(
         SETTINGS_TEMPLATE,
         tasks_list=tasks_list,
@@ -2155,6 +2293,14 @@ def settings_page():
         models_archived=len(models_archived_list),
         models_active_list=models_active_list,
         models_archived_list=models_archived_list,
+        answer_rows=answer_rows,
+        answer_archived_rows=answer_archived_rows,
+        answer_active_tasks=matrix["active_tasks"],
+        answer_inactive_tasks=answer_inactive,
+        answer_filled=matrix["filled"],
+        answer_total=matrix["total"],
+        answer_remaining=matrix["remaining"],
+        answer_has_active=matrix["has_active"],
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
     )
@@ -2164,6 +2310,37 @@ def settings_page():
 def settings_save():
     # Управление тасками теперь через отдельные POST-роуты /task/<id>/toggle и /current.
     return redirect(url_for("settings_page"))
+
+
+@app.route("/answer_flags", methods=["POST"])
+def save_answer_flags_route():
+    """Сохраняет ручной учёт наличия ответов (матрица из /settings)."""
+    from elo import load_models_yaml as _load_models
+
+    settings = load_settings()
+    model_ids = {m["id"] for m in _load_models()}
+    tasks_all = known_tasks(settings)
+    active_set = set(active_tasks(settings))
+
+    submitted = set(request.form.getlist("flag"))
+    existing = load_answer_flags()
+    new_flags: dict = {}
+    for tid in tasks_all:
+        for mid in model_ids:
+            if tid in active_set:
+                val = f"{mid}||{tid}" in submitted
+            else:
+                # Неактивные таски в форме скрыты — сохраняем как было.
+                val = bool((existing.get(tid) or {}).get(mid, False))
+            if val:
+                new_flags.setdefault(tid, {})[mid] = True
+    save_answer_flags(new_flags)
+
+    matrix = get_answer_matrix(settings)
+    return redirect(url_for(
+        "settings_page",
+        success=f"Учёт ответов сохранён: закрыто {matrix['filled']} из {matrix['total']}.",
+    ))
 
 
 @app.route("/edit/<model_id>")
