@@ -335,26 +335,32 @@ def update_model(model_id: str, name: str, status: str) -> bool:
     return True
 
 
-def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
-    """Рекомендует пары моделей для следующего прогона.
+def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
+    """Рекомендует пару моделей для следующего прогона (топ-1).
 
-    Алгоритм (трёхуровневый):
-    1. Берём все пары активных моделей из index.json
-    2. Сортировка лексикографическая:
-       - сначала pair_games по возрастанию (несыгранные пары выше
-         любых рематчей — круг завершается до начала повторов)
-       - затем тир калибровки (по min_games — числу игр менее
-         игранной модели в паре):
-         тир 0: min_games == 0 (новая модель, ещё не играла)
-         тир 1: min_games < 3 (мало игр, нужна калибровка)
-         тир 2: остальные
-       - внутри тира по близости ELO (меньше elo_diff — выше):
-         самый равный бой идёт первым
-    3. Возвращаем top_n
+    Обычный режим — только READY-ячейки `(таск, пара)`: активная пара +
+    активный таск + оба флага ответа `true` в answer_flags.yaml + нет
+    неаннулированного вердикта пары в этом таске. BLOCKED-ячейки
+    (хотя бы одного ответа нет) невидимы.
+    Сортировка лексикографическая:
+    1. приоритет таска (лексикографический порядок T-NNN по возрастанию —
+       T-001 выше любых ячеек T-002, пока в T-001 есть READY);
+    2. pair_games пары по возрастанию (глобальное число вердиктов пары);
+    3. тир калибровки (по min_games — числу игр менее
+       игранной модели в паре):
+       тир 0: min_games == 0 (новая модель, ещё не играла)
+       тир 1: min_games < 3 (мало игр, нужна калибровка)
+       тир 2: остальные;
+    4. внутри тира по близости ELO (меньше elo_diff — выше).
+
+    Режим рематчей (READY-ячеек нет): кандидаты — все пары активных
+    моделей C(n,2) без учёта флагов ответов; сортировка: pair_games,
+    затем тир, затем близость ELO; recommended_task — первый активный
+    таск. Запись помечается is_rematch=True.
 
     Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a,
     elo_b, elo_diff, pair_games, pair_wins_a, pair_wins_b, h2h_label,
-    tier, score, recommended_task}
+    tier, score, recommended_task, is_rematch}
     """
     models = index_data.get("models", {})
     name_map = get_model_name_map()
@@ -373,76 +379,94 @@ def get_recommendations(index_data: dict, top_n: int = 3) -> list[dict]:
     pair_stats = get_pair_stats()
     pair_task_verdicts = get_pair_task_verdicts()
     active_task_ids = active_tasks(load_settings())
+    flags = load_answer_flags()
 
-    candidates = []
+    def _build_rec(a: str, b: str, recommended_task: str,
+                   is_rematch: bool) -> dict:
+        pair_key = frozenset({a, b})
+        st = pair_stats.get(pair_key)
+        pair_games = st["games"] if st else 0
+        pair_wins_a = st["wins"].get(a, 0) if st else 0
+        pair_wins_b = st["wins"].get(b, 0) if st else 0
+
+        elo_a = elo_map[a]
+        elo_b = elo_map[b]
+        elo_diff = abs(elo_a - elo_b)
+        min_games = min(games_map[a], games_map[b])
+
+        # Тир калибровки: новая модель всегда выше калибрующейся,
+        # калибрующаяся — выше сыгранных. Внутри тира — близость ELO.
+        if min_games == 0:
+            tier = 0
+        elif min_games < 3:
+            tier = 1
+        else:
+            tier = 2
+
+        # Строка личных встреч: число вердиктов пары и счёт по победам
+        # в порядке отображения карточки (model_a : model_b). Ничьи
+        # входят в pair_games, но в счёт не выделяются.
+        if pair_games > 0:
+            h2h_label = (
+                f"личные встречи: {pair_games} · "
+                f"счёт {pair_wins_a}:{pair_wins_b}"
+            )
+        else:
+            h2h_label = "личные встречи: не встречались"
+
+        # score = близость ELO: монотонно убывает с ростом diff,
+        # внутри тира больший score идёт первым
+        closeness = 1.0 / (1.0 + elo_diff / 100.0)
+
+        return {
+            "model_a": a,
+            "model_b": b,
+            "name_a": name_map.get(a, a),
+            "name_b": name_map.get(b, b),
+            "elo_a": elo_a,
+            "elo_b": elo_b,
+            "elo_diff": elo_diff,
+            "pair_games": pair_games,
+            "pair_wins_a": pair_wins_a,
+            "pair_wins_b": pair_wins_b,
+            "h2h_label": h2h_label,
+            "tier": tier,
+            "score": closeness,
+            "recommended_task": recommended_task,
+            "is_rematch": is_rematch,
+        }
+
+    # Обычный режим: READY-ячейки (оба ответа есть, вердикта в таске нет).
+    ready = []
+    for order, task in enumerate(active_task_ids):
+        task_flags = flags.get(task) or {}
+        for i in range(len(model_ids)):
+            for j in range(i + 1, len(model_ids)):
+                a, b = model_ids[i], model_ids[j]
+                if not task_flags.get(a) or not task_flags.get(b):
+                    continue
+                if task in pair_task_verdicts.get(frozenset({a, b}), set()):
+                    continue
+                rec = _build_rec(a, b, task, False)
+                ready.append(
+                    (order, rec["pair_games"], rec["tier"], -rec["score"], rec)
+                )
+    if ready:
+        ready.sort(key=lambda c: (c[0], c[1], c[2], c[3]))
+        return [c[4] for c in ready[:top_n]]
+
+    # Режим рематчей: READY пуст — все активные пары без учёта флагов.
+    default_task = active_task_ids[0] if active_task_ids else ""
+    rematches = []
     for i in range(len(model_ids)):
         for j in range(i + 1, len(model_ids)):
             a, b = model_ids[i], model_ids[j]
-            pair_key = frozenset({a, b})
-            st = pair_stats.get(pair_key)
-            pair_games = st["games"] if st else 0
-            pair_wins_a = st["wins"].get(a, 0) if st else 0
-            pair_wins_b = st["wins"].get(b, 0) if st else 0
-
-            elo_a = elo_map[a]
-            elo_b = elo_map[b]
-            elo_diff = abs(elo_a - elo_b)
-            min_games = min(games_map[a], games_map[b])
-
-            # Тир калибровки: новая модель всегда выше калибрующейся,
-            # калибрующаяся — выше сыгранных. Внутри тира — близость ELO.
-            if min_games == 0:
-                tier = 0
-            elif min_games < 3:
-                tier = 1
-            else:
-                tier = 2
-
-            # Строка личных встреч: число вердиктов пары и счёт по победам
-            # в порядке отображения карточки (model_a : model_b). Ничьи
-            # входят в pair_games, но в счёт не выделяются.
-            if pair_games > 0:
-                h2h_label = (
-                    f"личные встречи: {pair_games} · "
-                    f"счёт {pair_wins_a}:{pair_wins_b}"
-                )
-            else:
-                h2h_label = "личные встречи: не встречались"
-
-            # score = близость ELO: монотонно убывает с ростом diff,
-            # внутри тира больший score идёт первым
-            closeness = 1.0 / (1.0 + elo_diff / 100.0)
-
-            # Первый активный таск по порядку T-NNN, в котором у пары
-            # нет вердикта. Если все заполнены — берём первый активный.
-            verdict_tasks = pair_task_verdicts.get(pair_key, set())
-            if active_task_ids:
-                recommended_task = next(
-                    (t for t in active_task_ids if t not in verdict_tasks),
-                    active_task_ids[0],
-                )
-            else:
-                recommended_task = ""
-
-            candidates.append({
-                "model_a": a,
-                "model_b": b,
-                "name_a": name_map.get(a, a),
-                "name_b": name_map.get(b, b),
-                "elo_a": elo_a,
-                "elo_b": elo_b,
-                "elo_diff": elo_diff,
-                "pair_games": pair_games,
-                "pair_wins_a": pair_wins_a,
-                "pair_wins_b": pair_wins_b,
-                "h2h_label": h2h_label,
-                "tier": tier,
-                "score": closeness,
-                "recommended_task": recommended_task,
-            })
-
-    candidates.sort(key=lambda c: (c["pair_games"], c["tier"], -c["score"]))
-    return candidates[:top_n]
+            rec = _build_rec(a, b, default_task, True)
+            rematches.append(
+                (rec["pair_games"], rec["tier"], -rec["score"], rec)
+            )
+    rematches.sort(key=lambda c: (c[0], c[1], c[2]))
+    return [c[3] for c in rematches[:top_n]]
 
 
 def format_reason(rec: dict) -> str:
@@ -692,6 +716,11 @@ CSS = """
     font-size: 0.82rem;
     margin-top: 2px;
   }
+  .rec-rematch {
+    color: #fbbf24;
+    font-size: 0.82rem;
+    margin-top: 2px;
+  }
   .legend {
     color: #64748b;
     font-size: 0.8rem;
@@ -759,32 +788,6 @@ CSS = """
     margin-bottom: 6px;
   }
   .rec-header h2 { margin-bottom: 0; }
-  .rec-nav {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .rec-counter {
-    font-size: 0.8rem;
-    color: #818cf8;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .rec-next {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 1px solid #4338ca;
-    background: #312e81;
-    color: #e0e7ff;
-    font-size: 1.1rem;
-    font-weight: 700;
-    cursor: pointer;
-    line-height: 1;
-    transition: background 0.15s;
-  }
-  .rec-next:hover { background: #4338ca; }
   .filter-bar {
     display: flex;
     align-items: center;
@@ -1207,18 +1210,12 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 
     <div class="sidebar">
       {% if recommendations %}
+      {% set rec = recommendations[0] %}
       <div class="card">
         <div class="rec-header">
           <h2>Рекомендуемые модели к прогону</h2>
-          {% if recommendations|length > 1 %}
-          <div class="rec-nav">
-            <span class="rec-counter" id="recCounter">1 / {{ recommendations|length }}</span>
-            <button type="button" class="rec-next" onclick="nextRec()" title="Следующая рекомендация">→</button>
-          </div>
-          {% endif %}
         </div>
-        {% for rec in recommendations %}
-        <div class="rec-item" data-rec-index="{{ loop.index0 }}"{% if not loop.first %} style="display:none;"{% endif %}>
+        <div class="rec-item">
           <div class="rec-info">
             <div class="rec-pair">
               <span class="rec-model">{{ rec.name_a }}</span>
@@ -1229,11 +1226,11 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
             <div class="rec-reason">{{ rec.reason }}</div>
+            {% if rec.is_rematch %}<div class="rec-rematch">доп. точность: рематч</div>{% endif %}
             <div class="rec-task">таск: {{ rec.recommended_task }}</div>
           </div>
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}', '{{ rec.recommended_task }}')">Прогнать</button>
         </div>
-        {% endfor %}
       </div>
       {% endif %}
       <div class="card">
@@ -1286,22 +1283,6 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 </div>
 
 <script>
-let recIndex = 0;
-function showRec(i) {
-  const items = document.querySelectorAll('.rec-item[data-rec-index]');
-  if (!items.length) return;
-  recIndex = (i + items.length) % items.length;
-  items.forEach((el) => {
-    el.style.display = (parseInt(el.dataset.recIndex, 10) === recIndex) ? '' : 'none';
-  });
-  const counter = document.getElementById('recCounter');
-  if (counter) counter.textContent = (recIndex + 1) + ' / ' + items.length;
-}
-
-function nextRec() {
-  showRec(recIndex + 1);
-}
-
 function validate() {
   const a = document.getElementById('modelA').value;
   const b = document.getElementById('modelB').value;
@@ -2088,7 +2069,7 @@ def leaderboard():
     )
 
     # Рекомендации пар (+ строка-обоснование для отображения)
-    recommendations = get_recommendations(index_data, top_n=3)
+    recommendations = get_recommendations(index_data, top_n=1)
     for rec in recommendations:
         rec["reason"] = format_reason(rec)
 

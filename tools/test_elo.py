@@ -226,13 +226,15 @@ def test_active_and_current_task():
 
 
 def test_get_coverage():
-    """Ячейки (таск × пара активных): повторы не засчитываются, кап 100%."""
+    """Видимые ячейки (оба флага true): BLOCKED невидимы, повторы не считаются."""
     from elo import get_coverage
     models = [{"id": "A", "status": "active"}, {"id": "B", "status": "active"},
               {"id": "C", "status": "active"}, {"id": "D", "status": "archived"}]
     settings = {"current_task": "T-001",
                 "tasks": {"T-001": "active", "T-002": "active",
                           "typo": "inactive"}}
+    flags_all = {"T-001": {"A": True, "B": True, "C": True},
+                 "T-002": {"A": True, "B": True, "C": True}}
     mus = [
         # A-B: 3 игры в T-001 → 1 ячейка; 1 игра в T-002 → ещё 1
         {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-001/001"},
@@ -249,7 +251,7 @@ def test_get_coverage():
         {"task": "T-001", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/005"},
         {"task": "T-001", "void_of": "T-001/005", "_matchup_id": "T-001/006"},
     ]
-    cov = get_coverage(settings, mus, models)
+    cov = get_coverage(settings, mus, models, flags_all)
     # Активных моделей 3 → C(3,2)=3 пары; активных тасков 2 → total=6
     # Ячейки: (T-001,A-B), (T-002,A-B), (T-002,A-C) = 3
     assert cov["total"] == 6, cov
@@ -260,13 +262,72 @@ def test_get_coverage():
     cov_none = get_coverage({"current_task": "",
                              "tasks": {"T-001": "inactive",
                                        "T-002": "inactive",
-                                       "typo": "inactive"}}, mus, models)
+                                       "typo": "inactive"}}, mus, models, flags_all)
     assert cov_none["percent"] is None, cov_none
 
     # <2 активных моделей → percent=None
-    cov_one = get_coverage(settings, mus, [{"id": "A", "status": "active"}])
+    cov_one = get_coverage(settings, mus, [{"id": "A", "status": "active"}], flags_all)
     assert cov_one["percent"] is None, cov_one
     print("get_coverage: OK")
+
+
+def test_get_coverage_answer_aware():
+    """Динамика знаменателя от флагов: BLOCKED исключены с обеих сторон."""
+    from elo import get_coverage
+    models = [{"id": "A", "status": "active"}, {"id": "B", "status": "active"},
+              {"id": "C", "status": "active"}]
+    settings = {"current_task": "T-001",
+                "tasks": {"T-001": "active", "T-002": "active"}}
+    # A,B закрыли всё между собой; C без ответов на T-002
+    mus = [
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-001/001"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/002"},
+        {"task": "T-001", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/003"},
+        {"task": "T-002", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-002/001"},
+    ]
+    flags = {"T-001": {"A": True, "B": True, "C": True},
+             "T-002": {"A": True, "B": True}}  # C x T-002 = BLOCKED
+    cov = get_coverage(settings, mus, models, flags)
+    # Видимые: T-001 × 3 пары + T-002 × {A,B} = 4; DONE: 3 + 1 = 4 → 100%
+    assert (cov["filled"], cov["total"]) == (4, 4), cov
+    assert cov["percent"] == 100.0, cov
+
+    # Новая модель D без ответов: знаменатель не меняется
+    models_d = models + [{"id": "D", "status": "active"}]
+    cov_d = get_coverage(settings, mus, models_d, flags)
+    assert (cov_d["filled"], cov_d["total"]) == (4, 4), cov_d
+    assert cov_d["percent"] == 100.0, cov_d
+
+    # D получил ответ на T-001: +3 READY → 4 из 7
+    flags_d = {"T-001": {"A": True, "B": True, "C": True, "D": True},
+               "T-002": {"A": True, "B": True}}
+    cov_d2 = get_coverage(settings, mus, models_d, flags_d)
+    assert (cov_d2["filled"], cov_d2["total"]) == (4, 7), cov_d2
+    assert abs(cov_d2["percent"] - 100 * 4 / 7) < 0.01, cov_d2
+    assert cov_d2["percent"] < 100.0, cov_d2  # есть READY → строго < 100%
+
+    # Снятие флага прячет и DONE-ячейку целиком (вердикт остаётся, но не считается)
+    flags_un = {"T-001": {"A": True, "C": True, "D": True},
+                "T-002": {"A": True, "B": True}}
+    cov_un = get_coverage(settings, mus, models_d, flags_un)
+    # Видимые T-001: AC, AD, CD (без B); T-002: AB. DONE: (T-001,AC), (T-002,AB)
+    assert (cov_un["filled"], cov_un["total"]) == (2, 4), cov_un
+    assert cov_un["percent"] == 50.0, cov_un
+
+    # Все BLOCKED (пустые флаги) → percent=None
+    cov_blocked = get_coverage(settings, mus, models, {})
+    assert cov_blocked["total"] == 0, cov_blocked
+    assert cov_blocked["percent"] is None, cov_blocked
+
+    # Рематчи сверх первой игры не двигают счёт
+    mus_rematch = mus + [
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "b", "_matchup_id": "T-001/010"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "draw", "_matchup_id": "T-001/011"},
+    ]
+    cov_re = get_coverage(settings, mus_rematch, models, flags)
+    assert (cov_re["filled"], cov_re["total"]) == (4, 4), cov_re
+    assert cov_re["percent"] == 100.0, cov_re
+    print("get_coverage answer-aware: OK")
 
 
 if __name__ == "__main__":
@@ -286,4 +347,5 @@ if __name__ == "__main__":
     test_known_tasks()
     test_active_and_current_task()
     test_get_coverage()
+    test_get_coverage_answer_aware()
     print("\nALL ELO TESTS PASSED")

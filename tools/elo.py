@@ -891,13 +891,21 @@ def get_coverage(
     settings: dict | None = None,
     matchups: list[dict] | None = None,
     models: list[dict] | None = None,
+    flags: dict | None = None,
 ) -> dict:
-    """Покрытие прогона: заполненные ячейки (таск × пара активных моделей).
+    """Покрытие прогона: видимые ячейки (таск × пара активных моделей).
 
-    Ячейка (task, {a, b}) заполнена, если у пары есть ≥1 неаннулированный
-    вердикт в активном таске. Повторы в ячейке не засчитываются.
-    Возвращает {"filled", "total", "percent"}; percent=None, если метрика
-    не определена (нет активных тасков или <2 активных моделей).
+    Видимая ячейка — активный таск + активная пара, у обеих моделей
+    которой флаг ответа true на этот таск (answer_flags.yaml;
+    отсутствие записи = false, отсутствие файла = все BLOCKED).
+    BLOCKED-ячейки (хотя бы одного ответа нет) исключаются и из
+    числителя, и из знаменателя. Видимая ячейка DONE, если у пары
+    есть ≥1 неаннулированный вердикт в этом таске, иначе READY.
+    Повторы и рематчи в ячейке не засчитываются.
+    Возвращает {"filled" (DONE), "total" (READY+DONE), "percent"};
+    percent=None, если метрика не определена (нет активных тасков,
+    <2 активных моделей или видимых ячеек 0). Процент ограничен
+    сверху 100.0: есть READY → строго меньше 100%.
     """
     if settings is None:
         settings = load_settings()
@@ -905,18 +913,21 @@ def get_coverage(
         models = load_models_yaml()
     if matchups is None:
         matchups = load_matchups()
+    if flags is None:
+        flags = load_answer_flags()
 
     active_model_ids = {
         m["id"] for m in models if m.get("status", "active") != "archived"
     }
-    tasks = set(active_tasks(settings))
-    total = len(tasks) * (len(active_model_ids) * (len(active_model_ids) - 1) // 2)
-    if total == 0:
+    if len(active_model_ids) < 2:
+        return {"filled": 0, "total": 0, "percent": None}
+    tasks = active_tasks(settings)
+    if not tasks:
         return {"filled": 0, "total": 0, "percent": None}
 
     model_ids = {m["id"] for m in models}
     voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
-    cells: set[tuple[str, frozenset]] = set()
+    verdict_cells: set[tuple[str, frozenset]] = set()
     for mu in matchups:
         if mu.get("void_of") or mu.get("_matchup_id") in voided:
             continue
@@ -926,9 +937,23 @@ def get_coverage(
         a, b = resolve_matchup_models(mu, model_ids)
         if not a or not b or a not in active_model_ids or b not in active_model_ids:
             continue
-        cells.add((task, frozenset((a, b))))
+        verdict_cells.add((task, frozenset((a, b))))
 
-    filled = len(cells)
+    # Видимые ячейки: оба флага true. Порядок пар детерминирован.
+    ordered_ids = sorted(active_model_ids)
+    visible: set[tuple[str, frozenset]] = set()
+    for task in tasks:
+        task_flags = flags.get(task) or {}
+        for i in range(len(ordered_ids)):
+            for j in range(i + 1, len(ordered_ids)):
+                a, b = ordered_ids[i], ordered_ids[j]
+                if task_flags.get(a) and task_flags.get(b):
+                    visible.add((task, frozenset((a, b))))
+
+    total = len(visible)
+    if total == 0:
+        return {"filled": 0, "total": 0, "percent": None}
+    filled = len(verdict_cells & visible)
     return {
         "filled": filled,
         "total": total,
