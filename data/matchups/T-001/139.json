@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 139,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "devin-deepseek-v4-1-flash-max",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "devin-deepseek-v4-1-flash-max",
+  "winner": "b",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T17:27:32+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1142,
+      "after": 1132,
+      "delta": -10
+    },
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1279,
+      "after": 1289,
+      "delta": 10
+    }
+  }
+}

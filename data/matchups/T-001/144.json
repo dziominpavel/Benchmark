@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 144,
+  "task": "T-001",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "devin-swe-2-max",
+  "model_a_id": "devin-glm-5-2-high",
+  "model_b_id": "devin-swe-2-max",
+  "winner": "b",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T19:25:55+03:00",
+  "elo": {
+    "devin-glm-5-2-high": {
+      "before": 1055,
+      "after": 1046,
+      "delta": -9
+    },
+    "devin-swe-2-max": {
+      "before": 1206,
+      "after": 1215,
+      "delta": 9
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 130,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-1-flash-max",
+  "model_b": "devin-deepseek-v4-pro-max",
+  "model_a_id": "devin-deepseek-v4-1-flash-max",
+  "model_b_id": "devin-deepseek-v4-pro-max",
+  "winner": "a",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T10:00:35+03:00",
+  "elo": {
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1265,
+      "after": 1280,
+      "delta": 15
+    },
+    "devin-deepseek-v4-pro-max": {
+      "before": 1182,
+      "after": 1170,
+      "delta": -12
+    }
+  }
+}

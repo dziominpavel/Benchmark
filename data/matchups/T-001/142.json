@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 142,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "devin-deepseek-v4-pro-max",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "devin-deepseek-v4-pro-max",
+  "winner": "a",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T19:02:10+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1359,
+      "after": 1368,
+      "delta": 9
+    },
+    "devin-deepseek-v4-pro-max": {
+      "before": 1204,
+      "after": 1195,
+      "delta": -9
+    }
+  }
+}

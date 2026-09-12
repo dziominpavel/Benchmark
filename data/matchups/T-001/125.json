@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 125,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-1-flash-max",
+  "model_b": "devin-gpt-6-astra-max-2",
+  "model_a_id": "devin-deepseek-v4-1-flash-max",
+  "model_b_id": "devin-gpt-6-astra-max-2",
+  "winner": "b",
+  "date": "2026-09-11",
+  "recorded_at": "2026-09-11T22:18:48+03:00",
+  "elo": {
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1303,
+      "after": 1283,
+      "delta": -20
+    },
+    "devin-gpt-6-astra-max-2": {
+      "before": 1297,
+      "after": 1313,
+      "delta": 16
+    }
+  }
+}

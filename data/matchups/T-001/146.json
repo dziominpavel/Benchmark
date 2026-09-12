@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 146,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "devin-glm-5-3-flash-max",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "devin-glm-5-3-flash-max",
+  "winner": "b",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T20:36:27+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1080,
+      "after": 1072,
+      "delta": -8
+    },
+    "devin-glm-5-3-flash-max": {
+      "before": 1265,
+      "after": 1273,
+      "delta": 8
+    }
+  }
+}

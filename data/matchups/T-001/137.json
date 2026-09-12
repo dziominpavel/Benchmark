@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 137,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "devin-swe-2-max",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "devin-swe-2-max",
+  "winner": "a",
+  "date": "2026-09-12",
+  "recorded_at": "2026-09-12T11:38:09+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1349,
+      "after": 1359,
+      "delta": 10
+    },
+    "devin-swe-2-max": {
+      "before": 1215,
+      "after": 1205,
+      "delta": -10
+    }
+  }
+}
