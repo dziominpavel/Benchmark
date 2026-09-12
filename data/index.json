@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "updated": "2026-09-12",
-  "matchups_digest": "3d475af6fe3a0a4980fb7966e04d54f8da9f5349494237630eb70d0bc23d9d48",
+  "updated": "2026-09-13",
+  "matchups_digest": "dd47e0dd34dea02c9bf32a805060a409cdb72c6bf9ea366943659b50c57f4679",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -87,10 +87,10 @@
       "name": "Devin DeepSeek V4 Pro Max",
       "provider": "",
       "status": "active",
-      "elo": 1195,
-      "games": 17,
+      "elo": 1187,
+      "games": 18,
       "wins": 8,
-      "losses": 9,
+      "losses": 10,
       "draws": 0
     },
     "devin-glm-5-2-high": {
@@ -127,9 +127,9 @@
       "name": "Devin GPT-6 Astra Max",
       "provider": "",
       "status": "active",
-      "elo": 1383,
-      "games": 11,
-      "wins": 11,
+      "elo": 1391,
+      "games": 12,
+      "wins": 12,
       "losses": 0,
       "draws": 0
     },
@@ -198,7 +198,7 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "matchups_count": 146
+      "matchups_count": 147
     },
     "T-002": {
       "slug": "T-002-hours-bridge-audit",
@@ -207,8 +207,8 @@
     }
   },
   "matchups_summary": {
-    "total": 146,
-    "applied": 146,
+    "total": 147,
+    "applied": 147,
     "voided": 0,
     "tombstone": 0,
     "skipped": 0
@@ -2985,6 +2985,25 @@
       "elo_b": {
         "before": 1265,
         "after": 1273,
+        "delta": 8
+      }
+    },
+    {
+      "matchup": "T-001/147",
+      "seq": 147,
+      "date": "2026-09-13",
+      "recorded_at": "2026-09-13T01:36:10+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "devin-gpt-6-astra-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1195,
+        "after": 1187,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1383,
+        "after": 1391,
         "delta": 8
       }
     }

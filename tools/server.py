@@ -924,6 +924,10 @@ CSS = """
     width: 100%;
     min-width: 0;
   }
+  .queue-wrap {
+    max-height: 420px;
+    overflow-y: auto;
+  }
   th, td {
     white-space: nowrap;
   }
@@ -1884,6 +1888,52 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
     <div class="empty-state">Нет активных моделей или активных тасков для учёта.</div>
     {% endif %}
   </div>
+
+  <div class="card" id="recommendation-queue">
+    <h2>Очередь рекомендаций{% if queue_has_coverage %} ({{ queue_remaining }}){% endif %}</h2>
+    {% if queue_has_coverage %}
+    <div class="stats">осталось {{ queue_remaining }} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
+    {% else %}
+    <div class="stats">очередь: — (нет активных моделей, активных тасков или видимых ячеек)</div>
+    {% endif %}
+    <div class="hint">
+      Порядок совпадает с кнопкой «Прогнать» на главной. Пары без обоих ответов скрыты.
+    </div>
+    {% if queue %}
+    <div class="table-wrap queue-wrap">
+      <table class="queue-table">
+        <thead>
+          <tr><th>№</th><th>Пара</th><th>Таск</th></tr>
+        </thead>
+        <tbody>
+          {% for q in queue %}
+          <tr>
+            <td class="rank">{{ loop.index }}</td>
+            <td class="model-cell"><a href="/model/{{ q.model_a }}" class="edit-link">{{ q.name_a }}</a> vs <a href="/model/{{ q.model_b }}" class="edit-link">{{ q.name_b }}</a></td>
+            <td>{{ q.recommended_task if q.recommended_task else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Очередь пуста — открытых пар нет.</div>
+    {% if rematch %}
+    {% set r = rematch[0] %}
+    <div class="table-wrap">
+      <table class="queue-table">
+        <tbody>
+          <tr>
+            <td class="rank">1</td>
+            <td class="model-cell"><a href="/model/{{ r.model_a }}" class="edit-link">{{ r.name_a }}</a> vs <a href="/model/{{ r.model_b }}" class="edit-link">{{ r.name_b }}</a></td>
+            <td>{{ r.recommended_task if r.recommended_task else "—" }} <span class="rec-rematch">рематч</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
 </div>
 
 <script>
@@ -2280,6 +2330,18 @@ def settings_page():
     else:
         answer_rows = list(matrix["rows"])
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
+    coverage = get_coverage(settings)
+    n_active_models = sum(1 for info in models.values() if is_model_active(info))
+    n_active_tasks = len(active_tasks(settings))
+    queue_bound = n_active_tasks * n_active_models * (n_active_models - 1) // 2
+    full_recs = get_recommendations(index_data, top_n=queue_bound) if queue_bound > 0 else []
+    if full_recs and full_recs[0].get("is_rematch"):
+        queue = []
+        rematch = full_recs[:1]
+    else:
+        queue = full_recs
+        rematch = []
+    queue_has_coverage = coverage.get("percent") is not None
     return render_template_string(
         SETTINGS_TEMPLATE,
         tasks_list=tasks_list,
@@ -2296,6 +2358,12 @@ def settings_page():
         answer_total=matrix["total"],
         answer_remaining=matrix["remaining"],
         answer_has_active=matrix["has_active"],
+        queue=queue,
+        rematch=rematch,
+        queue_filled=coverage.get("filled", 0),
+        queue_total=coverage.get("total", 0),
+        queue_remaining=coverage.get("total", 0) - coverage.get("filled", 0),
+        queue_has_coverage=queue_has_coverage,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
     )
