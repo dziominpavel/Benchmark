@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 150,
+  "task": "T-001",
+  "model_a": "devin-gpt-5-6-sol-max",
+  "model_b": "devin-kimi-k3-max",
+  "model_a_id": "devin-gpt-5-6-sol-max",
+  "model_b_id": "devin-kimi-k3-max",
+  "winner": "a",
+  "date": "2026-09-13",
+  "recorded_at": "2026-09-13T15:42:57+03:00",
+  "elo": {
+    "devin-gpt-5-6-sol-max": {
+      "before": 1315,
+      "after": 1322,
+      "delta": 7
+    },
+    "devin-kimi-k3-max": {
+      "before": 1105,
+      "after": 1098,
+      "delta": -7
+    }
+  }
+}

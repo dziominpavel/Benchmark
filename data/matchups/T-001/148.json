@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 148,
+  "task": "T-001",
+  "model_a": "devin-swe-2-max",
+  "model_b": "opencode-mimo-v2-5-free",
+  "model_a_id": "devin-swe-2-max",
+  "model_b_id": "opencode-mimo-v2-5-free",
+  "winner": "a",
+  "date": "2026-09-13",
+  "recorded_at": "2026-09-13T14:29:02+03:00",
+  "elo": {
+    "devin-swe-2-max": {
+      "before": 1215,
+      "after": 1223,
+      "delta": 8
+    },
+    "opencode-mimo-v2-5-free": {
+      "before": 1013,
+      "after": 1005,
+      "delta": -8
+    }
+  }
+}

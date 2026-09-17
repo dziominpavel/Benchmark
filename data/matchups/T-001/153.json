@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 153,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "devin-deepseek-v4-1-flash-max",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "devin-deepseek-v4-1-flash-max",
+  "winner": "b",
+  "date": "2026-09-13",
+  "recorded_at": "2026-09-13T18:14:33+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1065,
+      "after": 1059,
+      "delta": -6
+    },
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1305,
+      "after": 1311,
+      "delta": 6
+    }
+  }
+}

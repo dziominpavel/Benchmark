@@ -1892,7 +1892,10 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
   <div class="card" id="recommendation-queue">
     <h2>Очередь рекомендаций{% if queue_has_coverage %} ({{ queue_remaining }}){% endif %}</h2>
     {% if queue_has_coverage %}
-    <div class="stats">осталось {{ queue_remaining }} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
+    <div class="stats"{% if queue_breakdown_legend %} title="{{ queue_breakdown_legend }}"{% endif %}>осталось {{ queue_remaining }}{% if queue_breakdown_str %} ({{ queue_breakdown_str }}){% endif %} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
+    {% if queue_breakdown_legend %}
+    <div class="hint">в скобках — остаток по таскам: {{ queue_breakdown_legend }}</div>
+    {% endif %}
     {% else %}
     <div class="stats">очередь: — (нет активных моделей, активных тасков или видимых ячеек)</div>
     {% endif %}
@@ -2331,8 +2334,9 @@ def settings_page():
         answer_rows = list(matrix["rows"])
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     coverage = get_coverage(settings)
+    active_task_ids = active_tasks(settings)
     n_active_models = sum(1 for info in models.values() if is_model_active(info))
-    n_active_tasks = len(active_tasks(settings))
+    n_active_tasks = len(active_task_ids)
     queue_bound = n_active_tasks * n_active_models * (n_active_models - 1) // 2
     full_recs = get_recommendations(index_data, top_n=queue_bound) if queue_bound > 0 else []
     if full_recs and full_recs[0].get("is_rematch"):
@@ -2341,6 +2345,22 @@ def settings_page():
     else:
         queue = full_recs
         rematch = []
+    # Разбивка остатка очереди по таскам в порядке приоритета очереди
+    # (порядок активных тасков T-NNN по возрастанию). Первое число в
+    # скобках — первый активный таск, второе — второй и т.д.
+    queue_breakdown: list = []
+    queue_breakdown_str = ""
+    queue_breakdown_legend = ""
+    if len(active_task_ids) > 1 and queue:
+        counts: dict = {t: 0 for t in active_task_ids}
+        for rec in queue:
+            t = rec.get("recommended_task") or ""
+            counts[t] = counts.get(t, 0) + 1
+        ordered = [t for t in active_task_ids if t in counts]
+        ordered += [t for t in counts if t not in active_task_ids]
+        queue_breakdown = [{"task": t, "count": counts[t]} for t in ordered]
+        queue_breakdown_str = "+".join(str(counts[t]) for t in ordered)
+        queue_breakdown_legend = " + ".join(f"{t}: {counts[t]}" for t in ordered)
     queue_has_coverage = coverage.get("percent") is not None
     return render_template_string(
         SETTINGS_TEMPLATE,
@@ -2363,6 +2383,9 @@ def settings_page():
         queue_filled=coverage.get("filled", 0),
         queue_total=coverage.get("total", 0),
         queue_remaining=coverage.get("total", 0) - coverage.get("filled", 0),
+        queue_breakdown=queue_breakdown,
+        queue_breakdown_str=queue_breakdown_str,
+        queue_breakdown_legend=queue_breakdown_legend,
         queue_has_coverage=queue_has_coverage,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),

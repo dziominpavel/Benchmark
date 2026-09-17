@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 149,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "cursor-grok-4-6",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "cursor-grok-4-6",
+  "winner": "b",
+  "date": "2026-09-13",
+  "recorded_at": "2026-09-13T15:11:55+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1072,
+      "after": 1065,
+      "delta": -7
+    },
+    "cursor-grok-4-6": {
+      "before": 1280,
+      "after": 1287,
+      "delta": 7
+    }
+  }
+}
