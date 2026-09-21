@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 172,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "devin-gpt-6-astra-max",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "a",
+  "date": "2026-09-21",
+  "recorded_at": "2026-09-21T23:52:22+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max": {
+      "before": 1397,
+      "after": 1412,
+      "delta": 15
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1381,
+      "after": 1362,
+      "delta": -19
+    }
+  }
+}

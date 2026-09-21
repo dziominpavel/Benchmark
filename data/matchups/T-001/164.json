@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 164,
+  "task": "T-001",
+  "model_a": "devin-swe-2-max",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "devin-swe-2-max",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "b",
+  "date": "2026-09-21",
+  "recorded_at": "2026-09-21T22:29:31+03:00",
+  "elo": {
+    "devin-swe-2-max": {
+      "before": 1223,
+      "after": 1207,
+      "delta": -16
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1220,
+      "after": 1240,
+      "delta": 20
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 165,
+  "task": "T-001",
+  "model_a": "opencode-grok-4-7-xhigh",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "model_a_id": "opencode-grok-4-7-xhigh",
+  "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "a",
+  "date": "2026-09-21",
+  "recorded_at": "2026-09-21T22:35:35+03:00",
+  "elo": {
+    "opencode-grok-4-7-xhigh": {
+      "before": 1240,
+      "after": 1260,
+      "delta": 20
+    },
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1234,
+      "after": 1218,
+      "delta": -16
+    }
+  }
+}

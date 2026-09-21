@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 162,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-ling-3-0-flash-fin-free",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-ling-3-0-flash-fin-free",
+  "winner": "a",
+  "date": "2026-09-21",
+  "recorded_at": "2026-09-21T22:18:56+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1126,
+      "after": 1142,
+      "delta": 16
+    },
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 1133,
+      "after": 1113,
+      "delta": -20
+    }
+  }
+}

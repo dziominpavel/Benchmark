@@ -46,7 +46,8 @@ from register_task import (
 )
 
 from render_helpers import (
-    format_elo_history, format_winrate, get_model_detail, build_elo_svg,
+    format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
+    build_elo_distribution_svg,
 )
 
 from register_model import parse_existing, format_model
@@ -580,6 +581,7 @@ CSS = """
   }
   tbody tr:hover { background: #334155; }
   .rank { color: #64748b; font-weight: 600; }
+  .confidence { color: #64748b; font-size: 0.82rem; font-weight: 500; }
   .wld { font-weight: 600; }
   .w { color: #34d399; }
   .l { color: #f87171; }
@@ -763,6 +765,12 @@ CSS = """
   .chart-tick { fill: #64748b; font-size: 12px; }
   .chart-mark { fill: #94a3b8; font-size: 12px; font-weight: 600; }
   .chart-empty { color: #64748b; padding: 24px; text-align: center; }
+  .dist-pt-below { fill: #f87171; }
+  .dist-pt-above { fill: #34d399; }
+  .dist-line-start { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .dist-line-mean { stroke: #818cf8; stroke-width: 2; }
+  .dist-name { fill: #e2e8f0; font-size: 12px; }
+  .dist-value { fill: #94a3b8; font-size: 12px; }
   .rec-info {
     flex: 1;
     min-width: 0;
@@ -825,6 +833,7 @@ CSS = """
   }
   .status-active { background: #064e3b; color: #6ee7b7; }
   .status-archived { background: #475569; color: #cbd5e1; }
+  .status-warmup { background: #451a03; color: #fbbf24; opacity: 0.85; font-weight: 500; }
   tr.archived td { opacity: 0.6; }
 
   /* Content grid */
@@ -1105,6 +1114,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   <div class="header">
     <h1>ELO Benchmark</h1>
     <div style="display:flex;gap:12px;align-items:center;">
+      <a href="/stats" class="btn btn-secondary">Аналитика</a>
       <a href="/history" class="btn btn-secondary">История</a>
       <a href="/settings" class="btn btn-primary">Настройки</a>
     </div>
@@ -1137,7 +1147,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
     <div class="stats">
       Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
-    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5</div>
+    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр</div>
     <form method="GET" action="/" class="filter-bar">
       <label for="filter">Показывать</label>
       <select name="filter" id="filter" onchange="this.form.submit()">
@@ -1160,6 +1170,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 <th>#</th>
                 <th>Модель</th>
                 <th>ELO</th>
+                <th>±</th>
                 <th>Побед</th>
                 <th>Поражений</th>
                 <th>Ничьих</th>
@@ -1174,8 +1185,10 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
                 <td class="model-cell">
                   <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
                   {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+                  {% if m.games < 10 %}<span class="status-pill status-warmup">прогрев</span>{% endif %}
                 </td>
                 <td>{{ m.elo }}</td>
+                <td class="confidence">{{ format_confidence(m.games) }}</td>
                 <td class="wld w">{{ m.wins }}</td>
                 <td class="wld l">{{ m.losses }}</td>
                 <td class="wld d">{{ m.draws }}</td>
@@ -1466,6 +1479,42 @@ MODEL_TEMPLATE = """<!DOCTYPE html>
     {% else %}
     <div class="empty-state">Пока нет матчей</div>
     {% endif %}
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+# ─── HTML: Stats page ─────────────────────────────────────────────
+
+STATS_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аналитика — ELO Benchmark</title>
+<style>""" + CSS + """</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
+
+  <div class="header">
+    <h1>Аналитика</h1>
+  </div>
+
+  <div class="card" id="elo-distribution">
+    <h2>Распределение Elo</h2>
+    <div class="stats">{{ summary }}</div>
+    <form method="GET" action="/stats" class="filter-bar">
+      <label for="filter">Показывать</label>
+      <select name="filter" id="filter" onchange="this.form.submit()">
+        <option value="active" {% if stats_filter == 'active' %}selected{% endif %}>Только активные</option>
+        <option value="all" {% if stats_filter == 'all' %}selected{% endif %}>Все</option>
+      </select>
+    </form>
+    {{ chart_svg|safe }}
   </div>
 </div>
 </body>
@@ -2083,6 +2132,54 @@ def model_page(model_id: str):
     )
 
 
+@app.route("/stats")
+def stats_page():
+    index_data = ensure_index()
+
+    models = index_data.get("models", {})
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+
+    stats_filter = request.args.get("filter", "active").strip().lower()
+    if stats_filter not in ("active", "all"):
+        stats_filter = "active"
+
+    if stats_filter == "active":
+        pool = [info for info in models.values() if is_model_active(info)]
+    else:
+        pool = list(models.values())
+
+    entries = [
+        {
+            "elo": m.get("elo", DEFAULT_ELO),
+            "name": m.get("name", m.get("id", "")),
+            "games": m.get("games", 0),
+        }
+        for m in pool
+    ]
+
+    if entries:
+        elos = sorted(e["elo"] for e in entries)
+        n = len(elos)
+        mean = sum(elos) / n
+        below = sum(1 for v in elos if v < DEFAULT_ELO)
+        summary = (
+            f"моделей: {n} · ниже 1200: {below} · "
+            f"выше/равно 1200: {n - below} · "
+            f"среднее: {mean:.0f}"
+        )
+    else:
+        summary = "моделей: 0"
+
+    return render_template_string(
+        STATS_TEMPLATE,
+        summary=summary,
+        stats_filter=stats_filter,
+        chart_svg=build_elo_distribution_svg(entries),
+    )
+
+
 @app.route("/")
 def leaderboard():
     index_data = ensure_index()
@@ -2181,6 +2278,7 @@ def leaderboard():
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         format_winrate=format_winrate,
+        format_confidence=format_confidence,
     )
 
 

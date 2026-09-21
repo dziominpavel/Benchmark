@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 158,
+  "task": "T-001",
+  "model_a": "cursor-gemini-3-8-flash-high",
+  "model_b": "opencode-ling-3-0-flash-fin-free",
+  "model_a_id": "cursor-gemini-3-8-flash-high",
+  "model_b_id": "opencode-ling-3-0-flash-fin-free",
+  "winner": "a",
+  "date": "2026-09-19",
+  "recorded_at": "2026-09-19T16:09:39+03:00",
+  "elo": {
+    "cursor-gemini-3-8-flash-high": {
+      "before": 1164,
+      "after": 1181,
+      "delta": 17
+    },
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 1179,
+      "after": 1158,
+      "delta": -21
+    }
+  }
+}

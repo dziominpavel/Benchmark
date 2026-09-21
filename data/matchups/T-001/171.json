@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 171,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "b",
+  "date": "2026-09-21",
+  "recorded_at": "2026-09-21T23:52:15+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1368,
+      "after": 1352,
+      "delta": -16
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1361,
+      "after": 1381,
+      "delta": 20
+    }
+  }
+}

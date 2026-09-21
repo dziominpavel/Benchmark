@@ -112,6 +112,16 @@ models:
     provider: 
     version: 
     status: active
+  - id: opencode-grok-4-7-xhigh
+    name: "OpenCode Grok 4.7 Xhigh"
+    provider: 
+    version: 
+    status: active
+  - id: opencode-ling-3-0-flash-fin-free
+    name: "OpenCode Ling 3.0 Flash Fin Free"
+    provider: 
+    version: 
+    status: active
   - id: opencode-mimo-v2-5-free
     name: "OpenCode MiMo V2.5 Free"
     provider: 

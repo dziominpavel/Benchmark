@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import html
+import math
+
 DEFAULT_ELO = 1200
 
 
@@ -247,3 +250,113 @@ def build_elo_svg(points: list[int], width: int = 860, height: int = 220) -> str
         f'<polyline points="{poly}" class="chart-line" fill="none"/>'
         f"{dots}{marks}{current}</svg>"
     )
+
+
+def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
+    """Строит SVG bar-chart распределения ELO пула моделей.
+
+    entries: список {elo: int, name: str = "", games: int = 0}; сортировка
+    по убыванию Elo — внутри. У каждого бара имя модели и значение.
+    Бары ниже 1200 отличаются цветом. Вертикальные линии: старт 1200
+    и среднее. Ось начинается около минимума (не от нуля).
+    Пустой список → заглушка «Нет данных».
+    """
+    if not entries:
+        return '<div class="chart-empty">Нет данных</div>'
+
+    pts = sorted(entries, key=lambda e: e.get("elo", DEFAULT_ELO), reverse=True)
+    elos = [p.get("elo", DEFAULT_ELO) for p in pts]
+    n = len(elos)
+    mean = sum(elos) / n
+
+    lo, hi = min(elos), max(elos)
+    if lo == hi:
+        lo, hi = lo - 10, hi + 10
+    pad = max(15.0, (hi - lo) * 0.08)
+    lo, hi = lo - pad, hi + pad
+
+    row_h, bar_h = 30, 18
+    left, right, top, bottom = 220, 56, 44, 34
+    height = top + n * row_h + bottom
+    plot_w = width - left - right
+    rows_bottom = top + n * row_h
+
+    def x(v: float) -> float:
+        return left + plot_w * (v - lo) / (hi - lo)
+
+    bars = ""
+    for i, p in enumerate(pts):
+        v = p.get("elo", DEFAULT_ELO)
+        cls = "dist-pt-below" if v < DEFAULT_ELO else "dist-pt-above"
+        cy = top + i * row_h + row_h / 2
+        tip = html.escape(f'{p.get("name", "")} · {v} · игр: {p.get("games", 0)}')
+        label = str(p.get("name", ""))
+        if len(label) > 30:
+            label = label[:29] + "…"
+        bars += (
+            f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
+            f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" class="{cls}">'
+            f"<title>{tip}</title></rect>"
+            f'<text x="{left - 8}" y="{cy + 4:.1f}" text-anchor="end" '
+            f'class="dist-name">{html.escape(label)}<title>{tip}</title></text>'
+            f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
+            f'class="dist-value">{v}</text>'
+        )
+
+    def vline(v: float, cls: str, tip: str) -> str:
+        return (
+            f'<line x1="{x(v):.1f}" y1="{top}" x2="{x(v):.1f}" '
+            f'y2="{rows_bottom}" class="{cls}">'
+            f"<title>{html.escape(tip)}</title></line>"
+        )
+
+    lines = (
+        vline(DEFAULT_ELO, "dist-line-start", "старт: 1200")
+        + vline(mean, "dist-line-mean", f"среднее: {mean:.1f}")
+    )
+
+    legend = (
+        f'<line x1="{left}" y1="14" x2="{left + 28}" y2="14" class="dist-line-start"/>'
+        f'<text x="{left + 34}" y="18" class="chart-tick">старт 1200</text>'
+        f'<line x1="{left + 130}" y1="14" x2="{left + 158}" y2="14" class="dist-line-mean"/>'
+        f'<text x="{left + 164}" y="18" class="chart-tick">среднее {mean:.0f}</text>'
+    )
+
+    grid = ""
+    for v in (min(elos), (min(elos) + max(elos)) / 2, max(elos)):
+        gx = x(v)
+        grid += (
+            f'<line x1="{gx:.1f}" y1="{top}" x2="{gx:.1f}" '
+            f'y2="{rows_bottom}" class="chart-grid"/>'
+            f'<text x="{gx:.1f}" y="{rows_bottom + 22:.1f}" '
+            f'text-anchor="middle" class="chart-tick">{v:.0f}</text>'
+        )
+
+    return (
+        f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
+        f'aria-label="Распределение Elo: {n} моделей">'
+        f"{legend}{grid}{lines}{bars}</svg>"
+    )
+
+
+def confidence_half_width(games: int) -> int | None:
+    """Половина интервала доверия рейтинга по числу игр.
+
+    Эвристика объёма данных: round(400 / sqrt(games)).
+    При games <= 0 возвращает None (показывать «—»).
+    """
+
+    try:
+        n = int(games)
+    except (TypeError, ValueError):
+        return None
+    if n <= 0:
+        return None
+    return int(round(400 / math.sqrt(n)))
+
+
+def format_confidence(games: int) -> str:
+    """Форматирует доверие как '±N' или '—' при отсутствии игр."""
+
+    w = confidence_half_width(games)
+    return f"±{w}" if w is not None else "—"
