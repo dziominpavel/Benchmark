@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 185,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "devin-gpt-6-astra-max",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "a",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T23:14:43+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max": {
+      "before": 1412,
+      "after": 1423,
+      "delta": 11
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1307,
+      "after": 1296,
+      "delta": -11
+    }
+  }
+}

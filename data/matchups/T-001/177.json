@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 177,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-1-flash-max",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "devin-deepseek-v4-1-flash-max",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "b",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T21:50:33+03:00",
+  "elo": {
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1300,
+      "after": 1283,
+      "delta": -17
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1282,
+      "after": 1303,
+      "delta": 21
+    }
+  }
+}

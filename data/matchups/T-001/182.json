@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 182,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "b",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T22:46:56+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1352,
+      "after": 1333,
+      "delta": -19
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1286,
+      "after": 1310,
+      "delta": 24
+    }
+  }
+}

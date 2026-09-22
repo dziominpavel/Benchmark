@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 183,
+  "task": "T-001",
+  "model_a": "opencode-grok-4-7-xhigh",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "opencode-grok-4-7-xhigh",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "a",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T22:55:12+03:00",
+  "elo": {
+    "opencode-grok-4-7-xhigh": {
+      "before": 1362,
+      "after": 1376,
+      "delta": 14
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1310,
+      "after": 1293,
+      "delta": -17
+    }
+  }
+}

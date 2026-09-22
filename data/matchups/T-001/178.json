@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 178,
+  "task": "T-001",
+  "model_a": "devin-gpt-5-6-sol-max",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "devin-gpt-5-6-sol-max",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "a",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T21:57:27+03:00",
+  "elo": {
+    "devin-gpt-5-6-sol-max": {
+      "before": 1312,
+      "after": 1328,
+      "delta": 16
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1303,
+      "after": 1284,
+      "delta": -19
+    }
+  }
+}

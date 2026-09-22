@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 179,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-ling-3-0-flash-fin-free",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-ling-3-0-flash-fin-free",
+  "winner": "a",
+  "date": "2026-09-22",
+  "recorded_at": "2026-09-22T22:07:10+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1091,
+      "after": 1108,
+      "delta": 17
+    },
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 1113,
+      "after": 1092,
+      "delta": -21
+    }
+  }
+}

@@ -31,7 +31,7 @@ models:
     name: "Codex GPT-5.6-Terra High 09-2026"
     provider: 
     version: 
-    status: active
+    status: archived
   - id: cursor-composer-2-5
     name: "Cursor Composer 2.5"
     provider: 
@@ -56,7 +56,7 @@ models:
     name: "Cursor Grok 4.6 Low"
     provider: 
     version: 
-    status: active
+    status: archived
   - id: cursor-kimi-k3-max
     name: "Cursor Kimi K3 Max"
     provider: 
@@ -76,7 +76,7 @@ models:
     name: "Devin GLM-5.2 High"
     provider: 
     version: 
-    status: active
+    status: archived
   - id: devin-glm-5-3-flash-max
     name: "Devin GLM-5.3 Flash Max"
     provider: 
@@ -124,6 +124,11 @@ models:
     status: active
   - id: opencode-mimo-v2-5-free
     name: "OpenCode MiMo V2.5 Free"
+    provider: 
+    version: 
+    status: archived
+  - id: opencode-mimo-v2-6-flash-free
+    name: "OpenCode MiMo V2.6 Flash Free"
     provider: 
     version: 
     status: active
