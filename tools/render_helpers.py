@@ -49,7 +49,9 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
         встреч по убыванию, затем имя),
       history (список {opp_id, opp_name, date_str, outcome
         (Победа/Поражение/Ничья), before, delta, delta_str,
-        delta_class, after} в порядке seq).
+        delta_class, after} в ОБРАТНОМ порядке seq — новые матчи сверху),
+      points (список after-значений в ХРОНОЛОГИЧЕСКОМ порядке seq, включая
+        стартовое DEFAULT_ELO — для графика).
     """
     models = index_data.get("models", {})
     info = models.get(model_id)
@@ -119,6 +121,12 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
         for oid, st in h2h.items()
     ]
     h2h_list.sort(key=lambda r: (-r["games"], r["name"].lower()))
+
+    # Инвертируем ТОЛЬКО список таблицы «История матчей»: новые матчи сверху.
+    # `mine` и `points` должны остаться в хронологическом порядке seq —
+    # из них строится SVG-график (старые слева → новые справа). Разворот
+    # `mine` перед циклом молча отразил бы график.
+    history.reverse()
 
     games = info.get("games", 0)
     return {

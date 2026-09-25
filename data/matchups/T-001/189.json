@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 189,
+  "task": "T-001",
+  "model_a": "devin-swe-2-max",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "devin-swe-2-max",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-25",
+  "recorded_at": "2026-09-25T21:03:16+03:00",
+  "elo": {
+    "devin-swe-2-max": {
+      "before": 1202,
+      "after": 1186,
+      "delta": -16
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1200,
+      "after": 1220,
+      "delta": 20
+    }
+  }
+}

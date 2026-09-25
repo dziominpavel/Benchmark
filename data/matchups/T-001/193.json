@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 193,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-25",
+  "recorded_at": "2026-09-25T23:36:52+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1255,
+      "after": 1239,
+      "delta": -16
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1262,
+      "after": 1282,
+      "delta": 20
+    }
+  }
+}

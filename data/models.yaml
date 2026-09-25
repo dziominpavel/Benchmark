@@ -137,3 +137,8 @@ models:
     provider: 
     version: 
     status: active
+  - id: opencode-space-bunny-free-max
+    name: "OpenCode Space Bunny Free Max"
+    provider: 
+    version: 
+    status: active

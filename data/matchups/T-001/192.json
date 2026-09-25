@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 192,
+  "task": "T-001",
+  "model_a": "opencode-mimo-v2-6-flash-free",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "opencode-mimo-v2-6-flash-free",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "draw",
+  "date": "2026-09-25",
+  "recorded_at": "2026-09-25T23:05:25+03:00",
+  "elo": {
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1317,
+      "after": 1314,
+      "delta": -3
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1259,
+      "after": 1262,
+      "delta": 3
+    }
+  }
+}

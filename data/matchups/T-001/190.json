@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 190,
+  "task": "T-001",
+  "model_a": "opencode-muse-spark-1-3-free-xhigh",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "opencode-muse-spark-1-3-free-xhigh",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-25",
+  "recorded_at": "2026-09-25T22:12:13+03:00",
+  "elo": {
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1202,
+      "after": 1187,
+      "delta": -15
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1220,
+      "after": 1239,
+      "delta": 19
+    }
+  }
+}

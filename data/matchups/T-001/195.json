@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 195,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max-2",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "devin-gpt-6-astra-max-2",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "a",
+  "date": "2026-09-26",
+  "recorded_at": "2026-09-26T00:04:53+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max-2": {
+      "before": 1314,
+      "after": 1329,
+      "delta": 15
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1282,
+      "after": 1264,
+      "delta": -18
+    }
+  }
+}
