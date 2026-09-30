@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 249,
+  "task": "T-001",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "devin-gpt-5-6-sol-max",
+  "model_a_id": "devin-glm-5-2-high",
+  "model_b_id": "devin-gpt-5-6-sol-max",
+  "winner": "b",
+  "date": "2026-10-01",
+  "recorded_at": "2026-10-01T00:09:03+03:00",
+  "elo": {
+    "devin-glm-5-2-high": {
+      "before": 1049,
+      "after": 1044,
+      "delta": -5
+    },
+    "devin-gpt-5-6-sol-max": {
+      "before": 1341,
+      "after": 1346,
+      "delta": 5
+    }
+  }
+}

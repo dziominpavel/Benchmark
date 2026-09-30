@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 240,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T23:41:53+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1081,
+      "after": 1072,
+      "delta": -9
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1236,
+      "after": 1245,
+      "delta": 9
+    }
+  }
+}

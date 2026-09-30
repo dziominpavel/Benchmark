@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 262,
+  "task": "T-001",
+  "model_a": "devin-gpt-5-6-sol-max",
+  "model_b": "opencode-ling-3-0-flash-fin-free",
+  "model_a_id": "devin-gpt-5-6-sol-max",
+  "model_b_id": "opencode-ling-3-0-flash-fin-free",
+  "winner": "a",
+  "date": "2026-10-01",
+  "recorded_at": "2026-10-01T00:17:47+03:00",
+  "elo": {
+    "devin-gpt-5-6-sol-max": {
+      "before": 1350,
+      "after": 1353,
+      "delta": 3
+    },
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 983,
+      "after": 980,
+      "delta": -3
+    }
+  }
+}

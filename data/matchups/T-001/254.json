@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 254,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max",
+  "model_b": "devin-kimi-k3-max",
+  "model_a_id": "devin-gpt-6-astra-max",
+  "model_b_id": "devin-kimi-k3-max",
+  "winner": "a",
+  "date": "2026-10-01",
+  "recorded_at": "2026-10-01T00:14:51+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max": {
+      "before": 1432,
+      "after": 1436,
+      "delta": 4
+    },
+    "devin-kimi-k3-max": {
+      "before": 1096,
+      "after": 1092,
+      "delta": -4
+    }
+  }
+}

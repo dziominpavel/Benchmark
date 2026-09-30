@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 260,
+  "task": "T-001",
+  "model_a": "opencode-mimo-v2-5-free",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "opencode-mimo-v2-5-free",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "b",
+  "date": "2026-10-01",
+  "recorded_at": "2026-10-01T00:17:23+03:00",
+  "elo": {
+    "opencode-mimo-v2-5-free": {
+      "before": 970,
+      "after": 966,
+      "delta": -4
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1333,
+      "after": 1337,
+      "delta": 4
+    }
+  }
+}

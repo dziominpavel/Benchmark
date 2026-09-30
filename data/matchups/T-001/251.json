@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 251,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "devin-glm-5-2-high",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "devin-glm-5-2-high",
+  "winner": "a",
+  "date": "2026-10-01",
+  "recorded_at": "2026-10-01T00:09:20+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1363,
+      "after": 1367,
+      "delta": 4
+    },
+    "devin-glm-5-2-high": {
+      "before": 1044,
+      "after": 1040,
+      "delta": -4
+    }
+  }
+}
