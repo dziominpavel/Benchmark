@@ -368,3 +368,139 @@ def format_confidence(games: int) -> str:
 
     w = confidence_half_width(games)
     return f"±{w}" if w is not None else "—"
+
+
+TREND_WINDOW = 5
+TREND_MIN_GAMES = TREND_WINDOW + 1
+STALE_GLOBAL_GAP = 30
+
+
+def _rank_positions(pool_ids: list[str], elo: dict[str, int]) -> dict[str, int]:
+    """Ранжирует пул: ELO по убыванию, затем id по возрастанию. Места с 1."""
+    ordered = sorted(pool_ids, key=lambda mid: (-elo.get(mid, DEFAULT_ELO), mid))
+    return {mid: i + 1 for i, mid in enumerate(ordered)}
+
+
+def compute_rank_trends(
+    elo_history: list[dict],
+    pool_ids: list[str],
+    current_elo: dict[str, int],
+    window: int = TREND_WINDOW,
+    stale_gap: int = STALE_GLOBAL_GAP,
+) -> dict[str, dict]:
+    """Считает динамику позиции d5 для видимого пула.
+
+    Для модели с k играми (k >= window + 1) база — ELO-срез сразу после
+    ее (k - window)-й личной игры; rank_then — ранг в том же пуле по срезу
+    (без игр на тот момент = 1200), rank_now — текущий ранг в пуле.
+    Дельта = rank_then - rank_now. При k < window + 1 базы нет.
+    Модель без личных игр в последних stale_gap глобальных вердиктах
+    считается застоявшейся: вместо стрелки нейтраль с пояснением.
+    """
+    pool = list(pool_ids)
+    pool_set = set(pool)
+    history = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
+
+    rank_now_map = _rank_positions(pool, current_elo)
+
+    personal: dict[str, list[int]] = {mid: [] for mid in pool}
+    for e in history:
+        seq = e.get("seq", 0)
+        a_id = e.get("model_a_id", "")
+        b_id = e.get("model_b_id", "")
+        if a_id in pool_set:
+            personal[a_id].append(seq)
+        if b_id in pool_set:
+            personal[b_id].append(seq)
+
+    baseline: dict[str, int] = {}
+    stale: set[str] = set()
+    max_seq = max((e.get("seq", 0) for e in history), default=0)
+    for mid in pool:
+        seqs = personal[mid]
+        if len(seqs) >= window + 1:
+            if history and max_seq - seqs[-1] >= stale_gap:
+                stale.add(mid)
+            else:
+                baseline[mid] = seqs[len(seqs) - window - 1]
+
+    snapshots: dict[int, dict[str, int]] = {}
+    for cut in sorted(set(baseline.values())):
+        snap: dict[str, int] = {mid: DEFAULT_ELO for mid in pool}
+        for e in history:
+            if e.get("seq", 0) > cut:
+                break
+            a_id = e.get("model_a_id", "")
+            b_id = e.get("model_b_id", "")
+            if a_id in pool_set:
+                snap[a_id] = e.get("elo_a", {}).get("after", snap[a_id])
+            if b_id in pool_set:
+                snap[b_id] = e.get("elo_b", {}).get("after", snap[b_id])
+        snapshots[cut] = snap
+
+    trends: dict[str, dict] = {}
+    for mid in pool:
+        rank_now = rank_now_map[mid]
+        if mid in stale:
+            gap = max_seq - personal[mid][-1]
+            trends[mid] = {
+                "delta": None,
+                "label": "–",
+                "arrow": "",
+                "num": "–",
+                "css": "history-delta-neutral",
+                "title": (
+                    f"без личных игр в последних {stale_gap} прогонах "
+                    f"(последняя: {gap} назад)"
+                ),
+                "rank_then": None,
+                "rank_now": rank_now,
+                "elo_delta": None,
+                "has_baseline": False,
+                "stale": True,
+            }
+            continue
+        if mid not in baseline:
+            trends[mid] = {
+                "delta": None,
+                "label": "–",
+                "arrow": "",
+                "num": "–",
+                "css": "history-delta-neutral",
+                "title": "мало игр для тренда: нужно 6+ личных игр",
+                "rank_then": None,
+                "rank_now": rank_now,
+                "elo_delta": None,
+                "has_baseline": False,
+            }
+            continue
+        cut = baseline[mid]
+        snap = snapshots[cut]
+        rank_then = _rank_positions(pool, snap)[mid]
+        delta = rank_then - rank_now
+        elo_delta = current_elo.get(mid, DEFAULT_ELO) - snap.get(mid, DEFAULT_ELO)
+        if delta > 0:
+            label, css = f"↑{delta}", "history-delta-up"
+            arrow, num = "↑", str(delta)
+        elif delta < 0:
+            label, css = f"↓{-delta}", "history-delta-down"
+            arrow, num = "↓", str(-delta)
+        else:
+            label, css = "=", "history-delta-neutral"
+            arrow, num = "", "="
+        trends[mid] = {
+            "delta": delta,
+            "label": label,
+            "arrow": arrow,
+            "num": num,
+            "css": css,
+            "title": (
+                f"5 личных игр · ΔELO {elo_delta:+d} · "
+                f"место {rank_then}→{rank_now}"
+            ),
+            "rank_then": rank_then,
+            "rank_now": rank_now,
+            "elo_delta": elo_delta,
+            "has_baseline": True,
+        }
+    return trends

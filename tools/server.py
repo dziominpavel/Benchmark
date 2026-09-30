@@ -47,7 +47,7 @@ from register_task import (
 
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
-    build_elo_distribution_svg,
+    build_elo_distribution_svg, compute_rank_trends,
 )
 
 from register_model import parse_existing, format_model
@@ -581,6 +581,12 @@ CSS = """
   }
   tbody tr:hover { background: #334155; }
   .rank { color: #64748b; font-weight: 600; }
+  .trend { font-size: 0.95rem; margin-left: 8px; white-space: nowrap; font-weight: 800; letter-spacing: 0.02em; }
+  .trend.history-delta-up, .trend.history-delta-down { padding: 1px 8px; border-radius: 6px; }
+  .trend.history-delta-up { background: rgba(52,211,153,.16); }
+  .trend.history-delta-down { background: rgba(248,113,113,.16); }
+  .trend-arrow { font-size: 1.3em; line-height: 1; font-weight: 800; }
+  .trend-num { font-size: 0.78em; font-weight: 700; margin-left: 3px; }
   .confidence { color: #64748b; font-size: 0.82rem; font-weight: 500; }
   .wld { font-weight: 600; }
   .w { color: #34d399; }
@@ -833,7 +839,7 @@ CSS = """
   }
   .status-active { background: #064e3b; color: #6ee7b7; }
   .status-archived { background: #475569; color: #cbd5e1; }
-  .status-warmup { background: #451a03; color: #fbbf24; opacity: 0.85; font-weight: 500; }
+  .status-warmup { background: #16a34a; color: #ffffff; font-weight: 700; }
   tr.archived td { opacity: 0.6; }
 
   /* Content grid */
@@ -1147,7 +1153,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
     <div class="stats">
       Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
-    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр</div>
+    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
     <form method="GET" action="/" class="filter-bar">
       <label for="filter">Показывать</label>
       <select name="filter" id="filter" onchange="this.form.submit()">
@@ -1181,7 +1187,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
             <tbody>
               {% for m in models_sorted %}
               <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and filter != 'inactive' }}">
-                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ loop.index }}</td>
+                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ loop.index }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
                   <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
                   {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
@@ -2208,7 +2214,7 @@ def leaderboard():
     else:
         models_sorted = list(models.values())
 
-    models_sorted.sort(key=lambda m: m.get("elo", DEFAULT_ELO), reverse=True)
+    models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
 
     # Для формы вердикта — только активные модели
     active_models = {
@@ -2245,8 +2251,7 @@ def leaderboard():
     # Топ-3 активных по ELO — для медалей; архивные — для секции
     top_active = sorted(
         (i for i in models.values() if is_model_active(i)),
-        key=lambda m: m.get("elo", DEFAULT_ELO),
-        reverse=True,
+        key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")),
     )
     medals = {info["id"]: rank for rank, info in enumerate(top_active[:3], start=1)}
     archived_list = sorted(
@@ -2254,6 +2259,21 @@ def leaderboard():
         key=lambda m: m.get("elo", DEFAULT_ELO),
         reverse=True,
     )
+
+    # Тренд позиций d5: оба конца в текущем видимом пуле,
+    # чтобы архивация не дергала чужие стрелки.
+    pool_ids = [m.get("id", "") for m in models_sorted]
+    current_elo = {m.get("id", ""): m.get("elo", DEFAULT_ELO) for m in models_sorted}
+    trends = compute_rank_trends(
+        index_data.get("elo_history", []), pool_ids, current_elo,
+    )
+    for m in models_sorted:
+        t = trends.get(m.get("id", ""), {})
+        m["trend_label"] = t.get("label", "–")
+        m["trend_arrow"] = t.get("arrow", "")
+        m["trend_num"] = t.get("num", "–")
+        m["trend_class"] = t.get("css", "history-delta-neutral")
+        m["trend_title"] = t.get("title", "")
 
     # Настройки: прогресс покрытия (settings/current_task/task_options уже выше)
     coverage = get_coverage(settings)
