@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 221,
+  "task": "T-001",
+  "model_a": "opencode-ling-3-0-flash-fin-free",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "opencode-ling-3-0-flash-fin-free",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T21:16:38+03:00",
+  "elo": {
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 1032,
+      "after": 1025,
+      "delta": -7
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1249,
+      "after": 1256,
+      "delta": 7
+    }
+  }
+}

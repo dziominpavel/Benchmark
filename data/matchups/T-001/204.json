@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 204,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-pro-max",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "devin-deepseek-v4-pro-max",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "a",
+  "date": "2026-09-28",
+  "recorded_at": "2026-09-28T22:38:33+03:00",
+  "elo": {
+    "devin-deepseek-v4-pro-max": {
+      "before": 1193,
+      "after": 1212,
+      "delta": 19
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1248,
+      "after": 1225,
+      "delta": -23
+    }
+  }
+}

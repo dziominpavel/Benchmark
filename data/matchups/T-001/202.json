@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 202,
+  "task": "T-001",
+  "model_a": "opencode-ling-3-0-flash-fin-free",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "opencode-ling-3-0-flash-fin-free",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "draw",
+  "date": "2026-09-28",
+  "recorded_at": "2026-09-28T22:27:39+03:00",
+  "elo": {
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 1057,
+      "after": 1058,
+      "delta": 1
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 1078,
+      "after": 1077,
+      "delta": -1
+    }
+  }
+}

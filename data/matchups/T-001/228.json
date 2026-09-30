@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 228,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "b",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T21:35:41+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1153,
+      "after": 1147,
+      "delta": -6
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1400,
+      "after": 1406,
+      "delta": 6
+    }
+  }
+}

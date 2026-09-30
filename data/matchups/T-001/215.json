@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 215,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "b",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T20:39:18+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1162,
+      "after": 1153,
+      "delta": -9
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1314,
+      "after": 1323,
+      "delta": 9
+    }
+  }
+}

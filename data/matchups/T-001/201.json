@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 201,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-09-28",
+  "recorded_at": "2026-09-28T22:24:06+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1078,
+      "after": 1095,
+      "delta": 17
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 1099,
+      "after": 1078,
+      "delta": -21
+    }
+  }
+}

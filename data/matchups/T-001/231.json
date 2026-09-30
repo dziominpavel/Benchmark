@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 231,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "cursor-fable-5-1-1m-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "cursor-fable-5-1-1m-max",
+  "winner": "b",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T21:36:22+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1079,
+      "after": 1073,
+      "delta": -6
+    },
+    "cursor-fable-5-1-1m-max": {
+      "before": 1352,
+      "after": 1358,
+      "delta": 6
+    }
+  }
+}

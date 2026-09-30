@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 197,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-pro-max",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "devin-deepseek-v4-pro-max",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-09-28",
+  "recorded_at": "2026-09-28T22:02:23+03:00",
+  "elo": {
+    "devin-deepseek-v4-pro-max": {
+      "before": 1177,
+      "after": 1193,
+      "delta": 16
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 1179,
+      "after": 1159,
+      "delta": -20
+    }
+  }
+}

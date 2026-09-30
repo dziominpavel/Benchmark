@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 211,
+  "task": "T-001",
+  "model_a": "devin-swe-2-max",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "devin-swe-2-max",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-09-30",
+  "recorded_at": "2026-09-30T00:07:19+03:00",
+  "elo": {
+    "devin-swe-2-max": {
+      "before": 1186,
+      "after": 1197,
+      "delta": 11
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 1062,
+      "after": 1049,
+      "delta": -13
+    }
+  }
+}

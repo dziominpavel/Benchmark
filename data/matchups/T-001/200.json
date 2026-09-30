@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 200,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-09-28",
+  "recorded_at": "2026-09-28T22:20:20+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1108,
+      "after": 1125,
+      "delta": 17
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 1120,
+      "after": 1099,
+      "delta": -21
+    }
+  }
+}

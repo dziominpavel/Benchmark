@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 210,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-space-bunny-free-max",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-space-bunny-free-max",
+  "winner": "b",
+  "date": "2026-09-29",
+  "recorded_at": "2026-09-29T00:21:32+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1125,
+      "after": 1114,
+      "delta": -11
+    },
+    "opencode-space-bunny-free-max": {
+      "before": 1239,
+      "after": 1250,
+      "delta": 11
+    }
+  }
+}

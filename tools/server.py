@@ -1260,7 +1260,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
               <select name="model_a" id="modelA" onchange="validate()">
                 <option value="">— выбрать —</option>
                 {% for mid, mname in models_list %}
-                <option value="{{ mid }}">{{ mname }}</option>
+                <option value="{{ mid }}" {% if mid == pre_a %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -1269,7 +1269,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
               <select name="model_b" id="modelB" onchange="validate()">
                 <option value="">— выбрать —</option>
                 {% for mid, mname in models_list %}
-                <option value="{{ mid }}">{{ mname }}</option>
+                <option value="{{ mid }}" {% if mid == pre_b %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -1278,7 +1278,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
               <select name="task" id="taskField" onchange="validate()" required>
                 <option value="">— выбрать —</option>
                 {% for t in task_options %}
-                <option value="{{ t }}" {% if t == current_task %}selected{% endif %}>{{ t }}</option>
+                <option value="{{ t }}" {% if t == (pre_task or current_task) %}selected{% endif %}>{{ t }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -1316,6 +1316,7 @@ function usePair(a, b, task) {
   document.getElementById('taskField').value = task;
   validate();
 }
+validate();
 </script>
 </body>
 </html>
@@ -2218,6 +2219,24 @@ def leaderboard():
         key=lambda x: x[1].lower(),
     )
 
+    # Настройки нужны раньше — для валидации предзаполнения.
+    settings = load_settings()
+    task_options = active_tasks(settings)
+    current_task = resolve_current_task(settings)
+
+    # Предзаполнение формы вердикта из query (?model_a=&model_b=&task=,
+    # короткие алиасы ?a=&b=). Невалидные id/таск игнорируются.
+    pre_a = (request.args.get("model_a") or request.args.get("a") or "").strip()
+    pre_b = (request.args.get("model_b") or request.args.get("b") or "").strip()
+    pre_task = (request.args.get("task") or "").strip()
+    if pre_a not in active_models:
+        pre_a = ""
+    if pre_b not in active_models:
+        pre_b = ""
+    if pre_a and pre_a == pre_b:
+        pre_a, pre_b = "", ""
+    if pre_task not in task_options:
+        pre_task = ""
     # Рекомендации пар (+ строка-обоснование для отображения)
     recommendations = get_recommendations(index_data, top_n=1)
     for rec in recommendations:
@@ -2236,10 +2255,7 @@ def leaderboard():
         reverse=True,
     )
 
-    # Настройки: текущая таска и прогресс покрытия
-    settings = load_settings()
-    current_task = resolve_current_task(settings)
-    task_options = active_tasks(settings)
+    # Настройки: прогресс покрытия (settings/current_task/task_options уже выше)
     coverage = get_coverage(settings)
     coverage_pct = None
     coverage_done = False
@@ -2269,6 +2285,9 @@ def leaderboard():
         medal_icons=["🥇", "🥈", "🥉"],
         archived_list=archived_list,
         current_task=current_task,
+        pre_a=pre_a,
+        pre_b=pre_b,
+        pre_task=pre_task,
         task_options=task_options,
         coverage=coverage,
         coverage_pct=coverage_pct,
