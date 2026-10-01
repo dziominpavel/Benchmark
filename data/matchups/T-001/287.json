@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 287,
+  "task": "T-001",
+  "model_a": "opencode-fledge-alpha-free",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "opencode-fledge-alpha-free",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:30:25+03:00",
+  "elo": {
+    "opencode-fledge-alpha-free": {
+      "before": 1114,
+      "after": 1124,
+      "delta": 10
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 978,
+      "after": 968,
+      "delta": -10
+    }
+  }
+}

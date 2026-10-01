@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 266,
+  "task": "T-001",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "devin-glm-5-2-high",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:16:07+03:00",
+  "elo": {
+    "devin-glm-5-2-high": {
+      "before": 1040,
+      "after": 1037,
+      "delta": -3
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1426,
+      "after": 1429,
+      "delta": 3
+    }
+  }
+}

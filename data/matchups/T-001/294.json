@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 294,
+  "task": "T-001",
+  "model_a": "cursor-fable-5-1-1m-max",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "cursor-fable-5-1-1m-max",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:42:31+03:00",
+  "elo": {
+    "cursor-fable-5-1-1m-max": {
+      "before": 1376,
+      "after": 1382,
+      "delta": 6
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1112,
+      "after": 1106,
+      "delta": -6
+    }
+  }
+}

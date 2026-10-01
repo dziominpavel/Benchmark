@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 272,
+  "task": "T-001",
+  "model_a": "opencode-grok-4-7-xhigh",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "opencode-grok-4-7-xhigh",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:17:29+03:00",
+  "elo": {
+    "opencode-grok-4-7-xhigh": {
+      "before": 1429,
+      "after": 1431,
+      "delta": 2
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 980,
+      "after": 978,
+      "delta": -2
+    }
+  }
+}

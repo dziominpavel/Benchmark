@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 292,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max-2",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "devin-gpt-6-astra-max-2",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:31:18+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max-2": {
+      "before": 1351,
+      "after": 1358,
+      "delta": 7
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1126,
+      "after": 1119,
+      "delta": -7
+    }
+  }
+}

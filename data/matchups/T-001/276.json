@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 276,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:24:01+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1147,
+      "after": 1163,
+      "delta": 16
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1139,
+      "after": 1119,
+      "delta": -20
+    }
+  }
+}

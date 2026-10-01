@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 263,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "opencode-grok-4-7-xhigh",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "opencode-grok-4-7-xhigh",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:15:42+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1055,
+      "after": 1052,
+      "delta": -3
+    },
+    "opencode-grok-4-7-xhigh": {
+      "before": 1423,
+      "after": 1426,
+      "delta": 3
+    }
+  }
+}

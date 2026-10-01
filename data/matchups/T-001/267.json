@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 267,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "devin-gpt-6-astra-max",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "devin-gpt-6-astra-max",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:16:16+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1052,
+      "after": 1049,
+      "delta": -3
+    },
+    "devin-gpt-6-astra-max": {
+      "before": 1439,
+      "after": 1442,
+      "delta": 3
+    }
+  }
+}

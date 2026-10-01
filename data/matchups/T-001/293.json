@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 293,
+  "task": "T-001",
+  "model_a": "devin-gpt-5-6-sol-max",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "devin-gpt-5-6-sol-max",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:42:31+03:00",
+  "elo": {
+    "devin-gpt-5-6-sol-max": {
+      "before": 1356,
+      "after": 1363,
+      "delta": 7
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1119,
+      "after": 1112,
+      "delta": -7
+    }
+  }
+}

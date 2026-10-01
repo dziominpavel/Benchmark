@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 291,
+  "task": "T-001",
+  "model_a": "opencode-fledge-alpha-free",
+  "model_b": "opencode-mimo-v2-6-flash-free",
+  "model_a_id": "opencode-fledge-alpha-free",
+  "model_b_id": "opencode-mimo-v2-6-flash-free",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:31:08+03:00",
+  "elo": {
+    "opencode-fledge-alpha-free": {
+      "before": 1134,
+      "after": 1126,
+      "delta": -8
+    },
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1337,
+      "after": 1345,
+      "delta": 8
+    }
+  }
+}

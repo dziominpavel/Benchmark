@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 274,
+  "task": "T-001",
+  "model_a": "devin-swe-1-7-max",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "devin-swe-1-7-max",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:23:54+03:00",
+  "elo": {
+    "devin-swe-1-7-max": {
+      "before": 1164,
+      "after": 1181,
+      "delta": 17
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1180,
+      "after": 1159,
+      "delta": -21
+    }
+  }
+}

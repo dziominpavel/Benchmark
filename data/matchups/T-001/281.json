@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 281,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "opencode-fledge-alpha-free",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "opencode-fledge-alpha-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:24:10+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1254,
+      "after": 1262,
+      "delta": 8
+    },
+    "opencode-fledge-alpha-free": {
+      "before": 1066,
+      "after": 1056,
+      "delta": -10
+    }
+  }
+}

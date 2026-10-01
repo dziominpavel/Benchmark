@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 298,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "devin-gpt-6-astra-max",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T00:42:45+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max": {
+      "before": 1449,
+      "after": 1451,
+      "delta": 2
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 968,
+      "after": 966,
+      "delta": -2
+    }
+  }
+}
