@@ -269,11 +269,6 @@
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
       "matchups_count": 326
-    },
-    "T-002": {
-      "slug": "T-002-hours-bridge-audit",
-      "title": "Deep Bug Hunt — hours-bridge: корректность и отказоустойчивость",
-      "matchups_count": 0
     }
   },
   "matchups_summary": {
