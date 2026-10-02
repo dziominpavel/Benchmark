@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 322,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "opencode-ling-3-1-flash-free",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "opencode-ling-3-1-flash-free",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T20:41:09+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1035,
+      "after": 1028,
+      "delta": -7
+    },
+    "opencode-ling-3-1-flash-free": {
+      "before": 1263,
+      "after": 1270,
+      "delta": 7
+    }
+  }
+}

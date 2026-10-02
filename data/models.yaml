@@ -127,6 +127,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: opencode-ling-3-1-flash-free
+    name: "OpenCode Ling 3.1 Flash Free"
+    provider: 
+    version: 
+    status: active
   - id: opencode-longcat-2-5-preview-free
     name: "OpenCode LongCat 2.5 Preview Free"
     provider: 

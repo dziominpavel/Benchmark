@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 309,
+  "task": "T-001",
+  "model_a": "devin-swe-1-7-max",
+  "model_b": "opencode-ling-3-1-flash-free",
+  "model_a_id": "devin-swe-1-7-max",
+  "model_b_id": "opencode-ling-3-1-flash-free",
+  "winner": "b",
+  "date": "2026-10-02",
+  "recorded_at": "2026-10-02T20:35:32+03:00",
+  "elo": {
+    "devin-swe-1-7-max": {
+      "before": 1181,
+      "after": 1169,
+      "delta": -12
+    },
+    "opencode-ling-3-1-flash-free": {
+      "before": 1259,
+      "after": 1275,
+      "delta": 16
+    }
+  }
+}
