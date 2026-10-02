@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmark — ELO-рейтинг LLM-моделей</title>
+  <meta name="description" content="Таблица ELO-рейтинга языковых моделей, динамика рейтингов и лента последних прогонов: статическая страница результатов Benchmark.">
+  <meta property="og:title" content="Benchmark — ELO-рейтинг LLM-моделей">
+  <meta property="og:description" content="Таблица ELO-рейтинга языковых моделей, динамика рейтингов и лента последних прогонов.">
+  <meta property="og:type" content="website">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0a0b10">
+  <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+  <script src="../../static/js/theme.js"></script>
+  <link rel="stylesheet" href="../../static/css/style.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="../../"><span class="brand-mark" aria-hidden="true">М</span>Мои приложения</a>
+      <nav class="site-nav" aria-label="Навигация">
+        <a href="../../">Главная</a>
+        <a href="../../about/">О проекте</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Переключить тему" title="Переключить тему">
+          <svg class="tt-icon tt-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="tt-icon tt-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main class="site-main">
+    <section class="hero">
+      <div class="hero-text">
+        <h1>Benchmark</h1>
+        <p class="lead">ELO-рейтинг языковых моделей по итогам прогонов: таблица лидеров, динамика рейтингов и лента последних матчей. Только чтение, данные — index.json репозитория.</p>
+      </div>
+      <ul class="hero-stats" id="bm-stats" aria-label="Ключевые числа">
+        <li><strong class="stat-num">…</strong><span class="stat-label">моделей</span></li>
+        <li><strong class="stat-num">…</strong><span class="stat-label">прогонов</span></li>
+        <li><strong class="stat-num">…</strong><span class="stat-label">обновлено</span></li>
+      </ul>
+    </section>
+
+    <section class="bm-section">
+      <div class="bm-head">
+        <h2>ELO-рейтинг</h2>
+        <p class="bm-hint">Сортировка по рейтингу; В-Н-П — победы, ничьи, поражения.</p>
+      </div>
+      <p class="bm-loading" id="bm-loading">Загрузка данных…</p>
+      <div class="bm-table-wrap">
+        <table class="bm-table">
+          <thead>
+            <tr><th class="bm-rank">#</th><th>Модель</th><th>Провайдер</th><th class="num">Рейтинг</th><th class="num">В-Н-П</th><th class="num">Игры</th></tr>
+          </thead>
+          <tbody id="bm-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="bm-section">
+      <div class="bm-head">
+        <h2>Динамика рейтингов</h2>
+        <p class="bm-hint">Топ-6 моделей, построено по истории всех прогонов.</p>
+      </div>
+      <div class="bm-chart" id="bm-chart"></div>
+      <ul class="bm-legend" id="bm-legend"></ul>
+    </section>
+
+    <section class="bm-section">
+      <div class="bm-head">
+        <h2>Последние прогоны</h2>
+        <p class="bm-hint">Даты, участники и дельты рейтинга.</p>
+      </div>
+      <ol class="bm-feed" id="bm-feed"></ol>
+    </section>
+
+    <section class="bm-section">
+      <div class="bm-head">
+        <h2>Сводка</h2>
+      </div>
+      <dl class="bm-summary" id="bm-summary"></dl>
+      <p class="bm-error" id="bm-error" hidden></p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <p>Бесплатный каталог · <a href="../../about/">О проекте</a> · <a href="../../">Главная</a></p>
+  </footer>
+  <script src="app.js" defer></script>
+</body>
+</html>

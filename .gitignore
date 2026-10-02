@@ -30,3 +30,6 @@ data/logs/*.pid
 
 # Benchmark answers (modelA/modelB outputs stay local, _TEMPLATE.md tracked)
 data/answers/*/
+
+# Тестовая копия данных для локального просмотра web/ (боевую копию кладёт сборка витрины)
+web/index.json
