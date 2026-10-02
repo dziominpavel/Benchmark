@@ -28,7 +28,7 @@
 
 .bm-error {
   margin-top: var(--sp-4, 16px);
-  color: var(--neg, #f87171);
+  color: #f87171;
   font-size: var(--fs-sm, 14px);
 }
 
@@ -165,8 +165,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.bm-delta.pos { color: var(--pos, #3ddc84); }
-.bm-delta.neg { color: var(--neg, #f87171); }
+.bm-delta.pos { color: var(--android, #3ddc84); }
+.bm-delta.neg { color: #f87171; }
+
+/* На светлой теме светлые красный/зелёный не дают контраста 4.5:1. */
+[data-theme='light'] .bm-delta.neg,
+[data-theme='light'] .bm-error { color: #b91c1c; }
 
 /* Сводка */
 .bm-summary {
