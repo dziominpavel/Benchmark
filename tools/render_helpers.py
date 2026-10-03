@@ -140,6 +140,14 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
         "draws": info.get("draws", 0),
         "winrate": format_winrate(info.get("wins", 0), games),
         "points": points,
+        "date_first": (
+            (mine[0].get("date") or mine[0].get("recorded_at", ""))[:10]
+            if mine else ""
+        ),
+        "date_last": (
+            (mine[-1].get("date") or mine[-1].get("recorded_at", ""))[:10]
+            if mine else ""
+        ),
         "h2h": h2h_list,
         "history": history,
     }
@@ -197,22 +205,38 @@ def format_elo_history(history: list[dict], name_map: dict) -> list[dict]:
     return items
 
 
-def build_elo_svg(points: list[int], width: int = 860, height: int = 220) -> str:
+def _fmt_axis_date(ts: str) -> str:
+    """'YYYY-MM-DD...' → 'DD.MM.YYYY'; иначе — исходная строка."""
+    ts = (ts or "").strip()
+    if len(ts) >= 10 and ts[4] == "-" and ts[7] == "-":
+        return f"{ts[8:10]}.{ts[5:7]}.{ts[0:4]}"
+    return ts
+
+
+def build_elo_svg(
+    points: list[int],
+    dates: tuple[str, str] | None = None,
+    width: int = 860,
+    height: int = 220,
+) -> str:
     """Строит SVG-график динамики ELO из точек (старт + after каждого матча).
 
-    Пустой список или одна точка без истории ([1200]) → заглушка
-    «Нет матчей». Подписывает минимум, максимум и текущее значение.
+    Пустой список или одна точка без истории ([1200]) → заглушка «Нет матчей».
+    Ось X подписана датами первой и последней точки (dates); пунктирная линия
+    на уровне 1200 — старт. min/max — цветные метки на линии, текущее значение
+    и период — в HTML-легенде под графиком (без вложенных SVG-подписей).
     """
     if len(points) < 2:
         return '<div class="chart-empty">Нет матчей</div>'
 
     lo, hi = min(points), max(points)
+    lo, hi = min(lo, DEFAULT_ELO), max(hi, DEFAULT_ELO)
     if lo == hi:
         lo, hi = lo - 10, hi + 10
     pad = (hi - lo) * 0.1 or 10
     lo, hi = lo - pad, hi + pad
 
-    left, right, top, bottom = 56, 16, 18, 28
+    left, right, top, bottom = 56, 16, 18, 34
     plot_w = width - left - right
     plot_h = height - top - bottom
     n = len(points)
@@ -238,6 +262,30 @@ def build_elo_svg(points: list[int], width: int = 860, height: int = 220) -> str
             f'class="chart-tick">{label:.0f}</text>'
         )
 
+    # старт 1200 — пунктиром (диапазон оси всегда включает 1200)
+    baseline_y = y(DEFAULT_ELO)
+    baseline = (
+        f'<line x1="{left}" y1="{baseline_y:.1f}" x2="{width - right}" '
+        f'y2="{baseline_y:.1f}" class="chart-baseline">'
+        f"<title>старт: {DEFAULT_ELO}</title></line>"
+    )
+
+    # подписи дат на оси X (первая и последняя)
+    axis = ""
+    if dates:
+        d_first = _fmt_axis_date(dates[0])
+        d_last = _fmt_axis_date(dates[1])
+        if d_first:
+            axis += (
+                f'<text x="{left}" y="{height - 8}" text-anchor="start" '
+                f'class="chart-tick">{html.escape(d_first)}</text>'
+            )
+        if d_last:
+            axis += (
+                f'<text x="{width - right}" y="{height - 8}" text-anchor="end" '
+                f'class="chart-tick">{html.escape(d_last)}</text>'
+            )
+
     extremes = [
         (points.index(min(points)), min(points), "min"),
         (points.index(max(points)), max(points), "max"),
@@ -247,17 +295,31 @@ def build_elo_svg(points: list[int], width: int = 860, height: int = 220) -> str
         f'class="chart-mark chart-{kind}">{v}</text>'
         for i, v, kind in extremes
     )
-    current = (
-        f'<text x="{x(n - 1):.1f}" y="{y(points[-1]) + 18:.1f}" '
-        f'text-anchor="middle" class="chart-mark chart-current">'
-        f'текущий: {points[-1]}</text>'
-    )
-    return (
-        f'<svg viewBox="0 0 {width} {height}" class="chart" role="img">'
-        f"{grid}"
+
+    svg = (
+        f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
+        f'aria-label="Динамика ELO: {n} точек">'
+        f"{grid}{baseline}"
         f'<polyline points="{poly}" class="chart-line" fill="none"/>'
-        f"{dots}{marks}{current}</svg>"
+        f"{dots}{marks}{axis}</svg>"
     )
+
+    legend_parts = []
+    if dates:
+        d_first = _fmt_axis_date(dates[0])
+        d_last = _fmt_axis_date(dates[1])
+        if d_first and d_last:
+            legend_parts.append(f"период <b>{d_first} — {d_last}</b>")
+    legend_parts.append(f"старт <b>{DEFAULT_ELO}</b>")
+    legend_parts.append(f"мин <b>{min(points)}</b>")
+    legend_parts.append(f"макс <b>{max(points)}</b>")
+    legend_parts.append(f"текущий <b>{points[-1]}</b>")
+    legend = (
+        '<div class="chart-legend">'
+        + "".join(f"<span>{p}</span>" for p in legend_parts)
+        + "</div>"
+    )
+    return svg + legend
 
 
 def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
@@ -284,7 +346,10 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
     lo, hi = lo - pad, hi + pad
 
     row_h, bar_h = 30, 18
-    left, right, top, bottom = 220, 56, 44, 34
+    # поле слева — под самое длинное имя (без обрезки на 30 символах)
+    max_name = max((len(str(p.get("name", ""))) for p in pts), default=0)
+    left = max(220, min(420, int(max_name * 7.2) + 24))
+    right, top, bottom = 56, 44, 34
     height = top + n * row_h + bottom
     plot_w = width - left - right
     rows_bottom = top + n * row_h
@@ -298,15 +363,13 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
         cls = "dist-pt-below" if v < DEFAULT_ELO else "dist-pt-above"
         cy = top + i * row_h + row_h / 2
         tip = html.escape(f'{p.get("name", "")} · {v} · игр: {p.get("games", 0)}')
-        label = str(p.get("name", ""))
-        if len(label) > 30:
-            label = label[:29] + "…"
+        label = html.escape(str(p.get("name", "")))
         bars += (
             f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
             f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" class="{cls}">'
             f"<title>{tip}</title></rect>"
             f'<text x="{left - 8}" y="{cy + 4:.1f}" text-anchor="end" '
-            f'class="dist-name">{html.escape(label)}<title>{tip}</title></text>'
+            f'class="dist-name">{label}<title>{tip}</title></text>'
             f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
             f'class="dist-value">{v}</text>'
         )

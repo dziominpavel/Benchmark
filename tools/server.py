@@ -489,643 +489,11 @@ def format_reason(rec: dict) -> str:
     )
 
 
-# ─── HTML: shared CSS ───────────────────────────────────────────────
-
-CSS = """
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-    background: #0f172a;
-    color: #e2e8f0;
-    line-height: 1.5;
-  }
-  .page {
-    width: 100%;
-    max-width: 100%;
-    margin: 0 auto;
-    padding: 24px 4%;
-  }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-  }
-  .header h1 {
-    font-size: 1.6rem;
-    color: #f1f5f9;
-    font-weight: 700;
-  }
-  .btn {
-    display: inline-block;
-    padding: 10px 22px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 0.15s;
-  }
-  .btn-primary { background: #6366f1; color: white; }
-  .btn-primary:hover { background: #818cf8; }
-  .btn-secondary { background: #334155; color: #cbd5e1; }
-  .btn-secondary:hover { background: #475569; }
-  .btn-win { background: #10b981; color: white; }
-  .btn-win:hover { background: #34d399; }
-  .btn-lose { background: #ef4444; color: white; }
-  .btn-lose:hover { background: #f87171; }
-  .btn-draw { background: #475569; color: #e2e8f0; }
-  .btn-draw:hover { background: #64748b; }
-  .btn:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
-  .card {
-    background: #1e293b;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    border: 1px solid #334155;
-  }
-  .card h2 {
-    font-size: 1.15rem;
-    color: #f1f5f9;
-    margin-bottom: 16px;
-    font-weight: 600;
-  }
-  .stats {
-    color: #64748b;
-    font-size: 0.85rem;
-    margin-bottom: 12px;
-  }
-  .controls {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    padding: 12px 14px;
-    text-align: left;
-    border-bottom: 1px solid #334155;
-  }
-  th {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  tbody tr:hover { background: #334155; }
-  .rank { color: #64748b; font-weight: 600; }
-  .trend { font-size: 0.95rem; margin-left: 8px; white-space: nowrap; font-weight: 800; letter-spacing: 0.02em; }
-  .trend.history-delta-up, .trend.history-delta-down { padding: 1px 8px; border-radius: 6px; }
-  .trend.history-delta-up { background: rgba(52,211,153,.16); }
-  .trend.history-delta-down { background: rgba(248,113,113,.16); }
-  .trend-arrow { font-size: 1.3em; line-height: 1; font-weight: 800; }
-  .trend-num { font-size: 0.78em; font-weight: 700; margin-left: 3px; }
-  .confidence { color: #64748b; font-size: 0.82rem; font-weight: 500; }
-  .wld { font-weight: 600; }
-  .w { color: #34d399; }
-  .l { color: #f87171; }
-  .d { color: #94a3b8; }
-  .form-group { margin-bottom: 16px; }
-  .form-group label {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #94a3b8;
-    margin-bottom: 6px;
-  }
-  .form-group select, .form-group input[type="text"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #475569;
-    border-radius: 8px;
-    font-size: 1rem;
-    color: #e2e8f0;
-    background: #0f172a;
-  }
-  .form-group select:focus, .form-group input[type="text"]:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
-  }
-  .verdict-row {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .verdict-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .verdict-actions .btn { flex: 1 1 0; min-width: 0; text-align: center; padding: 12px; }
-  .alert {
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .alert-error { background: #7f1d1d; color: #fca5a5; }
-  .alert-success { background: #064e3b; color: #6ee7b7; }
-  .history-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid #334155;
-    font-size: 0.9rem;
-  }
-  .history-item:last-child { border-bottom: none; }
-  .history-model { font-weight: 600; color: #e2e8f0; min-width: 140px; }
-  .history-elo { font-weight: 700; color: #f1f5f9; white-space: nowrap; }
-  .history-elo-arrow { color: #64748b; }
-  .history-delta-up { color: #34d399; font-weight: 600; }
-  .history-delta-down { color: #f87171; font-weight: 600; }
-  .history-delta-neutral { color: #64748b; }
-  .history-date { color: #64748b; font-size: 0.8rem; margin-left: auto; }
-  .empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    color: #64748b;
-    font-size: 0.95rem;
-  }
-  .add-form { max-width: 420px; }
-  .back-link {
-    display: inline-block;
-    margin-bottom: 20px;
-    color: #818cf8;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .back-link:hover { text-decoration: underline; color: #a5b4fc; }
-  .hint { color: #64748b; font-size: 0.85rem; margin-top: 8px; }
-  .rec-card {
-    background: #1e1b4b;
-    border: 1px solid #4338ca;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-  .rec-card h2 {
-    font-size: 1.15rem;
-    color: #a5b4fc;
-    margin-bottom: 14px;
-    font-weight: 600;
-  }
-  .rec-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 0 4px;
-    flex-wrap: wrap;
-  }
-  .rec-pair {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .rec-model {
-    font-weight: 600;
-    color: #e0e7ff;
-  }
-  .rec-elo {
-    font-size: 0.8rem;
-    color: #818cf8;
-    font-weight: 600;
-  }
-  .rec-vs {
-    color: #6366f1;
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-  .rec-h2h {
-    color: #a5b4fc;
-    font-size: 0.82rem;
-    margin-top: 4px;
-  }
-  .rec-reason {
-    color: #94a3b8;
-    font-size: 0.82rem;
-    margin-top: 2px;
-  }
-  .rec-task {
-    color: #94a3b8;
-    font-size: 0.82rem;
-    margin-top: 2px;
-  }
-  .rec-rematch {
-    color: #fbbf24;
-    font-size: 0.82rem;
-    margin-top: 2px;
-  }
-  .legend {
-    color: #64748b;
-    font-size: 0.8rem;
-    margin-top: 10px;
-  }
-  tr.top-1 td { background: rgba(52, 211, 153, 0.08); }
-  tr.top-2 td { background: rgba(129, 140, 248, 0.08); }
-  tr.top-3 td { background: rgba(251, 191, 36, 0.08); }
-  .medal { margin-right: 6px; }
-  .archived-section {
-    margin-top: 16px;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    padding: 12px 16px;
-    color: #94a3b8;
-    font-size: 0.85rem;
-  }
-  .archived-section summary { cursor: pointer; font-weight: 600; }
-  .archived-section ul { list-style: none; margin: 8px 0 0; padding: 0; }
-  .archived-section li {
-    padding: 4px 0;
-    border-bottom: 1px solid #1e293b;
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .detail-header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-  .detail-header h1 { margin: 0; }
-  .detail-elo { font-size: 1.4rem; font-weight: 700; color: #818cf8; }
-  .back-link { display: inline-block; color: #94a3b8; text-decoration: none; font-size: 0.9rem; margin-bottom: 16px; }
-  .back-link:hover { color: #e2e8f0; }
-  .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin: 20px 0 24px; }
-  .stat-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; text-align: center; }
-  .stat-card .stat-value { font-size: 1.25rem; font-weight: 700; }
-  .stat-card .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
-  .chart { width: 100%; height: auto; }
-  .chart-line { stroke: #818cf8; stroke-width: 2; }
-  .chart-dot { fill: #818cf8; }
-  .chart-grid { stroke: #1e293b; stroke-width: 1; }
-  .chart-tick { fill: #64748b; font-size: 12px; }
-  .chart-mark { fill: #94a3b8; font-size: 12px; font-weight: 600; }
-  .chart-empty { color: #64748b; padding: 24px; text-align: center; }
-  .dist-pt-below { fill: #f87171; }
-  .dist-pt-above { fill: #34d399; }
-  .dist-line-start { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 4; }
-  .dist-line-mean { stroke: #818cf8; stroke-width: 2; }
-  .dist-name { fill: #e2e8f0; font-size: 12px; }
-  .dist-value { fill: #94a3b8; font-size: 12px; }
-  .rec-info {
-    flex: 1;
-    min-width: 0;
-  }
-  .rec-btn {
-    padding: 8px 18px;
-    background: #6366f1;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .rec-btn:hover { background: #818cf8; }
-  .rec-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 6px;
-  }
-  .rec-header h2 { margin-bottom: 0; }
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  .filter-bar label {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-weight: 600;
-  }
-  .filter-bar select {
-    padding: 8px 12px;
-    border: 1px solid #475569;
-    border-radius: 8px;
-    background: #0f172a;
-    color: #e2e8f0;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .edit-link {
-    color: #e2e8f0;
-    text-decoration: none;
-    font-weight: 600;
-  }
-  .edit-link:hover { color: #818cf8; text-decoration: underline; }
-  .status-pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-left: 8px;
-  }
-  .status-active { background: #064e3b; color: #6ee7b7; }
-  .status-archived { background: #475569; color: #cbd5e1; }
-  .status-warmup { background: #16a34a; color: #ffffff; font-weight: 700; }
-  tr.archived td { opacity: 0.6; }
-
-  /* Content grid */
-  .content-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
-    grid-template-areas: "rating sidebar";
-    row-gap: 16px;
-    column-gap: 24px;
-    align-items: stretch;
-  }
-  .main-column { display: contents; }
-  .rating-card { grid-area: rating; }
-  .sidebar {
-    grid-area: sidebar;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    height: 100%;
-    min-width: 0;
-  }
-  .sidebar .card { margin-bottom: 0; }
-
-  /* Settings page */
-  .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 20px;
-    align-items: stretch;
-  }
-  .settings-grid .card {
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .settings-grid .card > form {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-  }
-  .card-actions {
-    margin-top: auto;
-    padding-top: 16px;
-  }
-  .tasks-table input[type="checkbox"],
-  .tasks-table input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  .tasks-table td { text-align: left; vertical-align: middle; }
-  .tasks-table .id-col { font-weight: 600; white-space: nowrap; padding-right: 12px; }
-  .tasks-table .title-col { width: 99%; white-space: normal; }
-  .tasks-table .title-col .status-pill { margin-left: 8px; white-space: nowrap; }
-  .tasks-table .actions-col { text-align: right; white-space: nowrap; padding-left: 12px; }
-
-  /* Settings page: раскрываемые группы моделей */
-  .model-groups > .model-row { border-bottom: 1px solid #334155; }
-  .model-groups > div.model-row,
-  .model-groups > details.model-row > summary {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 14px;
-  }
-  .model-groups summary { cursor: pointer; list-style: none; }
-  .model-groups summary::-webkit-details-marker { display: none; }
-  .model-groups summary:hover { background: #334155; }
-  .model-groups summary .mg-label::before {
-    content: "\\25B8";
-    display: inline-block;
-    margin-right: 6px;
-    color: #64748b;
-  }
-  .model-groups details[open] > summary .mg-label::before { content: "\\25BE"; }
-  .model-groups .model-list {
-    list-style: none;
-    margin: 0;
-    padding: 4px 14px 12px 28px;
-  }
-  .model-groups .model-list li {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 0;
-    border-bottom: 1px solid #334155;
-  }
-  .model-groups .model-list li:last-child { border-bottom: none; }
-  .model-groups .model-empty { color: #64748b; }
-
-  .table-wrap {
-    overflow-x: auto;
-    margin: 0 -24px;
-    padding: 0 24px;
-  }
-  .table-wrap table {
-    width: 100%;
-    min-width: 0;
-  }
-  .queue-wrap {
-    max-height: 420px;
-    overflow-y: auto;
-  }
-  th, td {
-    white-space: nowrap;
-  }
-  th:first-child, td:first-child {
-    padding-left: 24px;
-  }
-  th:last-child, td:last-child {
-    padding-right: 24px;
-  }
-  .model-cell, .model-cell .edit-link {
-    white-space: normal;
-  }
-  .model-cell .status-pill {
-    white-space: nowrap;
-  }
-  .flags-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-    font-size: 0.85rem;
-    color: #94a3b8;
-  }
-  .flags-bar label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .flags-table input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  .flags-table th, .flags-table td { text-align: center; }
-  .flags-table th:first-child, .flags-table td:first-child { text-align: left; }
-  .flags-table .col-btn {
-    padding: 2px 8px;
-    font-size: 0.75rem;
-  }
-
-
-  .pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-  }
-  .pagination a, .pagination span {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    min-width: 32px;
-    height: 32px;
-    padding: 0 8px;
-    border-radius: 6px;
-    background: #0f172a;
-    border: 1px solid #475569;
-    color: #e2e8f0;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-  .pagination a:hover { background: #334155; }
-  .pagination span.current { background: #6366f1; border-color: #6366f1; }
-  .pagination .disabled { opacity: 0.4; pointer-events: none; }
-
-  /* Progress status bar */
-  .progress-card {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    padding: 18px 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  }
-  .progress-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-  .progress-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .progress-pct {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f1f5f9;
-  }
-  .progress-track {
-    height: 12px;
-    background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 999px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #6366f1, #10b981);
-    transition: width 0.4s ease;
-    position: relative;
-  }
-  .progress-fill::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      -45deg,
-      rgba(255,255,255,0.15) 0 8px,
-      transparent 8px 16px
-    );
-    animation: progress-stripes 1.2s linear infinite;
-  }
-  @keyframes progress-stripes {
-    from { background-position: 0 0; }
-    to { background-position: 22.63px 0; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .progress-fill::after { animation: none; }
-    .progress-fill { transition: none; }
-  }
-  .progress-meta {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-    font-size: 0.85rem;
-    color: #94a3b8;
-  }
-  .progress-card--empty .progress-pct { color: #64748b; }
-  .progress-card--empty .progress-track { opacity: 0.5; }
-  .progress-card--done .progress-fill { background: #10b981; }
-  .progress-card--done .progress-fill::after { display: none; }
-  .progress-card--done .progress-pct { color: #34d399; }
-
-  /* Responsive */
-  @media (max-width: 900px) {
-    .content-grid {
-      grid-template-columns: 1fr;
-      grid-template-areas: "rating" "sidebar";
-    }
-    .page { padding: 16px; }
-    .table-wrap { margin: 0 -16px; padding: 0 16px; }
-    th:first-child, td:first-child { padding-left: 16px; }
-    th:last-child, td:last-child { padding-right: 16px; }
-  }
-"""
-
-
 # ─── HTML: Leaderboard page ─────────────────────────────────────────
 
-INDEX_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<div class="page">
-  <div class="header">
-    <h1>ELO Benchmark</h1>
-    <div style="display:flex;gap:12px;align-items:center;">
-      <a href="/stats" class="btn btn-secondary">Аналитика</a>
-      <a href="/history" class="btn btn-secondary">История</a>
-      <a href="/settings" class="btn btn-primary">Настройки</a>
-    </div>
-  </div>
-
+INDEX_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}ELO Benchmark{% endblock %}
+{% block content %}
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
   {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
@@ -1303,7 +671,6 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
   </div>
-</div>
 
 <script>
 function validate() {
@@ -1324,25 +691,15 @@ function usePair(a, b, task) {
 }
 validate();
 </script>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: History page ─────────────────────────────────────────────
 
-HISTORY_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>История — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<div class="page">
-  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
-
+HISTORY_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}История — ELO Benchmark{% endblock %}
+{% block content %}
   <div class="header">
     <h1>История ELO</h1>
   </div>
@@ -1358,7 +715,7 @@ HISTORY_TEMPLATE = """<!DOCTYPE html>
         <option value="{{ m.id }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
         {% endfor %}
       </select>
-      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+      <label class="check-label">
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
         Включать неактивные
       </label>
@@ -1366,7 +723,7 @@ HISTORY_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
-    <h2 style="display:none;">История</h2>
+    <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
     <div class="history-item">
@@ -1390,26 +747,15 @@ HISTORY_TEMPLATE = """<!DOCTYPE html>
     <div class="empty-state">Нет истории</div>
     {% endif %}
   </div>
-</div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Model page ─────────────────────────────────────────────
 
-MODEL_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ detail.name }} — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<div class="page">
-  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
-
+MODEL_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}{{ detail.name }} — ELO Benchmark{% endblock %}
+{% block content %}
   <div class="detail-header">
     <h1>{{ detail.name }}</h1>
     <span class="detail-elo">{{ detail.elo }}</span>
@@ -1487,26 +833,15 @@ MODEL_TEMPLATE = """<!DOCTYPE html>
     <div class="empty-state">Пока нет матчей</div>
     {% endif %}
   </div>
-</div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Stats page ─────────────────────────────────────────────
 
-STATS_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Аналитика — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<div class="page">
-  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
-
+STATS_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Аналитика — ELO Benchmark{% endblock %}
+{% block content %}
   <div class="header">
     <h1>Аналитика</h1>
   </div>
@@ -1523,25 +858,15 @@ STATS_TEMPLATE = """<!DOCTYPE html>
     </form>
     {{ chart_svg|safe }}
   </div>
-</div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Add model page ───────────────────────────────────────────
 
-ADD_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Добавить модель — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<a href="/" class="back-link">&larr; Назад к рейтингу</a>
-
+ADD_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Добавить модель — ELO Benchmark{% endblock %}
+{% block content %}
 <div class="header">
   <h1>Добавить модель</h1>
 </div>
@@ -1556,7 +881,7 @@ ADD_TEMPLATE = """<!DOCTYPE html>
       <input type="text" name="name" required placeholder="Например: GPT-4o" autofocus>
     </div>
     <div class="hint">Стартовый ELO: {{ default_elo }}</div>
-    <div style="margin-top:16px;">
+    <div class="form-actions">
       <button type="submit" class="btn btn-primary">Добавить</button>
     </div>
   </form>
@@ -1577,31 +902,22 @@ ADD_TEMPLATE = """<!DOCTYPE html>
         </td>
         <td>{{ elo }}</td>
         <td>{{ games }}</td>
-        <td><a href="/edit/{{ mid }}" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">Изменить</a></td>
+        <td><a href="/edit/{{ mid }}" class="btn btn-secondary btn-sm">Изменить</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% endif %}
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Edit model page ──────────────────────────────────────────
 
-EDIT_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Редактировать модель — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<a href="/model/{{ model.id }}" class="back-link">&larr; Назад к модели</a>
-
+EDIT_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Редактировать модель — ELO Benchmark{% endblock %}
+{% block content %}
 <div class="header">
   <h1>Редактировать модель</h1>
 </div>
@@ -1627,30 +943,21 @@ EDIT_TEMPLATE = """<!DOCTYPE html>
         <option value="archived" {% if model.status == 'archived' %}selected{% endif %}>Неактивна (архив)</option>
       </select>
     </div>
-    <div style="margin-top:16px;">
+    <div class="form-actions">
       <button type="submit" class="btn btn-primary">Сохранить</button>
-      <a href="/model/{{ model.id }}" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+      <a href="/model/{{ model.id }}" class="btn btn-secondary ms-2">Отмена</a>
     </div>
   </form>
 </div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Add task page ────────────────────────────────────────────
 
-ADD_TASK_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Добавить таску — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<a href="/settings" class="back-link">&larr; Назад к настройкам</a>
-
+ADD_TASK_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Добавить таску — ELO Benchmark{% endblock %}
+{% block content %}
 <div class="header">
   <h1>Добавить таску</h1>
 </div>
@@ -1677,30 +984,21 @@ ADD_TASK_TEMPLATE = """<!DOCTYPE html>
       <label>Baseline commit (опц.)</label>
       <input type="text" name="baseline" placeholder="abc1234...">
     </div>
-    <div style="margin-top:16px;">
+    <div class="form-actions">
       <button type="submit" class="btn btn-primary">Добавить</button>
-      <a href="/settings" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+      <a href="/settings" class="btn btn-secondary ms-2">Отмена</a>
     </div>
   </form>
 </div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Edit task page ───────────────────────────────────────────
 
-EDIT_TASK_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Редактировать таску — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<a href="/settings" class="back-link">&larr; Назад к настройкам</a>
-
+EDIT_TASK_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Редактировать таску — ELO Benchmark{% endblock %}
+{% block content %}
 <div class="header">
   <h1>Редактировать таску {{ task.id }}</h1>
 </div>
@@ -1711,7 +1009,7 @@ EDIT_TASK_TEMPLATE = """<!DOCTYPE html>
 <div class="card add-form">
   <form method="POST" action="/edit_task/{{ task.id }}">
     <input type="hidden" name="id" value="{{ task.id }}">
-    <div class="hint" style="margin-bottom:16px;">
+    <div class="hint hint--mb">
       Обязательны только <strong>название</strong> и <strong>описание</strong>.
       Проект и baseline_commit — опциональны, нужны skills прогонов.
     </div>
@@ -1721,11 +1019,11 @@ EDIT_TASK_TEMPLATE = """<!DOCTYPE html>
     </div>
     <div class="form-group">
       <label>Описание и критерии (Markdown)</label>
-      <textarea name="body" rows="12" style="width:100%;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:1rem;color:#e2e8f0;background:#0f172a;">{{ task.body }}</textarea>
+      <textarea name="body" rows="12">{{ task.body }}</textarea>
     </div>
-    <details class="card" style="background:transparent;border:none;padding:0;margin-bottom:16px;">
-      <summary style="cursor:pointer;font-weight:600;color:#94a3b8;font-size:0.95rem;">Дополнительно: проект и baseline</summary>
-      <div class="form-group" style="margin-top:12px;">
+    <details class="card card--plain">
+      <summary>Дополнительно: проект и baseline</summary>
+      <div class="form-group form-group--mt">
         <label>Проект (опц.)</label>
         <input type="text" name="project" value="{{ task.project }}" placeholder="Например: VoiceMind">
       </div>
@@ -1734,31 +1032,21 @@ EDIT_TASK_TEMPLATE = """<!DOCTYPE html>
         <input type="text" name="baseline" value="{{ task.baseline_commit }}" placeholder="abc1234...">
       </div>
     </details>
-    <div style="margin-top:16px;">
+    <div class="form-actions">
       <button type="submit" class="btn btn-primary">Сохранить</button>
-      <a href="/settings" class="btn btn-secondary" style="margin-left:8px;">Отмена</a>
+      <a href="/settings" class="btn btn-secondary ms-2">Отмена</a>
     </div>
   </form>
 </div>
-</body>
-</html>
+{% endblock %}
 """
 
 
 # ─── HTML: Settings page ────────────────────────────────────────────
 
-SETTINGS_TEMPLATE = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Настройки — ELO Benchmark</title>
-<style>""" + CSS + """</style>
-</head>
-<body>
-<div class="page">
-  <a href="/" class="back-link">&larr; Назад к рейтингу</a>
-
+SETTINGS_TEMPLATE = """{% extends "shell.html" %}
+{% block title %}Настройки — ELO Benchmark{% endblock %}
+{% block content %}
   <div class="header">
     <h1>Настройки</h1>
   </div>
@@ -1766,8 +1054,15 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
   {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
 
+  <nav class="settings-nav" aria-label="Разделы настроек">
+    <a href="#models">Модели</a>
+    <a href="#tasks">Таски</a>
+    <a href="#answer-coverage">Ответы</a>
+    <a href="#recommendation-queue">Очередь</a>
+  </nav>
+
   <div class="settings-grid">
-    <div class="card">
+    <div class="card" id="models">
       <h2>Модели</h2>
       <div class="model-groups">
         <div class="model-row">
@@ -1817,9 +1112,10 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="tasks">
       <h2>Таски</h2>
       {% if tasks_list %}
+      <div class="table-wrap">
       <table class="tasks-table">
         <thead>
           <tr><th class="id-col">ID</th><th class="title-col">Название</th><th class="actions-col">Действия</th></tr>
@@ -1835,22 +1131,23 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
               {% if t.current %}<span class="status-pill status-active">текущая</span>{% endif %}
             </td>
             <td class="actions-col">
-              <form method="POST" action="/task/{{ t.id }}/current" style="display:inline;">
+              <form method="POST" action="/task/{{ t.id }}/current" class="form-inline">
                 <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
-                <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
+                <button type="submit" class="btn btn-secondary btn-sm" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
               </form>
-              <form method="POST" action="/task/{{ t.id }}/toggle" style="display:inline;margin-left:6px;">
+              <form method="POST" action="/task/{{ t.id }}/toggle" class="form-inline ms-1">
                 <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
-                <button type="submit" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">
+                <button type="submit" class="btn btn-secondary btn-sm">
                   {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
                 </button>
               </form>
-              <a href="/edit_task/{{ t.id }}" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;margin-left:6px;">Изменить</a>
+              <a href="/edit_task/{{ t.id }}" class="btn btn-secondary btn-sm ms-1">Изменить</a>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+      </div>
       {% else %}
       <div class="empty-state">Тасков пока нет — добавьте первую.</div>
       {% endif %}
@@ -1993,7 +1290,6 @@ SETTINGS_TEMPLATE = """<!DOCTYPE html>
     {% endif %}
     {% endif %}
   </div>
-</div>
 
 <script>
 // Матрица наличия ответов: фильтр «только долги», счётчик, bulk по строке/столбцу.
@@ -2047,8 +1343,7 @@ document.querySelectorAll('input[name="active"]').forEach((cb) => {
   });
 });
 </script>
-</body>
-</html>
+{% endblock %}
 """
 
 
@@ -2118,6 +1413,10 @@ def history_page():
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "История"},
+        ],
     )
 
 
@@ -2133,9 +1432,17 @@ def model_page(model_id: str):
     return render_template_string(
         MODEL_TEMPLATE,
         detail=detail,
-        chart_svg=build_elo_svg(detail["points"]),
+        chart_svg=build_elo_svg(
+            detail["points"],
+            dates=(detail["date_first"], detail["date_last"])
+            if detail["date_first"] and detail["date_last"] else None,
+        ),
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": detail["name"]},
+        ],
     )
 
 
@@ -2184,6 +1491,10 @@ def stats_page():
         summary=summary,
         stats_filter=stats_filter,
         chart_svg=build_elo_distribution_svg(entries),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Аналитика"},
+        ],
     )
 
 
@@ -2342,6 +1653,11 @@ def add_page():
         default_elo=DEFAULT_ELO,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Настройки", "href": "/settings"},
+            {"label": "Добавить модель"},
+        ],
     )
 
 
@@ -2526,6 +1842,10 @@ def settings_page():
         queue_has_coverage=queue_has_coverage,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Настройки"},
+        ],
     )
 
 
@@ -2595,6 +1915,11 @@ def edit_page(model_id: str):
         },
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": info.get("name", model_id), "href": f"/model/{model_id}"},
+            {"label": "Редактирование"},
+        ],
     )
 
 
@@ -2626,6 +1951,11 @@ def add_task_page():
         ADD_TASK_TEMPLATE,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Настройки", "href": "/settings"},
+            {"label": "Добавить таску"},
+        ],
     )
 
 
@@ -2656,6 +1986,11 @@ def edit_task_page(task_id: str):
         task=info,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Настройки", "href": "/settings"},
+            {"label": f"{task_id} — редактирование"},
+        ],
     )
 
 
