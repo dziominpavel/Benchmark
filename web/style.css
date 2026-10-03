@@ -75,6 +75,10 @@
 
 .bm-table .num { text-align: right; }
 
+/* В-Н-П: значения разной длины («9-2-14» против «13-1-11») — по левому краю,
+   чтобы колонка не выглядела рваной. */
+.bm-table .bm-wdl { text-align: left; }
+
 /* График */
 .bm-chart svg {
   display: block;

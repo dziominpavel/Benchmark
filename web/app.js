@@ -64,7 +64,7 @@
         '<td>' + esc(m.name) + '</td>' +
         '<td>' + esc(m.provider || '—') + '</td>' +
         '<td class="num bm-elo">' + m.elo + '</td>' +
-        '<td class="num">' + m.wins + '-' + m.draws + '-' + m.losses + '</td>' +
+        '<td class="bm-wdl">' + m.wins + '-' + m.draws + '-' + m.losses + '</td>' +
         '<td class="num">' + m.games + '</td>' +
         '</tr>';
     }).join('');
