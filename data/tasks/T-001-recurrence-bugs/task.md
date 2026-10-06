@@ -2,7 +2,7 @@
 id: T-001
 title: "Bug Hunt — RecurrenceCalculator"
 project: VoiceMind
-baseline_commit: ce2d3f66b2089c7b60073dc2a96899aaa006c9ce
+baseline_commit: 9cd89995d0253a07e5371b82619191815fea20d8
 ---
 
 ## Описание задачи
@@ -21,7 +21,7 @@ baseline_commit: ce2d3f66b2089c7b60073dc2a96899aaa006c9ce
 - `app/src/main/java/com/example/voicemind/data/RecurrenceRule.kt` (69 строк)
 
 **Проект:** `C:/projects/VoiceMind`
-**Коммит:** `ce2d3f66b2089c7b60073dc2a96899aaa006c9ce`
+**Коммит:** `9cd89995d0253a07e5371b82619191815fea20d8`
 
 ## Что искать
 
