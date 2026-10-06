@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 331,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "opencode-muse-spark-1-3-free-xhigh",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:18+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1275,
+      "after": 1292,
+      "delta": 17
+    },
+    "opencode-muse-spark-1-3-free-xhigh": {
+      "before": 1226,
+      "after": 1212,
+      "delta": -14
+    }
+  }
+}

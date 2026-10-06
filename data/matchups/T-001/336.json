@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 336,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6",
+  "model_b": "cursor-sonnet-5-5-1m-max",
+  "model_a_id": "cursor-grok-4-6",
+  "model_b_id": "cursor-sonnet-5-5-1m-max",
+  "winner": "b",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:19+03:00",
+  "elo": {
+    "cursor-grok-4-6": {
+      "before": 1278,
+      "after": 1265,
+      "delta": -13
+    },
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1345,
+      "after": 1361,
+      "delta": 16
+    }
+  }
+}

@@ -62,6 +62,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: cursor-sonnet-5-5-1m-max
+    name: "Cursor Sonnet 5.5 1M Max"
+    provider: Cursor
+    version: 5.5 1M Max
+    status: active
   - id: devin-deepseek-v4-1-flash-max
     name: "Devin DeepSeek V4.1 Flash Max"
     provider: 

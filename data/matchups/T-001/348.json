@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 348,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "opencode-longcat-2-5-preview-free",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "opencode-longcat-2-5-preview-free",
+  "winner": "a",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:21+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1459,
+      "after": 1461,
+      "delta": 2
+    },
+    "opencode-longcat-2-5-preview-free": {
+      "before": 961,
+      "after": 959,
+      "delta": -2
+    }
+  }
+}

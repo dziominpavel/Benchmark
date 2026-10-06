@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 329,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "devin-deepseek-v4-pro-max",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "devin-deepseek-v4-pro-max",
+  "winner": "a",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:17+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1239,
+      "after": 1257,
+      "delta": 18
+    },
+    "devin-deepseek-v4-pro-max": {
+      "before": 1208,
+      "after": 1193,
+      "delta": -15
+    }
+  }
+}

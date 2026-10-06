@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 332,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "cursor-sonnet-5-5-1m-max",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "cursor-sonnet-5-5-1m-max",
+  "winner": "b",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:18+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1169,
+      "after": 1158,
+      "delta": -11
+    },
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1292,
+      "after": 1305,
+      "delta": 13
+    }
+  }
+}

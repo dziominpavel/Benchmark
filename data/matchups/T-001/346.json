@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 346,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "devin-glm-5-2-high",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "devin-glm-5-2-high",
+  "winner": "a",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:21+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1442,
+      "after": 1445,
+      "delta": 3
+    },
+    "devin-glm-5-2-high": {
+      "before": 1015,
+      "after": 1012,
+      "delta": -3
+    }
+  }
+}

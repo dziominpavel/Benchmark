@@ -9,6 +9,7 @@ answer_flags:
     cursor-grok-4-6: true
     cursor-grok-4-6-low: true
     cursor-kimi-k3-max: true
+    cursor-sonnet-5-5-1m-max: true
     devin-deepseek-v4-1-flash-max: true
     devin-deepseek-v4-pro-max: true
     devin-glm-5-2-high: true

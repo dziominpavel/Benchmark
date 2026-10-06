@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 352,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "devin-gpt-6-astra-max",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "devin-gpt-6-astra-max",
+  "winner": "a",
+  "date": "2026-10-06",
+  "recorded_at": "2026-10-06T20:08:22+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1479,
+      "after": 1494,
+      "delta": 15
+    },
+    "devin-gpt-6-astra-max": {
+      "before": 1463,
+      "after": 1448,
+      "delta": -15
+    }
+  }
+}
