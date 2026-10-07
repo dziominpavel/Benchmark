@@ -62,7 +62,6 @@
       return '<tr>' +
         '<td class="bm-rank">' + (i + 1) + '</td>' +
         '<td>' + esc(m.name) + '</td>' +
-        '<td>' + esc(m.provider || '—') + '</td>' +
         '<td class="num bm-elo">' + m.elo + '</td>' +
         '<td class="bm-wdl">' + m.wins + '-' + m.draws + '-' + m.losses + '</td>' +
         '<td class="num">' + m.games + '</td>' +
