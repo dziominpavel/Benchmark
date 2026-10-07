@@ -1,0 +1,36 @@
+name: notify-store
+
+# Оповещает витрину «Мои приложения» о пуше, тронувшем статику веб-приложения:
+# сборка витрины запускается по событию, а не ждёт cron (capability
+# store-web-apps, «Оповещение витрины об обновлении web-статики»).
+# Секрет STORE_DISPATCH_TOKEN — токен с доступом к репозиторию витрины.
+# Без секрета (или при ошибке отправки) оповещение пропускается
+# с предупреждением: пуш не блокируется, витрина подхватит по расписанию.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - web/**
+      - data/**
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Оповестить витрину о пересборке
+        env:
+          GH_TOKEN: ${{ secrets.STORE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::STORE_DISPATCH_TOKEN не задан — оповещение витрины пропущено, сборка подойдёт по расписанию."
+            exit 0
+          fi
+          if ! gh api -X POST repos/dziominpavel/dziominpavel.github.io/dispatches -f event_type=web-updated; then
+            echo "::warning::Оповещение витрины не удалось — сборка подойдёт по расписанию."
+            exit 0
+          fi
+          echo "Витрина оповещена: пересборка запущена по событию."
