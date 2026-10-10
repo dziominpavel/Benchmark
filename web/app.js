@@ -44,7 +44,7 @@
       [fmtDate(data.updated), 'обновлено']
     ];
     document.getElementById('bm-stats').innerHTML = stats.map(function (s) {
-      return '<li><strong class="stat-num">' + esc(s[0]) + '</strong>' +
+      return '<li><strong class="stat-num">' + esc(s[0]) + '</strong> ' +
              '<span class="stat-label">' + esc(s[1]) + '</span></li>';
     }).join('');
   }
