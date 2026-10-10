@@ -165,7 +165,8 @@ python tools/register_model.py --auto --id <slug> --name "<Имя Модели>"
 - Заметки GitHub-Release берутся из этого блока автоматически — отдельное
   описание релиза писать не нужно и нельзя дублировать.
 - Сверка перед работой и после: `python scripts/check-version.py`
-  (exit 0 — версия и changelog согласованы, exit 1 — рассинхрон).
+  (exit 0 — версия и changelog согласованы, exit 1 — рассинхрон или
+  нарушение формат-контракта блока).
 - Полные правила и запреты: `docs/versioning.md`.
 <!-- versioning:end -->
 
