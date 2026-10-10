@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 364,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:25+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1093,
+      "after": 1108,
+      "delta": 15
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1063,
+      "after": 1048,
+      "delta": -15
+    }
+  }
+}

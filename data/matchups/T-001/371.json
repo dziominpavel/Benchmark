@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 371,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "b",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:27+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1025,
+      "after": 1009,
+      "delta": -16
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1032,
+      "after": 1048,
+      "delta": 16
+    }
+  }
+}

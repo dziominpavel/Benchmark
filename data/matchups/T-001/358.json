@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 358,
+  "task": "T-001",
+  "model_a": "devin-glm-5-3-flash-max",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "devin-glm-5-3-flash-max",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:24+03:00",
+  "elo": {
+    "devin-glm-5-3-flash-max": {
+      "before": 1237,
+      "after": 1248,
+      "delta": 11
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1126,
+      "after": 1112,
+      "delta": -14
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 360,
+  "task": "T-001",
+  "model_a": "cursor-kimi-k3-max",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "cursor-kimi-k3-max",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:24+03:00",
+  "elo": {
+    "cursor-kimi-k3-max": {
+      "before": 1158,
+      "after": 1172,
+      "delta": 14
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1115,
+      "after": 1097,
+      "delta": -18
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 355,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6-low",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "cursor-grok-4-6-low",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:23+03:00",
+  "elo": {
+    "cursor-grok-4-6-low": {
+      "before": 1188,
+      "after": 1204,
+      "delta": 16
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1181,
+      "after": 1161,
+      "delta": -20
+    }
+  }
+}

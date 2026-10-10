@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 370,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "b",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:27+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1040,
+      "after": 1023,
+      "delta": -17
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1015,
+      "after": 1032,
+      "delta": 17
+    }
+  }
+}

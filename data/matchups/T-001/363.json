@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 363,
+  "task": "T-001",
+  "model_a": "opencode-ling-3-1-flash-free",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "opencode-ling-3-1-flash-free",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:25+03:00",
+  "elo": {
+    "opencode-ling-3-1-flash-free": {
+      "before": 1276,
+      "after": 1283,
+      "delta": 7
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1070,
+      "after": 1063,
+      "delta": -7
+    }
+  }
+}

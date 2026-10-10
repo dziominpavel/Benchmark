@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 365,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-1-flash-max",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "devin-deepseek-v4-1-flash-max",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "a",
+  "date": "2026-10-10",
+  "recorded_at": "2026-10-10T11:34:25+03:00",
+  "elo": {
+    "devin-deepseek-v4-1-flash-max": {
+      "before": 1310,
+      "after": 1316,
+      "delta": 6
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1048,
+      "after": 1042,
+      "delta": -6
+    }
+  }
+}
