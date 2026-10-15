@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 445,
+  "task": "T-001",
+  "model_a": "devin-deepseek-v4-pro-max",
+  "model_b": "opencode-gemini-4-argon-high",
+  "model_a_id": "devin-deepseek-v4-pro-max",
+  "model_b_id": "opencode-gemini-4-argon-high",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:04+03:00",
+  "elo": {
+    "devin-deepseek-v4-pro-max": {
+      "before": 1193,
+      "after": 1179,
+      "delta": -14
+    },
+    "opencode-gemini-4-argon-high": {
+      "before": 1239,
+      "after": 1256,
+      "delta": 17
+    }
+  }
+}

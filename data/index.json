@@ -1,35 +1,35 @@
 {
   "version": 2,
-  "updated": "2026-10-15",
-  "matchups_digest": "362e1bf1b7e417d809acf602695bcb01ab45781a1d368cb0bbb160b7f4ce2caf",
+  "updated": "2026-10-16",
+  "matchups_digest": "392a2ed0ad868d0668acd30e6dce971e9e5f024f9b0fd89df168e2b5b032f540",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
       "provider": "",
       "status": "active",
-      "elo": 987,
-      "games": 29,
+      "elo": 981,
+      "games": 30,
       "wins": 4,
-      "losses": 25,
+      "losses": 26,
       "draws": 0
     },
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
       "provider": "",
       "status": "active",
-      "elo": 1033,
-      "games": 29,
+      "elo": 1026,
+      "games": 30,
       "wins": 6,
-      "losses": 23,
+      "losses": 24,
       "draws": 0
     },
     "cursor-fable-5-1-1m-max": {
       "name": "Cursor Fable 5.1 1M Max",
       "provider": "",
       "status": "active",
-      "elo": 1401,
-      "games": 29,
-      "wins": 25,
+      "elo": 1411,
+      "games": 30,
+      "wins": 26,
       "losses": 4,
       "draws": 0
     },
@@ -37,19 +37,19 @@
       "name": "Cursor Gemini 3.8 Flash High",
       "provider": "",
       "status": "active",
-      "elo": 1172,
-      "games": 29,
+      "elo": 1161,
+      "games": 30,
       "wins": 13,
-      "losses": 16,
+      "losses": 17,
       "draws": 0
     },
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6 Extra High",
       "provider": "",
       "status": "active",
-      "elo": 1267,
-      "games": 29,
-      "wins": 19,
+      "elo": 1285,
+      "games": 30,
+      "wins": 20,
       "losses": 10,
       "draws": 0
     },
@@ -57,29 +57,29 @@
       "name": "Cursor Grok 4.6 Low",
       "provider": "",
       "status": "active",
-      "elo": 1205,
-      "games": 29,
+      "elo": 1190,
+      "games": 30,
       "wins": 14,
-      "losses": 15,
+      "losses": 16,
       "draws": 0
     },
     "cursor-kimi-k3-max": {
       "name": "Cursor Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1174,
-      "games": 29,
+      "elo": 1162,
+      "games": 30,
       "wins": 11,
-      "losses": 16,
+      "losses": 17,
       "draws": 2
     },
     "cursor-sonnet-5-5-1m-max": {
       "name": "Cursor Sonnet 5.5 1M Max",
       "provider": "Cursor",
       "status": "active",
-      "elo": 1508,
-      "games": 29,
-      "wins": 29,
+      "elo": 1514,
+      "games": 30,
+      "wins": 30,
       "losses": 0,
       "draws": 0
     },
@@ -87,9 +87,9 @@
       "name": "Devin DeepSeek V4.1 Flash Max",
       "provider": "",
       "status": "active",
-      "elo": 1339,
-      "games": 32,
-      "wins": 21,
+      "elo": 1350,
+      "games": 33,
+      "wins": 22,
       "losses": 7,
       "draws": 4
     },
@@ -97,39 +97,39 @@
       "name": "Devin DeepSeek V4 Pro Max",
       "provider": "",
       "status": "active",
-      "elo": 1193,
-      "games": 29,
+      "elo": 1179,
+      "games": 30,
       "wins": 13,
-      "losses": 15,
+      "losses": 16,
       "draws": 1
     },
     "devin-glm-5-2-high": {
       "name": "Devin GLM-5.2 High",
       "provider": "",
       "status": "active",
-      "elo": 1009,
-      "games": 30,
+      "elo": 1003,
+      "games": 31,
       "wins": 5,
-      "losses": 25,
+      "losses": 26,
       "draws": 0
     },
     "devin-glm-5-3-flash-max": {
       "name": "Devin GLM-5.3 Flash Max",
       "provider": "",
       "status": "active",
-      "elo": 1244,
-      "games": 29,
+      "elo": 1230,
+      "games": 30,
       "wins": 17,
-      "losses": 11,
+      "losses": 12,
       "draws": 1
     },
     "devin-gpt-5-6-sol-max": {
       "name": "Devin GPT-5.6 Sol Max",
       "provider": "",
       "status": "active",
-      "elo": 1340,
-      "games": 29,
-      "wins": 22,
+      "elo": 1354,
+      "games": 30,
+      "wins": 23,
       "losses": 6,
       "draws": 1
     },
@@ -137,9 +137,9 @@
       "name": "Devin GPT-6 Astra Max",
       "provider": "",
       "status": "active",
-      "elo": 1465,
-      "games": 29,
-      "wins": 28,
+      "elo": 1473,
+      "games": 30,
+      "wins": 29,
       "losses": 1,
       "draws": 0
     },
@@ -147,9 +147,9 @@
       "name": "Devin GPT-6 Astra Low",
       "provider": "",
       "status": "active",
-      "elo": 1364,
-      "games": 29,
-      "wins": 22,
+      "elo": 1376,
+      "games": 30,
+      "wins": 23,
       "losses": 5,
       "draws": 2
     },
@@ -157,39 +157,39 @@
       "name": "Devin Kimi K3 Max",
       "provider": "",
       "status": "active",
-      "elo": 1115,
-      "games": 29,
+      "elo": 1107,
+      "games": 30,
       "wins": 9,
-      "losses": 20,
+      "losses": 21,
       "draws": 0
     },
     "devin-swe-1-7-max": {
       "name": "Devin SWE-1.7 Max",
       "provider": "",
       "status": "active",
-      "elo": 1160,
-      "games": 30,
+      "elo": 1149,
+      "games": 31,
       "wins": 12,
-      "losses": 17,
+      "losses": 18,
       "draws": 1
     },
     "devin-swe-2-max": {
       "name": "Devin SWE-2 Max",
       "provider": "",
       "status": "active",
-      "elo": 1196,
-      "games": 29,
+      "elo": 1180,
+      "games": 30,
       "wins": 15,
-      "losses": 14,
+      "losses": 15,
       "draws": 0
     },
     "opencode-deepseek-v4-1-flash-free-max": {
       "name": "OpenCode DeepSeek V4.1 Flash Free Max",
       "provider": "",
       "status": "active",
-      "elo": 1344,
-      "games": 35,
-      "wins": 21,
+      "elo": 1354,
+      "games": 36,
+      "wins": 22,
       "losses": 5,
       "draws": 9
     },
@@ -197,29 +197,29 @@
       "name": "OpenCode Fledge Alpha Free Max",
       "provider": "",
       "status": "active",
-      "elo": 1105,
-      "games": 29,
+      "elo": 1097,
+      "games": 30,
       "wins": 9,
-      "losses": 20,
+      "losses": 21,
       "draws": 0
     },
     "opencode-gemini-4-argon-high": {
       "name": "OpenCode Gemini 4 Argon High",
       "provider": "",
       "status": "active",
-      "elo": 1200,
-      "games": 0,
-      "wins": 0,
-      "losses": 0,
+      "elo": 1260,
+      "games": 30,
+      "wins": 19,
+      "losses": 11,
       "draws": 0
     },
     "opencode-grok-4-7-xhigh": {
       "name": "OpenCode Grok 4.7 Xhigh",
       "provider": "",
       "status": "active",
-      "elo": 1451,
-      "games": 29,
-      "wins": 27,
+      "elo": 1459,
+      "games": 30,
+      "wins": 28,
       "losses": 2,
       "draws": 0
     },
@@ -227,49 +227,49 @@
       "name": "OpenCode Ling 3.0 Flash Fin Free",
       "provider": "",
       "status": "active",
-      "elo": 927,
-      "games": 29,
+      "elo": 923,
+      "games": 30,
       "wins": 1,
-      "losses": 27,
+      "losses": 28,
       "draws": 1
     },
     "opencode-ling-3-1-flash-free": {
       "name": "OpenCode Ling 3.1 Flash Free",
       "provider": "",
       "status": "active",
-      "elo": 1277,
-      "games": 29,
+      "elo": 1261,
+      "games": 30,
       "wins": 17,
-      "losses": 9,
+      "losses": 10,
       "draws": 3
     },
     "opencode-longcat-2-5-preview-free": {
       "name": "OpenCode LongCat 2.5 Preview Free",
       "provider": "",
       "status": "active",
-      "elo": 961,
-      "games": 29,
+      "elo": 956,
+      "games": 30,
       "wins": 2,
-      "losses": 26,
+      "losses": 27,
       "draws": 1
     },
     "opencode-mimo-v2-5-free": {
       "name": "OpenCode MiMo V2.5 Free",
       "provider": "",
       "status": "active",
-      "elo": 911,
-      "games": 29,
+      "elo": 907,
+      "games": 30,
       "wins": 0,
-      "losses": 29,
+      "losses": 30,
       "draws": 0
     },
     "opencode-mimo-v2-6-flash-free": {
       "name": "OpenCode MiMo V2.6 Flash Free",
       "provider": "",
       "status": "active",
-      "elo": 1335,
-      "games": 32,
-      "wins": 21,
+      "elo": 1347,
+      "games": 33,
+      "wins": 22,
       "losses": 6,
       "draws": 5
     },
@@ -277,29 +277,29 @@
       "name": "OpenCode Muse Spark 1.3 Free Xhigh",
       "provider": "",
       "status": "active",
-      "elo": 1223,
-      "games": 29,
+      "elo": 1209,
+      "games": 30,
       "wins": 15,
-      "losses": 13,
+      "losses": 14,
       "draws": 1
     },
     "opencode-nemotron-3-5-super-vl-free-xhigh": {
       "name": "OpenCode Nemotron 3.5 Super VL Free Xhigh",
       "provider": "OpenCode",
       "status": "active",
-      "elo": 971,
-      "games": 29,
+      "elo": 966,
+      "games": 30,
       "wins": 3,
-      "losses": 26,
+      "losses": 27,
       "draws": 0
     },
     "opencode-space-bunny-free-max": {
       "name": "OpenCode Space Bunny Free Max",
       "provider": "",
       "status": "active",
-      "elo": 1235,
-      "games": 29,
-      "wins": 15,
+      "elo": 1254,
+      "games": 30,
+      "wins": 16,
       "losses": 10,
       "draws": 4
     },
@@ -307,10 +307,10 @@
       "name": "OpenCode Step 5 Preview Free High",
       "provider": "",
       "status": "active",
-      "elo": 1090,
-      "games": 29,
+      "elo": 1083,
+      "games": 30,
       "wins": 7,
-      "losses": 20,
+      "losses": 21,
       "draws": 2
     }
   },
@@ -318,12 +318,12 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "matchups_count": 442
+      "matchups_count": 472
     }
   },
   "matchups_summary": {
-    "total": 442,
-    "applied": 442,
+    "total": 472,
+    "applied": 472,
     "voided": 0,
     "tombstone": 0,
     "skipped": 0
@@ -8725,6 +8725,576 @@
         "before": 1344,
         "after": 1344,
         "delta": 0
+      }
+    },
+    {
+      "matchup": "T-001/443",
+      "seq": 443,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:03+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1196,
+        "after": 1180,
+        "delta": -16
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1220,
+        "delta": 20
+      }
+    },
+    {
+      "matchup": "T-001/444",
+      "seq": 444,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:03+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1205,
+        "after": 1190,
+        "delta": -15
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1239,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "T-001/445",
+      "seq": 445,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:04+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1193,
+        "after": 1179,
+        "delta": -14
+      },
+      "elo_b": {
+        "before": 1239,
+        "after": 1256,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/446",
+      "seq": 446,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:04+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1256,
+        "after": 1274,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1223,
+        "after": 1209,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/447",
+      "seq": 447,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:04+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1174,
+        "after": 1162,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1274,
+        "after": 1288,
+        "delta": 14
+      }
+    },
+    {
+      "matchup": "T-001/448",
+      "seq": 448,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:05+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1172,
+        "after": 1161,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1288,
+        "after": 1302,
+        "delta": 14
+      }
+    },
+    {
+      "matchup": "T-001/449",
+      "seq": 449,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:05+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-space-bunny-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1302,
+        "after": 1278,
+        "delta": -24
+      },
+      "elo_b": {
+        "before": 1235,
+        "after": 1254,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "T-001/450",
+      "seq": 450,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:05+03:00",
+      "model_a_id": "devin-swe-1-7-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1160,
+        "after": 1149,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1278,
+        "after": 1291,
+        "delta": 13
+      }
+    },
+    {
+      "matchup": "T-001/451",
+      "seq": 451,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:05+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1244,
+        "after": 1230,
+        "delta": -14
+      },
+      "elo_b": {
+        "before": 1291,
+        "after": 1308,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/452",
+      "seq": 452,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:06+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1267,
+        "after": 1285,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1308,
+        "after": 1286,
+        "delta": -22
+      }
+    },
+    {
+      "matchup": "T-001/453",
+      "seq": 453,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:06+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-ling-3-1-flash-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1286,
+        "after": 1302,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1277,
+        "after": 1261,
+        "delta": -16
+      }
+    },
+    {
+      "matchup": "T-001/454",
+      "seq": 454,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:06+03:00",
+      "model_a_id": "devin-kimi-k3-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1115,
+        "after": 1107,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1302,
+        "after": 1310,
+        "delta": 8
+      }
+    },
+    {
+      "matchup": "T-001/455",
+      "seq": 455,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:07+03:00",
+      "model_a_id": "opencode-fledge-alpha-free",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1105,
+        "after": 1097,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1310,
+        "after": 1318,
+        "delta": 8
+      }
+    },
+    {
+      "matchup": "T-001/456",
+      "seq": 456,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:07+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-step-5-preview-free-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1318,
+        "after": 1325,
+        "delta": 7
+      },
+      "elo_b": {
+        "before": 1090,
+        "after": 1083,
+        "delta": -7
+      }
+    },
+    {
+      "matchup": "T-001/457",
+      "seq": 457,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:07+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-mimo-v2-6-flash-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 1325,
+        "after": 1309,
+        "delta": -16
+      },
+      "elo_b": {
+        "before": 1335,
+        "after": 1347,
+        "delta": 12
+      }
+    },
+    {
+      "matchup": "T-001/458",
+      "seq": 458,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:08+03:00",
+      "model_a_id": "devin-deepseek-v4-1-flash-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1339,
+        "after": 1350,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1309,
+        "after": 1294,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/459",
+      "seq": 459,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:08+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1340,
+        "after": 1354,
+        "delta": 14
+      },
+      "elo_b": {
+        "before": 1294,
+        "after": 1280,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/460",
+      "seq": 460,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:08+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-free-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1344,
+        "after": 1354,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1280,
+        "after": 1267,
+        "delta": -13
+      }
+    },
+    {
+      "matchup": "T-001/461",
+      "seq": 461,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:09+03:00",
+      "model_a_id": "devin-gpt-6-astra-max-2",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1364,
+        "after": 1376,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1267,
+        "after": 1255,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/462",
+      "seq": 462,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:09+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1033,
+        "after": 1026,
+        "delta": -7
+      },
+      "elo_b": {
+        "before": 1255,
+        "after": 1262,
+        "delta": 7
+      }
+    },
+    {
+      "matchup": "T-001/463",
+      "seq": 463,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:09+03:00",
+      "model_a_id": "devin-glm-5-2-high",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1009,
+        "after": 1003,
+        "delta": -6
+      },
+      "elo_b": {
+        "before": 1262,
+        "after": 1268,
+        "delta": 6
+      }
+    },
+    {
+      "matchup": "T-001/464",
+      "seq": 464,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:10+03:00",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1401,
+        "after": 1411,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1268,
+        "after": 1258,
+        "delta": -10
+      }
+    },
+    {
+      "matchup": "T-001/465",
+      "seq": 465,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:10+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 987,
+        "after": 981,
+        "delta": -6
+      },
+      "elo_b": {
+        "before": 1258,
+        "after": 1264,
+        "delta": 6
+      }
+    },
+    {
+      "matchup": "T-001/466",
+      "seq": 466,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:10+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1264,
+        "after": 1269,
+        "delta": 5
+      },
+      "elo_b": {
+        "before": 971,
+        "after": 966,
+        "delta": -5
+      }
+    },
+    {
+      "matchup": "T-001/467",
+      "seq": 467,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:11+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-longcat-2-5-preview-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1269,
+        "after": 1274,
+        "delta": 5
+      },
+      "elo_b": {
+        "before": 961,
+        "after": 956,
+        "delta": -5
+      }
+    },
+    {
+      "matchup": "T-001/468",
+      "seq": 468,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:11+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-grok-4-7-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1274,
+        "after": 1266,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1451,
+        "after": 1459,
+        "delta": 8
+      }
+    },
+    {
+      "matchup": "T-001/469",
+      "seq": 469,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:11+03:00",
+      "model_a_id": "devin-gpt-6-astra-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1465,
+        "after": 1473,
+        "delta": 8
+      },
+      "elo_b": {
+        "before": 1266,
+        "after": 1258,
+        "delta": -8
+      }
+    },
+    {
+      "matchup": "T-001/470",
+      "seq": 470,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:12+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-ling-3-0-flash-fin-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1258,
+        "after": 1262,
+        "delta": 4
+      },
+      "elo_b": {
+        "before": 927,
+        "after": 923,
+        "delta": -4
+      }
+    },
+    {
+      "matchup": "T-001/471",
+      "seq": 471,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:12+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1262,
+        "after": 1266,
+        "delta": 4
+      },
+      "elo_b": {
+        "before": 911,
+        "after": 907,
+        "delta": -4
+      }
+    },
+    {
+      "matchup": "T-001/472",
+      "seq": 472,
+      "date": "2026-10-16",
+      "recorded_at": "2026-10-16T00:04:12+03:00",
+      "model_a_id": "cursor-sonnet-5-5-1m-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1508,
+        "after": 1514,
+        "delta": 6
+      },
+      "elo_b": {
+        "before": 1266,
+        "after": 1260,
+        "delta": -6
       }
     }
   ]

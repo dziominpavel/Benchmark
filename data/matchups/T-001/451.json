@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 451,
+  "task": "T-001",
+  "model_a": "devin-glm-5-3-flash-max",
+  "model_b": "opencode-gemini-4-argon-high",
+  "model_a_id": "devin-glm-5-3-flash-max",
+  "model_b_id": "opencode-gemini-4-argon-high",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:05+03:00",
+  "elo": {
+    "devin-glm-5-3-flash-max": {
+      "before": 1244,
+      "after": 1230,
+      "delta": -14
+    },
+    "opencode-gemini-4-argon-high": {
+      "before": 1291,
+      "after": 1308,
+      "delta": 17
+    }
+  }
+}

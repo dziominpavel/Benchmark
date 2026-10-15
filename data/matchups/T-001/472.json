@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 472,
+  "task": "T-001",
+  "model_a": "cursor-sonnet-5-5-1m-max",
+  "model_b": "opencode-gemini-4-argon-high",
+  "model_a_id": "cursor-sonnet-5-5-1m-max",
+  "model_b_id": "opencode-gemini-4-argon-high",
+  "winner": "a",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:12+03:00",
+  "elo": {
+    "cursor-sonnet-5-5-1m-max": {
+      "before": 1508,
+      "after": 1514,
+      "delta": 6
+    },
+    "opencode-gemini-4-argon-high": {
+      "before": 1266,
+      "after": 1260,
+      "delta": -6
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 454,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-gemini-4-argon-high",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-gemini-4-argon-high",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:06+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1115,
+      "after": 1107,
+      "delta": -8
+    },
+    "opencode-gemini-4-argon-high": {
+      "before": 1302,
+      "after": 1310,
+      "delta": 8
+    }
+  }
+}

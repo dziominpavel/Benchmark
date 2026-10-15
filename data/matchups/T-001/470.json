@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 470,
+  "task": "T-001",
+  "model_a": "opencode-gemini-4-argon-high",
+  "model_b": "opencode-ling-3-0-flash-fin-free",
+  "model_a_id": "opencode-gemini-4-argon-high",
+  "model_b_id": "opencode-ling-3-0-flash-fin-free",
+  "winner": "a",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:12+03:00",
+  "elo": {
+    "opencode-gemini-4-argon-high": {
+      "before": 1258,
+      "after": 1262,
+      "delta": 4
+    },
+    "opencode-ling-3-0-flash-fin-free": {
+      "before": 927,
+      "after": 923,
+      "delta": -4
+    }
+  }
+}

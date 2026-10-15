@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 466,
+  "task": "T-001",
+  "model_a": "opencode-gemini-4-argon-high",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "opencode-gemini-4-argon-high",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T00:04:10+03:00",
+  "elo": {
+    "opencode-gemini-4-argon-high": {
+      "before": 1264,
+      "after": 1269,
+      "delta": 5
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 971,
+      "after": 966,
+      "delta": -5
+    }
+  }
+}
