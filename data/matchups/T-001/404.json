@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 404,
+  "task": "T-001",
+  "model_a": "devin-kimi-k3-max",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "devin-kimi-k3-max",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T21:54:22+03:00",
+  "elo": {
+    "devin-kimi-k3-max": {
+      "before": 1102,
+      "after": 1115,
+      "delta": 13
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 1026,
+      "after": 1013,
+      "delta": -13
+    }
+  }
+}

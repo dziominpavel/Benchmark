@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 422,
+  "task": "T-001",
+  "model_a": "codex-gpt-5-6-terra-09-2026",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "codex-gpt-5-6-terra-09-2026",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "b",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T21:54:29+03:00",
+  "elo": {
+    "codex-gpt-5-6-terra-09-2026": {
+      "before": 1005,
+      "after": 987,
+      "delta": -18
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 959,
+      "after": 977,
+      "delta": 18
+    }
+  }
+}

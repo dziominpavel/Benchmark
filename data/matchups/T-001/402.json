@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 402,
+  "task": "T-001",
+  "model_a": "opencode-ling-3-1-flash-free",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "opencode-ling-3-1-flash-free",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T20:23:10+03:00",
+  "elo": {
+    "opencode-ling-3-1-flash-free": {
+      "before": 1270,
+      "after": 1277,
+      "delta": 7
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 1033,
+      "after": 1026,
+      "delta": -7
+    }
+  }
+}

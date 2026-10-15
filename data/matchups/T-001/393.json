@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 393,
+  "task": "T-001",
+  "model_a": "cursor-gemini-3-8-flash-high",
+  "model_b": "opencode-deepseek-v4-1-flash-free-max",
+  "model_a_id": "cursor-gemini-3-8-flash-high",
+  "model_b_id": "opencode-deepseek-v4-1-flash-free-max",
+  "winner": "b",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T20:23:06+03:00",
+  "elo": {
+    "cursor-gemini-3-8-flash-high": {
+      "before": 1170,
+      "after": 1160,
+      "delta": -10
+    },
+    "opencode-deepseek-v4-1-flash-free-max": {
+      "before": 1301,
+      "after": 1314,
+      "delta": 13
+    }
+  }
+}

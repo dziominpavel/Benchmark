@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 416,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max-2",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "devin-gpt-6-astra-max-2",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T21:54:26+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max-2": {
+      "before": 1361,
+      "after": 1364,
+      "delta": 3
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 978,
+      "after": 975,
+      "delta": -3
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 410,
+  "task": "T-001",
+  "model_a": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_b": "opencode-step-5-preview-free-high",
+  "model_a_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_b_id": "opencode-step-5-preview-free-high",
+  "winner": "b",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T21:54:24+03:00",
+  "elo": {
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 997,
+      "after": 985,
+      "delta": -12
+    },
+    "opencode-step-5-preview-free-high": {
+      "before": 1078,
+      "after": 1090,
+      "delta": 12
+    }
+  }
+}

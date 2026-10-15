@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 381,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6-low",
+  "model_b": "opencode-deepseek-v4-1-flash-free-max",
+  "model_a_id": "cursor-grok-4-6-low",
+  "model_b_id": "opencode-deepseek-v4-1-flash-free-max",
+  "winner": "b",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T20:23:01+03:00",
+  "elo": {
+    "cursor-grok-4-6-low": {
+      "before": 1204,
+      "after": 1189,
+      "delta": -15
+    },
+    "opencode-deepseek-v4-1-flash-free-max": {
+      "before": 1220,
+      "after": 1239,
+      "delta": 19
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 426,
+  "task": "T-001",
+  "model_a": "opencode-grok-4-7-xhigh",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "opencode-grok-4-7-xhigh",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T21:54:31+03:00",
+  "elo": {
+    "opencode-grok-4-7-xhigh": {
+      "before": 1449,
+      "after": 1451,
+      "delta": 2
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 962,
+      "after": 960,
+      "delta": -2
+    }
+  }
+}

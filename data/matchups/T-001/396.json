@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 396,
+  "task": "T-001",
+  "model_a": "devin-swe-1-7-max",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "devin-swe-1-7-max",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T20:23:08+03:00",
+  "elo": {
+    "devin-swe-1-7-max": {
+      "before": 1148,
+      "after": 1160,
+      "delta": 12
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 1065,
+      "after": 1050,
+      "delta": -15
+    }
+  }
+}

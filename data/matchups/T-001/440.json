@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 440,
+  "task": "T-001",
+  "model_a": "opencode-mimo-v2-6-flash-free",
+  "model_b": "opencode-deepseek-v4-1-flash-free-max",
+  "model_a_id": "opencode-mimo-v2-6-flash-free",
+  "model_b_id": "opencode-deepseek-v4-1-flash-free-max",
+  "winner": "draw",
+  "date": "2026-10-15",
+  "recorded_at": "2026-10-15T22:57:21+03:00",
+  "elo": {
+    "opencode-mimo-v2-6-flash-free": {
+      "before": 1353,
+      "after": 1352,
+      "delta": -1
+    },
+    "opencode-deepseek-v4-1-flash-free-max": {
+      "before": 1330,
+      "after": 1331,
+      "delta": 1
+    }
+  }
+}
