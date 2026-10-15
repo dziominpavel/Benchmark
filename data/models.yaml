@@ -117,6 +117,11 @@ models:
     provider: 
     version: 
     status: active
+  - id: opencode-deepseek-v4-1-flash-free-max
+    name: "OpenCode DeepSeek V4.1 Flash Free Max"
+    provider: 
+    version: 
+    status: active
   - id: opencode-fledge-alpha-free
     name: "OpenCode Fledge Alpha Free Max"
     provider: 

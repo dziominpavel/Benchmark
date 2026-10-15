@@ -1,4 +1,7 @@
 ---
+name: "/opsx-archive"
+id: "opsx-archive"
+category: "Workflow"
 description: "Archive a completed change in the experimental workflow"
 ---
 
@@ -9,7 +12,6 @@ Archive a completed change in the experimental workflow.
 `<capability-path>` is the spec directory relative to `specs/` (for example, `user-auth` or `identity/user-auth`). Preserve the full path from each delta spec when resolving its main spec.
 
 **Input**: Optionally specify a change name after `/opsx-archive` (e.g., `/opsx-archive add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
-**Provided arguments**: $ARGUMENTS
 
 **Steps**
 
