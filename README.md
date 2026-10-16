@@ -57,7 +57,7 @@ Benchmark/
 ├── launch.vbs             # Скрытый запуск сервера (вызывается из start.bat)
 │
 ├── data/                  # Все данные прогонов
-│   ├── models.yaml        # Реестр моделей (status: active/archived)
+│   ├── models.yaml        # Реестр моделей (agent, provider, status: active/archived)
 │   ├── judges.yaml        # Резерв пула судей (пока пуст, судейство — skill/вручную)
 │   ├── settings.yaml      # Статусы тасок и текущая таска
 │   ├── index.json         # Кэш ELO + сводки (генерируется tools/elo.py, коммитится)
@@ -89,7 +89,7 @@ Benchmark/
 │   ├── elo.py             # ELO-движок (пересчёт из data/matchups → data/index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
 │   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
-│   ├── register_model.py  # Регистрация модели (в т.ч. --auto для саморегистрации)
+│   ├── register_model.py  # Регистрация модели (+ --agent/--provider; --auto для саморегистрации)
 │   ├── register_task.py   # Регистрация задачи T-NNN
 │   ├── archive_model.py   # Архивация/разархивация модели (--restore)
 │   └── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
@@ -121,8 +121,9 @@ uv run python tools/elo.py --check
 # Юнит-тесты движка
 uv run python tools/test_elo.py
 
-# Зарегистрировать модель
+# Зарегистрировать модель (--agent/--provider опциональны)
 uv run python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
+uv run python tools/register_model.py --id claude-sonnet-4.6 --name "Claude Sonnet 4.6" --version sonnet-4.6 --agent Cursor --provider Anthropic
 
 # Зарегистрировать задачу
 uv run python tools/register_task.py --title "Bug Hunt — NewModule" --project VoiceMind --baseline abc123

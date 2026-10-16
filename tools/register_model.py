@@ -4,8 +4,8 @@ register_model.py — регистрация новой LLM-модели в mode
 
 Использование:
     python tools/register_model.py --id <slug> --name "<полное имя>" \
-        --provider <org> --version <строка> [--released <YYYY-MM-DD>] \
-        [--added <YYYY-MM-DD>] [--notes "<текст>"]
+        --version <строка> [--agent <agent>] [--provider <фирма>] \
+        [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>] [--notes "<текст>"]
 
 Проверяет уникальность id. Если модель с таким id уже есть — отказывается
 (используй --force для перезаписи, но осторожно — история прогонов смешается).
@@ -84,6 +84,7 @@ def format_model(m: dict) -> str:
     """Форматирует модель в YAML-блок."""
     lines = [f"  - id: {m['id']}"]
     lines.append(f"    name: \"{m.get('name', '')}\"")
+    lines.append(f"    agent: {m.get('agent', '')}")
     lines.append(f"    provider: {m.get('provider', '')}")
     lines.append(f"    version: {m.get('version', '')}")
     if m.get("released"):
@@ -100,7 +101,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Регистрация модели в models.yaml")
     parser.add_argument("--id", required=True, help="Уникальный slug модели")
     parser.add_argument("--name", required=True, help="Полное имя модели")
-    parser.add_argument("--provider", default="", help="Провайдер (Anthropic, OpenAI, ...). Опционально при --auto.")
+    parser.add_argument("--agent", default="", help="Агент (Codex, Cursor, Devin, OpenCode). Опционально.")
+    parser.add_argument("--provider", default="", help="Фирма-разработчик (Anthropic, OpenAI, ...). Опционально.")
     parser.add_argument("--version", default="", help="Версия/релиз. Опционально при --auto.")
     parser.add_argument("--released", default="", help="Дата выхода YYYY-MM-DD")
     parser.add_argument("--added", default="",
@@ -114,14 +116,10 @@ def main() -> int:
         print(f"Файл {MODELS_PATH} не найден.", file=sys.stderr)
         return 1
 
-    # При --auto provider/version опциональны; при обычном режиме — обязательны
-    if not args.auto:
-        if not args.provider:
-            print("--provider обязателен без --auto.", file=sys.stderr)
-            return 1
-        if not args.version:
-            print("--version обязателен без --auto.", file=sys.stderr)
-            return 1
+    # При обычном режиме обязательна только версия; --agent и --provider опциональны
+    if not args.auto and not args.version:
+        print("--version обязателен без --auto.", file=sys.stderr)
+        return 1
 
     text = MODELS_PATH.read_text(encoding="utf-8")
     models, preamble = parse_existing(text)
@@ -146,7 +144,8 @@ def main() -> int:
     new_model = {
         "id": args.id,
         "name": args.name,
-        "provider": args.provider,
+        "agent": args.agent.strip(),
+        "provider": args.provider.strip(),
         "version": args.version,
         "released": args.released,
         "added": args.added or date.today().isoformat(),

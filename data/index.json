@@ -5,7 +5,8 @@
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
-      "provider": "",
+      "agent": "Codex",
+      "provider": "OpenAI",
       "added": "2026-09-08",
       "status": "active",
       "elo": 981,
@@ -16,7 +17,8 @@
     },
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "Cursor",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1026,
@@ -27,7 +29,8 @@
     },
     "cursor-fable-5-1-1m-max": {
       "name": "Cursor Fable 5.1 1M Max",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "Anthropic",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1411,
@@ -38,7 +41,8 @@
     },
     "cursor-gemini-3-8-flash-high": {
       "name": "Cursor Gemini 3.8 Flash High",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "Google",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1161,
@@ -49,7 +53,8 @@
     },
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6 Extra High",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "xAI",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1285,
@@ -60,7 +65,8 @@
     },
     "cursor-grok-4-6-low": {
       "name": "Cursor Grok 4.6 Low",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "xAI",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1190,
@@ -71,7 +77,8 @@
     },
     "cursor-kimi-k3-max": {
       "name": "Cursor Kimi K3 Max",
-      "provider": "",
+      "agent": "Cursor",
+      "provider": "Moonshot AI",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1162,
@@ -82,7 +89,8 @@
     },
     "cursor-sonnet-5-5-1m-max": {
       "name": "Cursor Sonnet 5.5 1M Max",
-      "provider": "Cursor",
+      "agent": "Cursor",
+      "provider": "Anthropic",
       "added": "2026-10-06",
       "status": "active",
       "elo": 1514,
@@ -93,7 +101,8 @@
     },
     "devin-deepseek-v4-1-flash-max": {
       "name": "Devin DeepSeek V4.1 Flash Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "DeepSeek",
       "added": "2026-09-11",
       "status": "active",
       "elo": 1350,
@@ -104,7 +113,8 @@
     },
     "devin-deepseek-v4-pro-max": {
       "name": "Devin DeepSeek V4 Pro Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "DeepSeek",
       "added": "2026-09-10",
       "status": "active",
       "elo": 1179,
@@ -115,7 +125,8 @@
     },
     "devin-glm-5-2-high": {
       "name": "Devin GLM-5.2 High",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "Z.ai",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1003,
@@ -126,7 +137,8 @@
     },
     "devin-glm-5-3-flash-max": {
       "name": "Devin GLM-5.3 Flash Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "Z.ai",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1230,
@@ -137,7 +149,8 @@
     },
     "devin-gpt-5-6-sol-max": {
       "name": "Devin GPT-5.6 Sol Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "OpenAI",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1354,
@@ -148,7 +161,8 @@
     },
     "devin-gpt-6-astra-max": {
       "name": "Devin GPT-6 Astra Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "OpenAI",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1473,
@@ -159,7 +173,8 @@
     },
     "devin-gpt-6-astra-max-2": {
       "name": "Devin GPT-6 Astra Low",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "OpenAI",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1376,
@@ -170,7 +185,8 @@
     },
     "devin-kimi-k3-max": {
       "name": "Devin Kimi K3 Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "Moonshot AI",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1107,
@@ -181,7 +197,8 @@
     },
     "devin-swe-1-7-max": {
       "name": "Devin SWE-1.7 Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "Cognition",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1149,
@@ -192,7 +209,8 @@
     },
     "devin-swe-2-max": {
       "name": "Devin SWE-2 Max",
-      "provider": "",
+      "agent": "Devin",
+      "provider": "Cognition",
       "added": "2026-09-10",
       "status": "active",
       "elo": 1180,
@@ -201,9 +219,22 @@
       "losses": 15,
       "draws": 0
     },
+    "opencode-beam-free-max": {
+      "name": "OpenCode Beam Free Max",
+      "agent": "OpenCode",
+      "provider": "Reflection AI",
+      "added": "2026-10-16",
+      "status": "active",
+      "elo": 1200,
+      "games": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0
+    },
     "opencode-deepseek-v4-1-flash-free-max": {
       "name": "OpenCode DeepSeek V4.1 Flash Free Max",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "DeepSeek",
       "added": "2026-10-15",
       "status": "active",
       "elo": 1354,
@@ -214,7 +245,8 @@
     },
     "opencode-fledge-alpha-free": {
       "name": "OpenCode Fledge Alpha Free Max",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Unknown",
       "added": "2026-10-02",
       "status": "active",
       "elo": 1097,
@@ -225,7 +257,8 @@
     },
     "opencode-gemini-4-argon-high": {
       "name": "OpenCode Gemini 4 Argon High",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Google",
       "added": "2026-10-15",
       "status": "active",
       "elo": 1260,
@@ -236,7 +269,8 @@
     },
     "opencode-glm-5-3-flash-free": {
       "name": "OpenCode GLM-5.3 Flash Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Z.ai",
       "added": "2026-10-16",
       "status": "active",
       "elo": 1200,
@@ -247,7 +281,8 @@
     },
     "opencode-grok-4-7-xhigh": {
       "name": "OpenCode Grok 4.7 Xhigh",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "xAI",
       "added": "2026-09-22",
       "status": "active",
       "elo": 1459,
@@ -258,7 +293,8 @@
     },
     "opencode-ling-3-0-flash-fin-free": {
       "name": "OpenCode Ling 3.0 Flash Fin Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Ant Group",
       "added": "2026-09-22",
       "status": "active",
       "elo": 923,
@@ -269,7 +305,8 @@
     },
     "opencode-ling-3-1-flash-free": {
       "name": "OpenCode Ling 3.1 Flash Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Ant Group",
       "added": "2026-10-02",
       "status": "active",
       "elo": 1261,
@@ -280,7 +317,8 @@
     },
     "opencode-longcat-2-5-preview-free": {
       "name": "OpenCode LongCat 2.5 Preview Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Meituan",
       "added": "2026-09-30",
       "status": "active",
       "elo": 956,
@@ -291,7 +329,8 @@
     },
     "opencode-mimo-v2-5-free": {
       "name": "OpenCode MiMo V2.5 Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Xiaomi",
       "added": "2026-09-05",
       "status": "active",
       "elo": 907,
@@ -302,7 +341,8 @@
     },
     "opencode-mimo-v2-6-flash-free": {
       "name": "OpenCode MiMo V2.6 Flash Free",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Xiaomi",
       "added": "2026-09-22",
       "status": "active",
       "elo": 1347,
@@ -313,7 +353,8 @@
     },
     "opencode-muse-spark-1-3-free-xhigh": {
       "name": "OpenCode Muse Spark 1.3 Free Xhigh",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "Meta",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1209,
@@ -324,7 +365,8 @@
     },
     "opencode-nemotron-3-5-super-vl-free-xhigh": {
       "name": "OpenCode Nemotron 3.5 Super VL Free Xhigh",
-      "provider": "OpenCode",
+      "agent": "OpenCode",
+      "provider": "NVIDIA",
       "added": "2026-10-15",
       "status": "active",
       "elo": 966,
@@ -335,7 +377,8 @@
     },
     "opencode-space-bunny-free-max": {
       "name": "OpenCode Space Bunny Free Max",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "MiniMax",
       "added": "2026-09-26",
       "status": "active",
       "elo": 1254,
@@ -346,7 +389,8 @@
     },
     "opencode-step-5-preview-free-high": {
       "name": "OpenCode Step 5 Preview Free High",
-      "provider": "",
+      "agent": "OpenCode",
+      "provider": "StepFun",
       "added": "2026-10-10",
       "status": "active",
       "elo": 1083,

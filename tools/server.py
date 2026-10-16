@@ -131,6 +131,100 @@ def valid_answer_filter(value: str | None) -> str:
     return v if v in ("active", "all", "inactive") else "active"
 
 
+# ─── Фильтр «Агент и фирма» ─────────────────────────────────────────
+
+TAG_NONE = "none"
+
+
+def _tag_values(models: dict, key: str) -> tuple[list[str], bool]:
+    """Значения тега из реестра: (отсортированные непустые, есть ли пустые)."""
+    values: set[str] = set()
+    has_none = False
+    for info in models.values():
+        val = str(info.get(key) or "").strip()
+        if val:
+            values.add(val)
+        else:
+            has_none = True
+    return sorted(values, key=str.lower), has_none
+
+
+def _parse_tag_tokens(raw: str | None, known: list[str]) -> set[str]:
+    """CSV из URL → выбранные теги.
+
+    Токен `none` = пустое значение («без агента»/«без фирмы»), неизвестные
+    и пустые токены отбрасываются; пустой CSV = пустой набор (без сужения).
+    """
+    known_set = set(known)
+    selected: set[str] = set()
+    for token in (raw or "").split(","):
+        token = token.strip()
+        if token == TAG_NONE:
+            selected.add("")
+        elif token in known_set:
+            selected.add(token)
+    return selected
+
+
+def _tags_csv(selected: set[str]) -> str:
+    """Выбранные теги → CSV для URL (сортировка case-insensitive)."""
+    items = [TAG_NONE if val == "" else val for val in selected]
+    return ",".join(sorted(items, key=str.lower))
+
+
+def model_passes_tags(info: dict, agent_sel: set[str], provider_sel: set[str]) -> bool:
+    """Проходит ли модель фильтр «Агент и фирма».
+
+    ИЛИ внутри группы, И между группами; пустая группа не сужает.
+    """
+    if agent_sel and str(info.get("agent") or "").strip() not in agent_sel:
+        return False
+    if provider_sel and str(info.get("provider") or "").strip() not in provider_sel:
+        return False
+    return True
+
+
+def tags_filter_context(models: dict, action: str, hidden_fields: list[dict],
+                        reset_url: str) -> dict:
+    """Контекст панели фильтра «Агент и фирма» + выборки из URL запроса."""
+    agents, agents_none = _tag_values(models, "agent")
+    providers, providers_none = _tag_values(models, "provider")
+    agent_sel = _parse_tag_tokens(request.args.get("agents"), agents)
+    provider_sel = _parse_tag_tokens(request.args.get("providers"), providers)
+    return {
+        "tag_action": action,
+        "tag_hidden_fields": hidden_fields,
+        "tag_reset_url": reset_url,
+        "tag_active": bool(agent_sel or provider_sel),
+        "tag_agents": [
+            {"value": v, "label": v, "checked": v in agent_sel} for v in agents
+        ],
+        "tag_agents_has_none": agents_none,
+        "tag_agents_none_checked": "" in agent_sel,
+        "tag_providers": [
+            {"value": v, "label": v, "checked": v in provider_sel} for v in providers
+        ],
+        "tag_providers_has_none": providers_none,
+        "tag_providers_none_checked": "" in provider_sel,
+        "tag_agents_csv": _tags_csv(agent_sel),
+        "tag_providers_csv": _tags_csv(provider_sel),
+        "tag_agent_sel": agent_sel,
+        "tag_provider_sel": provider_sel,
+    }
+
+
+def format_model_caption(info: dict) -> str:
+    """Серая подпись «Фирма · Агент»; пустые части не выводятся."""
+    parts = []
+    provider = str(info.get("provider") or "").strip()
+    agent = str(info.get("agent") or "").strip()
+    if provider:
+        parts.append(provider)
+    if agent:
+        parts.append(agent)
+    return " · ".join(parts)
+
+
 def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
     """Возвращает {frozenset{id_a, id_b}: set(task_id)} с тасками,
     в которых у пары есть неаннулированный вердикт.
@@ -304,8 +398,9 @@ def set_current_task(task_id: str) -> bool:
     return True
 
 
-def update_model(model_id: str, name: str, status: str) -> bool:
-    """Редактирует name и status модели в models.yaml и пересчитывает index."""
+def update_model(model_id: str, name: str, status: str,
+                 agent: str = "", provider: str = "") -> bool:
+    """Редактирует name/status/agent/provider модели в models.yaml и пересчитывает index."""
     models_path = MODELS_PATH
     if not models_path.exists():
         return False
@@ -318,6 +413,8 @@ def update_model(model_id: str, name: str, status: str) -> bool:
         if m["id"] == model_id:
             m["name"] = name
             m["status"] = status
+            m["agent"] = agent
+            m["provider"] = provider
             found = True
             break
 
@@ -493,6 +590,7 @@ def format_reason(rec: dict) -> str:
 # ─── HTML: Leaderboard page ─────────────────────────────────────────
 
 INDEX_TEMPLATE = """{% extends "shell.html" %}
+{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
 {% block title %}ELO Benchmark{% endblock %}
 {% block content %}
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
@@ -530,14 +628,16 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         <option value="all" {% if filter == 'all' %}selected{% endif %}>Все</option>
         <option value="inactive" {% if filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
       </select>
+      {{ tag_hidden() }}
     </form>
+    {{ tag_panel() }}
   </div>
 
   <div class="content-grid">
     <div class="main-column">
       <div class="card rating-card">
         <h2>Рейтинг</h2>
-        {% if models_sorted %}
+        {% if models_visible %}
         <div class="table-wrap">
           <table>
             <thead>
@@ -554,13 +654,16 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               </tr>
             </thead>
             <tbody>
-              {% for m in models_sorted %}
+              {% for m in models_visible %}
               <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and filter != 'inactive' }}">
-                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ loop.index }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
+                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ m.rank }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
-                  <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
-                  {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
-                  {% if m.games < 10 %}<span class="status-pill status-warmup">прогрев</span>{% endif %}
+                  <div>
+                    <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                    {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+                    {% if m.games < 10 %}<span class="status-pill status-warmup">прогрев</span>{% endif %}
+                  </div>
+                  {% if m.caption %}<div class="model-caption">{{ m.caption }}</div>{% endif %}
                 </td>
                 <td>{{ m.elo }}</td>
                 <td class="confidence">{{ format_confidence(m.games) }}</td>
@@ -573,6 +676,11 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        {% elif models_sorted %}
+        <div class="empty-state">
+          Под выбранный фильтр «Агент и фирма» не попала ни одна модель.
+          Сбросьте фильтр, чтобы увидеть список.
         </div>
         {% else %}
         <div class="empty-state">
@@ -590,7 +698,13 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <summary>Архивные модели ({{ archived_list|length }})</summary>
           <ul>
             {% for a in archived_list %}
-            <li><a href="/model/{{ a.id }}" class="edit-link">{{ a.name }}</a><span>{{ a.elo }}</span></li>
+            <li>
+              <span class="archived-name">
+                <a href="{{ url_for('model_page', model_id=a.id, agents=tag_agents_csv or none, providers=tag_providers_csv or none) }}" class="edit-link">{{ a.name }}</a>
+                {% if a.caption %}<span class="model-caption">{{ a.caption }}</span>{% endif %}
+              </span>
+              <span>{{ a.elo }}</span>
+            </li>
             {% endfor %}
           </ul>
         </details>
@@ -699,6 +813,7 @@ validate();
 # ─── HTML: History page ─────────────────────────────────────────────
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
+{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
 {% block title %}История — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -720,7 +835,9 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
         Включать неактивные
       </label>
+      {{ tag_hidden() }}
     </form>
+    {{ tag_panel() }}
   </div>
 
   <div class="card">
@@ -728,7 +845,11 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     {% if history %}
     {% for item in history %}
     <div class="history-item">
-      <span class="history-model">{{ item.model_a_name }} vs {{ item.model_b_name }}</span>
+      <span class="history-model">
+        <span class="history-side">{{ item.model_a_name }}{% if item.model_a_caption %}<span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
+        <span class="history-vs">vs</span>
+        <span class="history-side">{{ item.model_b_name }}{% if item.model_b_caption %}<span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
+      </span>
       <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span>
       <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
       <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
@@ -740,7 +861,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <div class="pagination">
       {% for p in range(1, history_pages + 1) %}
       {% if p == history_page %}<span class="current">{{ p }}</span>
-      {% else %}<a href="?page={{ p }}{% if model %}&model={{ model }}{% endif %}{% if include_inactive %}&include_inactive=1{% endif %}">{{ p }}</a>{% endif %}
+      {% else %}<a href="?page={{ p }}{% if model %}&model={{ model }}{% endif %}{% if include_inactive %}&include_inactive=1{% endif %}{% if tag_agents_csv %}&agents={{ tag_agents_csv|urlencode }}{% endif %}{% if tag_providers_csv %}&providers={{ tag_providers_csv|urlencode }}{% endif %}">{{ p }}</a>{% endif %}
       {% endfor %}
     </div>
     {% endif %}
@@ -758,7 +879,10 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
 {% block title %}{{ detail.name }} — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="detail-header">
-    <h1>{{ detail.name }}</h1>
+    <span class="detail-title">
+      <h1>{{ detail.name }}</h1>
+      {% if detail_caption %}<span class="model-caption">{{ detail_caption }}</span>{% endif %}
+    </span>
     <span class="detail-elo">{{ detail.elo }}</span>
     {% if detail.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
     <a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>
@@ -841,6 +965,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Stats page ─────────────────────────────────────────────
 
 STATS_TEMPLATE = """{% extends "shell.html" %}
+{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
 {% block title %}Аналитика — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -856,8 +981,14 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
         <option value="active" {% if stats_filter == 'active' %}selected{% endif %}>Только активные</option>
         <option value="all" {% if stats_filter == 'all' %}selected{% endif %}>Все</option>
       </select>
+      {{ tag_hidden() }}
     </form>
+    {{ tag_panel() }}
+    {% if pool_count %}
     {{ chart_svg|safe }}
+    {% else %}
+    <div class="empty-state">Под выбранный фильтр «Агент и фирма» не попала ни одна модель.</div>
+    {% endif %}
   </div>
 {% endblock %}
 """
@@ -866,6 +997,7 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Add model page ───────────────────────────────────────────
 
 ADD_TEMPLATE = """{% extends "shell.html" %}
+{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
 {% block title %}Добавить модель — ELO Benchmark{% endblock %}
 {% block content %}
 <div class="header">
@@ -881,6 +1013,20 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
       <label>Название модели</label>
       <input type="text" name="name" required placeholder="Например: GPT-4o" autofocus>
     </div>
+    <div class="form-group">
+      <label>Агент</label>
+      <input type="text" name="agent" list="agentOptions" placeholder="Например: Cursor">
+      <datalist id="agentOptions">
+        {% for a in agent_options %}<option value="{{ a }}"></option>{% endfor %}
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>Фирма</label>
+      <input type="text" name="provider" list="providerOptions" placeholder="Например: Anthropic">
+      <datalist id="providerOptions">
+        {% for p in provider_options %}<option value="{{ p }}"></option>{% endfor %}
+      </datalist>
+    </div>
     <div class="hint">Стартовый ELO: {{ default_elo }}</div>
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">Добавить</button>
@@ -888,26 +1034,35 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
   </form>
 </div>
 
+{{ tag_panel() }}
+
 {% if models_list %}
 <div class="card">
   <h2>Уже в списке ({{ models_list|length }})</h2>
   <table>
     <thead><tr><th>Модель</th><th>Статус</th><th>ELO</th><th>Игр</th><th></th></tr></thead>
     <tbody>
-      {% for mid, mname, elo, games, status in models_list %}
-      <tr class="{{ 'archived' if status == 'archived' }}">
-        <td><a href="/edit/{{ mid }}" class="edit-link">{{ mname }}</a></td>
+      {% for m in models_list %}
+      <tr class="{{ 'archived' if m.status == 'archived' }}">
         <td>
-          {% if status == 'archived' %}<span class="status-pill status-archived">неактивна</span>
+          <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+          {% if m.caption %}<div class="model-caption">{{ m.caption }}</div>{% endif %}
+        </td>
+        <td>
+          {% if m.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>
           {% else %}<span class="status-pill status-active">активна</span>{% endif %}
         </td>
-        <td>{{ elo }}</td>
-        <td>{{ games }}</td>
-        <td><a href="/edit/{{ mid }}" class="btn btn-secondary btn-sm">Изменить</a></td>
+        <td>{{ m.elo }}</td>
+        <td>{{ m.games }}</td>
+        <td><a href="/edit/{{ m.id }}" class="btn btn-secondary btn-sm">Изменить</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% elif tag_active %}
+<div class="card">
+  <div class="empty-state">Под выбранный фильтр «Агент и фирма» не попала ни одна модель.</div>
 </div>
 {% endif %}
 {% endblock %}
@@ -936,6 +1091,20 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
     <div class="form-group">
       <label>Название модели</label>
       <input type="text" name="name" value="{{ model.name }}" required autofocus>
+    </div>
+    <div class="form-group">
+      <label>Агент</label>
+      <input type="text" name="agent" value="{{ model.agent }}" list="agentOptions" placeholder="Например: Cursor">
+      <datalist id="agentOptions">
+        {% for a in agent_options %}<option value="{{ a }}"></option>{% endfor %}
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>Фирма</label>
+      <input type="text" name="provider" value="{{ model.provider }}" list="providerOptions" placeholder="Например: Anthropic">
+      <datalist id="providerOptions">
+        {% for p in provider_options %}<option value="{{ p }}"></option>{% endfor %}
+      </datalist>
     </div>
     <div class="form-group">
       <label>Статус активности</label>
@@ -1046,6 +1215,7 @@ EDIT_TASK_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Settings page ────────────────────────────────────────────
 
 SETTINGS_TEMPLATE = """{% extends "shell.html" %}
+{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
 {% block title %}Настройки — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -1065,6 +1235,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
   <div class="settings-grid">
     <div class="card" id="models">
       <h2>Модели</h2>
+      {{ tag_panel() }}
       <div class="model-groups">
         <div class="model-row">
           <span>Всего в реестре</span>
@@ -1078,7 +1249,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           <ul class="model-list">
             {% for m in models_active_list %}
             <li>
-              <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+              <span class="model-list-name">
+                <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                {% if m.caption %}<span class="model-caption">{{ m.caption }}</span>{% endif %}
+              </span>
               <span>{{ m.elo }}</span>
             </li>
             {% else %}
@@ -1094,7 +1268,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           <ul class="model-list">
             {% for m in models_archived_list %}
             <li>
-              <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+              <span class="model-list-name">
+                <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
+                {% if m.caption %}<span class="model-caption">{{ m.caption }}</span>{% endif %}
+              </span>
               <span>{{ m.elo }}</span>
             </li>
             {% else %}
@@ -1183,10 +1360,12 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         <option value="all" {% if answer_filter == 'all' %}selected{% endif %}>Все</option>
         <option value="inactive" {% if answer_filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
       </select>
+      {{ tag_hidden() }}
     </form>
     {% if answer_rows %}
     <form method="POST" action="/answer_flags?answer_filter={{ answer_filter }}" id="flagsForm">
       <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
+      {{ tag_hidden() }}
       <div class="flags-bar">
         <label><input type="checkbox" id="onlyDebts"> только долги</label>
         <span id="flagsCounter"></span>
@@ -1209,7 +1388,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           <tbody>
             {% for r in answer_rows %}
             <tr data-debt="{{ r.debt }}" class="{{ 'archived' if r.status == 'archived' }}">
-              <td class="model-cell">{{ r.name }}{% if r.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}</td>
+              <td class="model-cell">
+                <div>{{ r.name }}{% if r.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}</div>
+                {% if r.caption %}<div class="model-caption">{{ r.caption }}</div>{% endif %}
+              </td>
               {% for t in answer_active_tasks %}
               <td><input type="checkbox" name="flag" value="{{ r.id }}||{{ t }}" data-col="{{ t }}" {% if r.cells[t] %}checked{% endif %}></td>
               {% endfor %}
@@ -1229,7 +1411,9 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     </form>
     {% else %}
     <div class="empty-state">
-      {% if answer_filter == 'inactive' %}
+      {% if tag_active %}
+      Под выбранный фильтр «Агент и фирма» не попала ни одна модель.
+      {% elif answer_filter == 'inactive' %}
       Нет неактивных моделей для учёта.
       {% elif answer_filter == 'all' %}
       Нет моделей для учёта.
@@ -1363,7 +1547,23 @@ def history_page():
     model_id = request.args.get("model", "").strip()
     include_inactive = request.args.get("include_inactive", "") == "1"
 
-    # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе
+    tag_ctx = tags_filter_context(
+        models,
+        action="/history",
+        hidden_fields=[
+            *([{"name": "model", "value": model_id}] if model_id else []),
+            *([{"name": "include_inactive", "value": "1"}] if include_inactive else []),
+        ],
+        reset_url=url_for(
+            "history_page",
+            model=model_id or None,
+            include_inactive="1" if include_inactive else None,
+        ),
+    )
+    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+
+    # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
+    # состав дополнительно сужается фильтром «Агент и фирма».
     all_models = sorted(models.values(), key=lambda m: m.get("name", "").lower())
     dropdown = [{"id": "", "name": "Все", "archived": False, "selected": not model_id}]
     for m in all_models:
@@ -1371,6 +1571,8 @@ def history_page():
         status = m.get("status", "active")
         archived = status == "archived"
         if not include_inactive and archived and mid != model_id:
+            continue
+        if mid != model_id and not model_passes_tags(m, agent_sel, provider_sel):
             continue
         dropdown.append({
             "id": mid,
@@ -1380,12 +1582,20 @@ def history_page():
         })
 
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
+    caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
     raw_history = list(reversed(index_data.get("elo_history", [])))
 
     if model_id:
         raw_history = [
             h for h in raw_history
             if h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
+        ]
+    else:
+        # «Все»: показываем записи, где хотя бы один участник проходит фильтр
+        raw_history = [
+            h for h in raw_history
+            if model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
+            or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
         ]
 
     # Пагинация по 20 записей
@@ -1400,7 +1610,7 @@ def history_page():
     history_page_num = max(1, min(history_page_num, history_pages))
     start = (history_page_num - 1) * page_size
     end = start + page_size
-    history = format_elo_history(raw_history[start:end], name_map)
+    history = format_elo_history(raw_history[start:end], name_map, caption_map)
 
     model_name = name_map.get(model_id, model_id) if model_id else ""
 
@@ -1414,6 +1624,7 @@ def history_page():
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
+        **tag_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
             {"label": "История"},
@@ -1433,6 +1644,7 @@ def model_page(model_id: str):
     return render_template_string(
         MODEL_TEMPLATE,
         detail=detail,
+        detail_caption=format_model_caption(detail),
         chart_svg=build_elo_svg(
             detail["points"],
             dates=(detail["date_first"], detail["date_last"])
@@ -1465,11 +1677,21 @@ def stats_page():
     else:
         pool = list(models.values())
 
+    tag_ctx = tags_filter_context(
+        models,
+        action="/stats",
+        hidden_fields=[{"name": "filter", "value": stats_filter}],
+        reset_url=url_for("stats_page", filter=stats_filter),
+    )
+    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
+
     entries = [
         {
             "elo": m.get("elo", DEFAULT_ELO),
             "name": m.get("name", m.get("id", "")),
             "games": m.get("games", 0),
+            "caption": format_model_caption(m),
         }
         for m in pool
     ]
@@ -1491,7 +1713,9 @@ def stats_page():
         STATS_TEMPLATE,
         summary=summary,
         stats_filter=stats_filter,
+        pool_count=len(entries),
         chart_svg=build_elo_distribution_svg(entries),
+        **tag_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
             {"label": "Аналитика"},
@@ -1513,6 +1737,14 @@ def leaderboard():
     if filter_mode not in ("active", "all", "inactive"):
         filter_mode = "active"
 
+    tag_ctx = tags_filter_context(
+        models,
+        action="/",
+        hidden_fields=[{"name": "filter", "value": filter_mode}],
+        reset_url=url_for("leaderboard", filter=filter_mode),
+    )
+    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+
     if filter_mode == "active":
         models_sorted = [
             info for info in models.values()
@@ -1527,6 +1759,16 @@ def leaderboard():
         models_sorted = list(models.values())
 
     models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
+
+    # Места/медали/d5 считаются по полному (статусному) пулу: фильтр
+    # «Агент и фирма» только скрывает строки, номера мест не пересчитываются.
+    for rank, m in enumerate(models_sorted, start=1):
+        m["rank"] = rank
+        m["caption"] = format_model_caption(m)
+
+    models_visible = [
+        m for m in models_sorted if model_passes_tags(m, agent_sel, provider_sel)
+    ]
 
     # Для формы вердикта — только активные модели
     active_models = {
@@ -1571,6 +1813,12 @@ def leaderboard():
         key=lambda m: m.get("elo", DEFAULT_ELO),
         reverse=True,
     )
+    archived_list = [
+        info for info in archived_list
+        if model_passes_tags(info, agent_sel, provider_sel)
+    ]
+    for info in archived_list:
+        info["caption"] = format_model_caption(info)
 
     # Тренд позиций d5: оба конца в текущем видимом пуле,
     # чтобы архивация не дергала чужие стрелки.
@@ -1607,8 +1855,9 @@ def leaderboard():
     return render_template_string(
         INDEX_TEMPLATE,
         models_sorted=models_sorted,
+        models_visible=models_visible,
         models_count=len(models),
-        filtered_count=len(models_sorted),
+        filtered_count=len(models_visible),
         matchups_count=matchups_count,
         updated=index_data.get("updated", ""),
         models_list=models_list,
@@ -1626,6 +1875,7 @@ def leaderboard():
         coverage_done=coverage_done,
         remaining=remaining,
         filter=filter_mode,
+        **tag_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         format_winrate=format_winrate,
@@ -1638,20 +1888,40 @@ def add_page():
     index_data = ensure_index()
     models_data = index_data.get("models", {})
 
-    # (id, name, elo, games, status) — актуальный ELO из index.json
+    # Модели «Уже в списке»: актуальный ELO из index.json, с подписями
     models_list = []
     for mid, info in models_data.items():
-        mname = info.get("name", mid)
-        elo = info.get("elo", DEFAULT_ELO)
-        games = info.get("games", 0)
-        status = info.get("status", "active")
-        models_list.append((mid, mname, elo, games, status))
-    models_list.sort(key=lambda x: x[1].lower())
+        models_list.append({
+            "id": mid,
+            "name": info.get("name", mid),
+            "elo": info.get("elo", DEFAULT_ELO),
+            "games": info.get("games", 0),
+            "status": info.get("status", "active"),
+            "agent": info.get("agent", ""),
+            "provider": info.get("provider", ""),
+            "caption": format_model_caption(info),
+        })
+    models_list.sort(key=lambda m: m["name"].lower())
+
+    tag_ctx = tags_filter_context(
+        models_data,
+        action="/add",
+        hidden_fields=[],
+        reset_url=url_for("add_page"),
+    )
+    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    models_list = [m for m in models_list if model_passes_tags(m, agent_sel, provider_sel)]
+
+    agent_options, _ = _tag_values(models_data, "agent")
+    provider_options, _ = _tag_values(models_data, "provider")
 
     return render_template_string(
         ADD_TEMPLATE,
         models_list=models_list,
+        agent_options=agent_options,
+        provider_options=provider_options,
         default_elo=DEFAULT_ELO,
+        **tag_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -1665,6 +1935,8 @@ def add_page():
 @app.route("/add_model", methods=["POST"])
 def add_model():
     name = request.form.get("name", "").strip()
+    agent = request.form.get("agent", "").strip()
+    provider = request.form.get("provider", "").strip()
 
     if not name:
         return redirect(url_for("add_page", error="Введите название модели"))
@@ -1682,7 +1954,8 @@ def add_model():
     new_model = {
         "id": model_id,
         "name": name,
-        "provider": "",
+        "agent": agent,
+        "provider": provider,
         "version": "",
         "released": "",
         "added": date.today().isoformat(),
@@ -1765,28 +2038,49 @@ def settings_page():
         })
     index_data = ensure_index()
     models = index_data.get("models", {})
+
+    # Фильтр строк матрицы: active / all / inactive (по умолчанию active)
+    answer_filter = valid_answer_filter(request.args.get("answer_filter"))
+    tag_ctx = tags_filter_context(
+        models,
+        action="/settings",
+        hidden_fields=[{"name": "answer_filter", "value": answer_filter}],
+        reset_url=url_for("settings_page", answer_filter=answer_filter),
+    )
+    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+
     models_active_list, models_archived_list = [], []
     for mid, info in models.items():
         entry = {
             "id": mid,
             "name": info.get("name", mid),
             "elo": info.get("elo", DEFAULT_ELO),
+            "agent": info.get("agent", ""),
+            "provider": info.get("provider", ""),
+            "caption": format_model_caption(info),
         }
+        if not model_passes_tags(entry, agent_sel, provider_sel):
+            continue
         if is_model_active(info):
             models_active_list.append(entry)
         else:
             models_archived_list.append(entry)
     models_active_list.sort(key=lambda m: m["elo"], reverse=True)
     models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
+
     matrix = get_answer_matrix(settings)
-    # Фильтр строк матрицы: active / all / inactive (по умолчанию active)
-    answer_filter = valid_answer_filter(request.args.get("answer_filter"))
     if answer_filter == "active":
         answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
     elif answer_filter == "inactive":
         answer_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
     else:
         answer_rows = list(matrix["rows"])
+    answer_rows = [
+        r for r in answer_rows
+        if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
+    ]
+    for r in answer_rows:
+        r["caption"] = format_model_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     coverage = get_coverage(settings)
     active_task_ids = active_tasks(settings)
@@ -1842,6 +2136,7 @@ def settings_page():
         queue_breakdown_str=queue_breakdown_str,
         queue_breakdown_legend=queue_breakdown_legend,
         queue_has_coverage=queue_has_coverage,
+        **tag_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -1860,24 +2155,36 @@ def settings_save():
 @app.route("/answer_flags", methods=["POST"])
 def save_answer_flags_route():
     """Сохраняет ручной учёт наличия ответов (матрица из /settings)."""
-    from elo import load_models_yaml as _load_models
-
     settings = load_settings()
-    all_models = _load_models()
-    model_ids = {m["id"] for m in all_models}
+    index_data = ensure_index()
+    models = index_data.get("models", {})
+    model_ids = set(models)
+
     tasks_all = known_tasks(settings)
     active_set = set(active_tasks(settings))
 
-    # Модели вне текущего фильтра в форме скрыты — сохраняем как было.
+    # Модели вне текущих фильтров в форме скрыты — сохраняем как было.
     answer_filter = valid_answer_filter(
         request.args.get("answer_filter") or request.form.get("answer_filter")
     )
-    if answer_filter == "active":
-        visible = {m["id"] for m in all_models if m.get("status", "active") != "archived"}
-    elif answer_filter == "inactive":
-        visible = {m["id"] for m in all_models if m.get("status", "active") == "archived"}
-    else:
-        visible = set(model_ids)
+    agent_sel = _parse_tag_tokens(
+        request.args.get("agents") or request.form.get("agents"),
+        _tag_values(models, "agent")[0],
+    )
+    provider_sel = _parse_tag_tokens(
+        request.args.get("providers") or request.form.get("providers"),
+        _tag_values(models, "provider")[0],
+    )
+    visible = set()
+    for mid, info in models.items():
+        status = info.get("status", "active")
+        if answer_filter == "active" and status == "archived":
+            continue
+        if answer_filter == "inactive" and status != "archived":
+            continue
+        if not model_passes_tags(info, agent_sel, provider_sel):
+            continue
+        visible.add(mid)
 
     submitted = set(request.form.getlist("flag"))
     existing = load_answer_flags()
@@ -1887,17 +2194,24 @@ def save_answer_flags_route():
             if tid in active_set and mid in visible:
                 val = f"{mid}||{tid}" in submitted
             else:
-                # Неактивные таски и скрытые фильтром модели — сохраняем как было.
+                # Неактивные таски и скрытые фильтрами модели — сохраняем как было.
                 val = bool((existing.get(tid) or {}).get(mid, False))
             if val:
                 new_flags.setdefault(tid, {})[mid] = True
     save_answer_flags(new_flags)
 
     matrix = get_answer_matrix(settings)
+    redirect_params = {"answer_filter": answer_filter}
+    agents_csv = _tags_csv(agent_sel)
+    providers_csv = _tags_csv(provider_sel)
+    if agents_csv:
+        redirect_params["agents"] = agents_csv
+    if providers_csv:
+        redirect_params["providers"] = providers_csv
     return redirect(url_for(
         "settings_page",
-        answer_filter=answer_filter,
         success=f"Учёт ответов сохранён: закрыто {matrix['filled']} из {matrix['total']}.",
+        **redirect_params,
     ))
 
 
@@ -1908,13 +2222,21 @@ def edit_page(model_id: str):
     if not info:
         return redirect(url_for("leaderboard", error="Модель не найдена"))
 
+    all_models = index_data.get("models", {})
+    agent_options, _ = _tag_values(all_models, "agent")
+    provider_options, _ = _tag_values(all_models, "provider")
+
     return render_template_string(
         EDIT_TEMPLATE,
         model={
             "id": model_id,
             "name": info.get("name", ""),
             "status": info.get("status", "active"),
+            "agent": info.get("agent", ""),
+            "provider": info.get("provider", ""),
         },
+        agent_options=agent_options,
+        provider_options=provider_options,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -1929,6 +2251,8 @@ def edit_page(model_id: str):
 def edit_model(model_id: str):
     name = request.form.get("name", "").strip()
     status = request.form.get("status", "").strip()
+    agent = request.form.get("agent", "").strip()
+    provider = request.form.get("provider", "").strip()
 
     if not name:
         return redirect(url_for("edit_page", model_id=model_id, error="Введите название модели"))
@@ -1936,7 +2260,7 @@ def edit_model(model_id: str):
     if status not in ("active", "archived"):
         return redirect(url_for("edit_page", model_id=model_id, error="Неверный статус"))
 
-    if not update_model(model_id, name, status):
+    if not update_model(model_id, name, status, agent, provider):
         return redirect(url_for("leaderboard", error="Не удалось обновить модель"))
 
     status_label = "активна" if status == "active" else "неактивна (архив)"

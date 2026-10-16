@@ -330,6 +330,102 @@ def test_get_coverage_answer_aware():
     print("get_coverage answer-aware: OK")
 
 
+def test_format_model_roundtrip():
+    """parse_existing↔format_model сохраняют agent/provider и не добавляют мусор."""
+    from register_model import format_model, parse_existing
+    text = (
+        "# шапка\n\nmodels:\n"
+        "  - id: a\n"
+        "    name: \"A\"\n"
+        "    agent: Cursor\n"
+        "    provider: Anthropic\n"
+        "    version: v1\n"
+        "    added: 2026-01-02\n"
+        "    status: active\n"
+        "  - id: b\n"
+        "    name: \"B\"\n"
+        "    agent: \n"
+        "    provider: \n"
+        "    version: \n"
+        "    added: 2026-01-03\n"
+        "    status: archived\n"
+    )
+    models, _ = parse_existing(text)
+    assert [m["id"] for m in models] == ["a", "b"], models
+    assert models[0]["agent"] == "Cursor" and models[0]["provider"] == "Anthropic"
+
+    out = format_model(models[0])
+    back, _ = parse_existing("models:\n" + out + "\n")
+    assert back[0] == models[0], f"round-trip потерял поля: {models[0]} != {back[0]}"
+
+    # Пустые agent/provider остаются пустыми строками, released/notes не появляются
+    back_b, _ = parse_existing("models:\n" + format_model(models[1]) + "\n")
+    assert back_b[0]["agent"] == "" and back_b[0]["provider"] == ""
+    assert "released" not in back_b[0] and "notes" not in back_b[0]
+
+    # Запись без agent/provider (старый формат) переживает круг без выдуманных значений
+    legacy = {"id": "c", "name": "C", "version": "1", "added": "2026-01-04", "status": "active"}
+    back_c, _ = parse_existing("models:\n" + format_model(legacy) + "\n")
+    assert back_c[0].get("agent", "") == "" and back_c[0].get("provider", "") == ""
+    print("format_model round-trip: OK")
+
+
+def test_index_stale_agent_provider():
+    """is_index_stale замечает правку agent/provider и старый кэш без agent."""
+    import json
+    import tempfile
+    import elo as elo_mod
+
+    models_yaml = (
+        "models:\n"
+        "  - id: m\n"
+        "    name: \"M\"\n"
+        "    agent: Cursor\n"
+        "    provider: Anthropic\n"
+        "    version: 1\n"
+        "    added: 2026-01-01\n"
+        "    status: active\n"
+    )
+    cache = {
+        "version": 2,
+        "updated": "2026-01-01",
+        "matchups_digest": elo_mod.matchups_digest(),
+        "models": {
+            "m": {"name": "M", "agent": "Cursor", "provider": "Anthropic",
+                  "added": "2026-01-01", "status": "active",
+                  "elo": 1200, "games": 0, "wins": 0, "losses": 0, "draws": 0},
+        },
+    }
+    old_models, old_index = elo_mod.MODELS_PATH, elo_mod.INDEX_PATH
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            mp = Path(tmp) / "models.yaml"
+            ip = Path(tmp) / "index.json"
+            elo_mod.MODELS_PATH, elo_mod.INDEX_PATH = mp, ip
+
+            mp.write_text(models_yaml, encoding="utf-8")
+            ip.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            assert elo_mod.is_index_stale() is False
+
+            mp.write_text(models_yaml.replace("agent: Cursor", "agent: Devin"), encoding="utf-8")
+            assert elo_mod.is_index_stale() is True
+
+            mp.write_text(models_yaml.replace("provider: Anthropic", "provider: OpenAI"), encoding="utf-8")
+            assert elo_mod.is_index_stale() is True
+
+            # Реестр с agent, а кэш — старого формата (без agent) → устарел
+            mp.write_text(models_yaml, encoding="utf-8")
+            old_cache = dict(cache)
+            old_cache["models"] = {
+                "m": {k: v for k, v in cache["models"]["m"].items() if k != "agent"},
+            }
+            ip.write_text(json.dumps(old_cache, ensure_ascii=False), encoding="utf-8")
+            assert elo_mod.is_index_stale() is True
+    finally:
+        elo_mod.MODELS_PATH, elo_mod.INDEX_PATH = old_models, old_index
+    print("is_index_stale agent/provider: OK")
+
+
 if __name__ == "__main__":
     test_expected_score()
     test_k_factor()
@@ -348,4 +444,6 @@ if __name__ == "__main__":
     test_active_and_current_task()
     test_get_coverage()
     test_get_coverage_answer_aware()
+    test_format_model_roundtrip()
+    test_index_stale_agent_provider()
     print("\nALL ELO TESTS PASSED")

@@ -1210,6 +1210,81 @@ tr.archived td { opacity: 0.6; }
 .dist-line-mean { stroke: var(--chart-line); stroke-width: 2; }
 .dist-name { fill: var(--text); font-size: 12px; }
 .dist-value { fill: var(--muted); font-size: 12px; }
+.dist-caption { fill: var(--muted); font-size: 10px; }
+
+/* --- фильтр «Агент и фирма» и подписи моделей ----------------------------- */
+
+.model-caption {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.tag-filter-form { margin: 0 0 var(--sp-4); }
+.tag-filter { font-size: var(--fs-sm); }
+
+.tag-filter summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  user-select: none;
+}
+
+.tag-filter summary:hover { color: var(--text); }
+.tag-filter[open] summary { color: var(--text); }
+
+.tag-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-6);
+  margin-top: var(--sp-3);
+}
+
+.tag-group {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  margin: 0;
+  min-width: 170px;
+}
+
+.tag-group legend {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  padding: 0 6px;
+}
+
+.tag-group .check-label { display: flex; padding: 2px 0; }
+
+.tag-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.history-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 140px;
+}
+
+.history-side { display: flex; flex-direction: column; }
+.history-side .model-caption { margin-top: 0; }
+.history-vs { color: var(--muted); font-weight: 400; }
+
+.archived-name, .model-list-name { display: flex; flex-direction: column; }
+.archived-name .model-caption, .model-list-name .model-caption { margin-top: 0; }
+
+.detail-title { display: flex; flex-direction: column; }
+.detail-title h1 { margin: 0; }
+.detail-title .model-caption { margin-top: 0; font-weight: 400; }
 
 /* --- адаптив -------------------------------------------------------------- */
 

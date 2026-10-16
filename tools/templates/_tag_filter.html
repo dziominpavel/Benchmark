@@ -1,0 +1,55 @@
+{# Общие макросы фильтра «Агент и фирма» (change model-agent-provider-filter).
+   tag_panel() — панель мультивыбора; tag_hidden() — скрытые поля для форм,
+   чтобы фильтр не терялся при отправке других форм страницы. #}
+
+{% macro tag_panel() %}
+<form method="GET" action="{{ tag_action }}" class="tag-filter-form">
+  {% for h in tag_hidden_fields %}
+  <input type="hidden" name="{{ h.name }}" value="{{ h.value }}">
+  {% endfor %}
+  <details class="tag-filter"{% if tag_active %} open{% endif %}>
+    <summary>Агент и фирма{% if tag_active %} · фильтр включён{% endif %}</summary>
+    <div class="tag-groups">
+      <fieldset class="tag-group">
+        <legend>Агент</legend>
+        {% for o in tag_agents %}
+        <label class="check-label">
+          <input type="checkbox" name="agents" value="{{ o.value }}"{% if o.checked %} checked{% endif %}>
+          {{ o.label }}
+        </label>
+        {% endfor %}
+        {% if tag_agents_has_none %}
+        <label class="check-label">
+          <input type="checkbox" name="agents" value="none"{% if tag_agents_none_checked %} checked{% endif %}>
+          без агента
+        </label>
+        {% endif %}
+      </fieldset>
+      <fieldset class="tag-group">
+        <legend>Фирма</legend>
+        {% for o in tag_providers %}
+        <label class="check-label">
+          <input type="checkbox" name="providers" value="{{ o.value }}"{% if o.checked %} checked{% endif %}>
+          {{ o.label }}
+        </label>
+        {% endfor %}
+        {% if tag_providers_has_none %}
+        <label class="check-label">
+          <input type="checkbox" name="providers" value="none"{% if tag_providers_none_checked %} checked{% endif %}>
+          без фирмы
+        </label>
+        {% endif %}
+      </fieldset>
+    </div>
+    <div class="tag-actions">
+      <button type="submit" class="btn btn-secondary btn-sm">Показать</button>
+      <a href="{{ tag_reset_url }}" class="btn btn-secondary btn-sm">Сбросить</a>
+    </div>
+  </details>
+</form>
+{% endmacro %}
+
+{% macro tag_hidden() %}
+{% if tag_agents_csv %}<input type="hidden" name="agents" value="{{ tag_agents_csv }}">{% endif %}
+{% if tag_providers_csv %}<input type="hidden" name="providers" value="{{ tag_providers_csv }}">{% endif %}
+{% endmacro %}

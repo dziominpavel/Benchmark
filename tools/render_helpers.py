@@ -43,7 +43,7 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
     """Агрегирует данные страницы модели из кэша index.json.
 
     Возвращает None для неизвестного id. Иначе словарь:
-      id, name, elo, games, wins, losses, draws, winrate,
+      id, name, agent, provider, elo, games, wins, losses, draws, winrate,
       points (1200 + after своих матчей по seq),
       h2h (список {id, name, games, w, l, d, winrate}, сортировка:
         встреч по убыванию, затем имя),
@@ -132,6 +132,8 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
     return {
         "id": model_id,
         "name": info.get("name", model_id),
+        "agent": info.get("agent", ""),
+        "provider": info.get("provider", ""),
         "status": info.get("status", "active"),
         "elo": info.get("elo", DEFAULT_ELO),
         "games": games,
@@ -153,11 +155,13 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
     }
 
 
-def format_elo_history(history: list[dict], name_map: dict) -> list[dict]:
+def format_elo_history(history: list[dict], name_map: dict,
+                       caption_map: dict | None = None) -> list[dict]:
     """Преобразует match-centric elo_history в форму для рендеринга.
 
+    caption_map: id → подпись «Фирма · Агент» (опционально).
     Возвращает список словарей с полями:
-      model_a_name, model_b_name,
+      model_a_name, model_b_name, model_a_caption, model_b_caption,
       elo_a_before, elo_a_after, elo_a_delta, elo_a_delta_str, elo_a_delta_class,
       elo_b_before, elo_b_after, elo_b_delta, elo_b_delta_str, elo_b_delta_class,
       date_str.
@@ -187,9 +191,12 @@ def format_elo_history(history: list[dict], name_map: dict) -> list[dict]:
             item.get("recorded_at", ""), item.get("date", "")
         )
 
+        captions = caption_map or {}
         items.append({
             "model_a_name": a_name,
             "model_b_name": b_name,
+            "model_a_caption": captions.get(a_id, ""),
+            "model_b_caption": captions.get(b_id, ""),
             "elo_a_before": a_before,
             "elo_a_after": a_after,
             "elo_a_delta": a_delta,
@@ -325,7 +332,8 @@ def build_elo_svg(
 def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
     """Строит SVG bar-chart распределения ELO пула моделей.
 
-    entries: список {elo: int, name: str = "", games: int = 0}; сортировка
+    entries: список {elo: int, name: str = "", games: int = 0,
+    caption: str = ""}; сортировка
     по убыванию Elo — внутри. У каждого бара имя модели и значение.
     Бары ниже 1200 отличаются цветом. Вертикальные линии: старт 1200
     и среднее. Ось начинается около минимума (не от нуля).
@@ -347,7 +355,10 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
 
     row_h, bar_h = 30, 18
     # поле слева — под самое длинное имя (без обрезки на 30 символах)
-    max_name = max((len(str(p.get("name", ""))) for p in pts), default=0)
+    max_name = max(
+        (max(len(str(p.get("name", ""))), len(str(p.get("caption", "")))) for p in pts),
+        default=0,
+    )
     left = max(220, min(420, int(max_name * 7.2) + 24))
     right, top, bottom = 56, 44, 34
     height = top + n * row_h + bottom
@@ -362,7 +373,11 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
         v = p.get("elo", DEFAULT_ELO)
         cls = "dist-pt-below" if v < DEFAULT_ELO else "dist-pt-above"
         cy = top + i * row_h + row_h / 2
-        tip = html.escape(f'{p.get("name", "")} · {v} · игр: {p.get("games", 0)}')
+        caption = str(p.get("caption", ""))
+        tip_name = (
+            f'{p.get("name", "")} ({caption})' if caption else f'{p.get("name", "")}'
+        )
+        tip = html.escape(f'{tip_name} · {v} · игр: {p.get("games", 0)}')
         label = html.escape(str(p.get("name", "")))
         bars += (
             f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
@@ -370,6 +385,13 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
             f"<title>{tip}</title></rect>"
             f'<text x="{left - 8}" y="{cy + 4:.1f}" text-anchor="end" '
             f'class="dist-name">{label}<title>{tip}</title></text>'
+        )
+        if caption:
+            bars += (
+                f'<text x="{left - 8}" y="{cy + 15:.1f}" text-anchor="end" '
+                f'class="dist-caption">{html.escape(caption)}<title>{tip}</title></text>'
+            )
+        bars += (
             f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
             f'class="dist-value">{v}</text>'
         )
