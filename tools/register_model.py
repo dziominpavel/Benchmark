@@ -4,7 +4,8 @@ register_model.py — регистрация новой LLM-модели в mode
 
 Использование:
     python tools/register_model.py --id <slug> --name "<полное имя>" \
-        --provider <org> --version <строка> [--released <YYYY-MM-DD>] [--notes "<текст>"]
+        --provider <org> --version <строка> [--released <YYYY-MM-DD>] \
+        [--added <YYYY-MM-DD>] [--notes "<текст>"]
 
 Проверяет уникальность id. Если модель с таким id уже есть — отказывается
 (используй --force для перезаписи, но осторожно — история прогонов смешается).
@@ -87,6 +88,8 @@ def format_model(m: dict) -> str:
     lines.append(f"    version: {m.get('version', '')}")
     if m.get("released"):
         lines.append(f"    released: {m['released']}")
+    if m.get("added"):
+        lines.append(f"    added: {m['added']}")
     lines.append(f"    status: {m.get('status', 'active')}")
     if m.get("notes"):
         lines.append(f"    notes: \"{m['notes']}\"")
@@ -100,6 +103,8 @@ def main() -> int:
     parser.add_argument("--provider", default="", help="Провайдер (Anthropic, OpenAI, ...). Опционально при --auto.")
     parser.add_argument("--version", default="", help="Версия/релиз. Опционально при --auto.")
     parser.add_argument("--released", default="", help="Дата выхода YYYY-MM-DD")
+    parser.add_argument("--added", default="",
+                        help="Дата регистрации YYYY-MM-DD (по умолчанию сегодня)")
     parser.add_argument("--notes", default="", help="Заметки")
     parser.add_argument("--force", action="store_true", help="Перезаписать если id существует")
     parser.add_argument("--auto", action="store_true", help="Авто-регистрация моделью самой себя. provider/version опциональны. Если модель уже есть — exit 0 (не ошибка).")
@@ -144,6 +149,7 @@ def main() -> int:
         "provider": args.provider,
         "version": args.version,
         "released": args.released,
+        "added": args.added or date.today().isoformat(),
         "status": "active",
         "notes": args.notes,
     }

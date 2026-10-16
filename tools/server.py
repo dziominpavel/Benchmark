@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -1684,6 +1685,7 @@ def add_model():
         "provider": "",
         "version": "",
         "released": "",
+        "added": date.today().isoformat(),
         "status": "active",
         "notes": "",
     }

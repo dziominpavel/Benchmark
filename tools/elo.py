@@ -552,7 +552,8 @@ def verify_snapshots(matchups: list[dict], model_ids: list[str]) -> list[str]:
 
 
 def load_models_yaml() -> list[dict]:
-    """Парсит models.yaml — возвращает список моделей (id, name, provider, status)."""
+    """Парсит models.yaml — возвращает список моделей
+    (id, name, provider, released, added, status)."""
     models_path = MODELS_PATH
     if not models_path.exists():
         return []
@@ -672,6 +673,7 @@ def generate_index() -> dict:
         models_out[mid] = {
             "name": m.get("name", ""),
             "provider": m.get("provider", ""),
+            "added": m.get("added", ""),
             "status": m.get("status", "active"),
             "elo": elo_info["elo"],
             "games": elo_info["games"],
@@ -1040,12 +1042,12 @@ def is_index_stale() -> bool:
     if indexed_models != yaml_models:
         return True
 
-    # Метаданные моделей (status, name, provider) тоже влияют на UI/рекомендации
+    # Метаданные моделей (status, name, provider, added) тоже влияют на UI/рекомендации
     for m in load_models_yaml():
         mid = m["id"]
         info = idx.get("models", {}).get(mid, {})
-        for key in ("name", "provider", "status"):
-            if info.get(key) != m.get(key, ""):
+        for key in ("name", "provider", "status", "added"):
+            if info.get(key, "") != m.get(key, ""):
                 return True
 
     return False
