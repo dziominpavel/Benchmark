@@ -17,10 +17,10 @@ context: |
 rules:
   specs:
     - Текст requirements и сценариев — русский
-    - В каждом ### Requirement: обязательно MUST, SHALL или MUST NOT (не «ДОЛЖЕН») — иначе validate падает
-    - Main spec (openspec/specs/): секции ## Purpose и ## Requirements
-    - Delta spec (openspec/changes/*/specs/): ## ADDED/MODIFIED/REMOVED Requirements
-    - Каждый requirement — минимум один #### Scenario: с WHEN/THEN
+    - "В каждом ### Requirement: обязательно MUST, SHALL или MUST NOT (не «ДОЛЖЕН») — иначе validate падает"
+    - "Main spec (openspec/specs/): секции ## Purpose и ## Requirements"
+    - "Delta spec (openspec/changes/*/specs/): ## ADDED/MODIFIED/REMOVED Requirements"
+    - "Каждый requirement — минимум один #### Scenario: с WHEN/THEN"
     - Capability = подсистема бенчмарк-системы (benchmark-workflow, task-management,
       answer-management, matchup-management, elo-engine, pairing-algorithm,
       leaderboard-ui, model-registry, data-storage) — спеки описывают ФАКТИЧЕСКОЕ
@@ -29,8 +29,8 @@ rules:
       код при наведении порядка в документации не менять
     - После правок запускать openspec validate --all
   proposal:
-    - Русский язык, кратко: что и зачем
+    - "Русский язык, кратко: что и зачем"
   design:
-    - Русский язык: как реализовать, trade-offs
+    - "Русский язык: как реализовать, trade-offs"
   tasks:
     - Русский язык, чекбоксы - [ ] / - [x]
