@@ -202,6 +202,14 @@ models:
     version: 
     added: 2026-09-22
     status: active
+  - id: opencode-hy4-preview-high
+    name: "OpenCode Hy4 Preview High"
+    agent: OpenCode
+    provider: Tencent
+    version: 4 preview
+    released: 2026-08-28
+    added: 2026-10-17
+    status: active
   - id: opencode-ling-3-0-flash-fin-free
     name: "OpenCode Ling 3.0 Flash Fin Free"
     agent: OpenCode
@@ -250,6 +258,14 @@ models:
     provider: NVIDIA
     version: 
     added: 2026-10-15
+    status: active
+  - id: opencode-qwen3-8-max-xhigh
+    name: "OpenCode Qwen3.8 Max Xhigh"
+    agent: OpenCode
+    provider: Alibaba
+    version: 3.8
+    released: 2026-08-03
+    added: 2026-10-17
     status: active
   - id: opencode-space-bunny-free-max
     name: "OpenCode Space Bunny Free Max"
