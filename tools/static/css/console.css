@@ -46,6 +46,13 @@
   --chart-text: var(--muted);
   --chart-baseline: #94a3b8;
 
+  /* палитра распределения Elo: s0 — слабейшие, s2 — пивот 1200, s4 — сильнейшие */
+  --dist-s0: #dc2626;
+  --dist-s1: #f97316;
+  --dist-s2: #fbbf24;
+  --dist-s3: #4ade80;
+  --dist-s4: #16a34a;
+
   /* тени */
   --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 14px 36px rgba(0, 0, 0, 0.5);
@@ -111,6 +118,13 @@
   --chart-grid: rgba(15, 23, 42, 0.10);
   --chart-text: var(--muted);
   --chart-baseline: #55606d;
+
+  /* палитра распределения Elo: s0 — слабейшие, s2 — пивот 1200, s4 — сильнейшие */
+  --dist-s0: #b91c1c;
+  --dist-s1: #ea580c;
+  --dist-s2: #ca8a04;
+  --dist-s3: #16a34a;
+  --dist-s4: #166534;
 
   --shadow-1: 0 2px 10px rgba(15, 23, 42, 0.07);
   --shadow-2: 0 14px 36px rgba(15, 23, 42, 0.13);
@@ -1191,11 +1205,14 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
   font-variant-numeric: tabular-nums;
 }
 
-.dist-pt-below { fill: var(--neg); }
-.dist-pt-above { fill: var(--pos); }
+/* плавная шкала: --a/--b — соседние опоры палитры, --p — доля --b (0% → --a) */
+.dist-pt {
+  fill: var(--dist-s2);
+  fill: color-mix(in oklab, var(--b) var(--p), var(--a));
+}
 /* режим «Подсвечивать»: контур отобранных баров, приглушение остальных */
-rect.filter-hit { stroke: var(--accent); stroke-width: 2; }
-rect.filter-miss { opacity: 0.5; }
+rect.dist-pt.filter-hit { stroke: var(--accent); stroke-width: 2; }
+rect.dist-pt.filter-miss { opacity: 0.5; }
 .dist-line-start { stroke: var(--chart-baseline); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .dist-line-mean { stroke: var(--chart-line); stroke-width: 2; }
 .dist-name { fill: var(--text); font-size: 12px; }

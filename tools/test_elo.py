@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from elo import expected_score, k_factor, round_elo, update_elo, recalculate
+from render_helpers import build_elo_scale, scale_segment
 
 
 def test_expected_score():
@@ -426,6 +427,41 @@ def test_index_stale_agent_provider():
     print("is_index_stale agent/provider: OK")
 
 
+def test_elo_dist_scale():
+    # Полный пул 895..1520: обе половины, пивот 1200
+    anchors = build_elo_scale([895, 1520])
+    assert anchors == [
+        (895.0, 0), (1047.5, 1), (1200.0, 2), (1360.0, 3), (1520.0, 4),
+    ], anchors
+    # Контрольные значения: 895 -> s0/0%, 1218 -> сегмент s2-s3,
+    # 1360 -> сегмент s3-s4, 1520 -> s4/1.0
+    assert scale_segment(895, anchors) == (0, 0.0)
+    seg, frac = scale_segment(1218, anchors)
+    assert seg == 2 and abs(frac - 0.1125) < 1e-9, (seg, frac)
+    assert scale_segment(1360, anchors) == (3, 0.0)
+    assert scale_segment(1520, anchors) == (3, 1.0)
+    # 1200 — всегда опора s2 (левая граница сегмента s2-s3)
+    assert scale_segment(1200, anchors) == (2, 0.0)
+    # Непрерывность на стыке: доля слева ~1 при том же цвете опоры s3
+    seg_l, frac_l = scale_segment(1359.999, anchors)
+    assert seg_l == 2 and frac_l > 0.9999, (seg_l, frac_l)
+    # За краями пула доля зажата в 0/1
+    assert scale_segment(700, anchors) == (0, 0.0)
+    assert scale_segment(2000, anchors) == (3, 1.0)
+    # Пул целиком выше 1200 — только холодная половина (без красного)
+    anchors_hi = build_elo_scale([1250, 1400])
+    assert [a[1] for a in anchors_hi] == [2, 3, 4], anchors_hi
+    # Пул целиком ниже 1200 — только тёплая половина (без зелёного)
+    anchors_lo = build_elo_scale([895, 1100])
+    assert [a[1] for a in anchors_lo] == [0, 1, 2], anchors_lo
+    # Вырожденный пул: одно значение расширяется на +-10 и не падает
+    anchors_one = build_elo_scale([1234])
+    assert anchors_one[0][0] < 1234 < anchors_one[-1][0], anchors_one
+    seg, frac = scale_segment(1234, anchors_one)
+    assert 0.0 <= frac <= 1.0, (seg, frac)
+    print("elo dist scale: OK")
+
+
 if __name__ == "__main__":
     test_expected_score()
     test_k_factor()
@@ -446,4 +482,5 @@ if __name__ == "__main__":
     test_get_coverage_answer_aware()
     test_format_model_roundtrip()
     test_index_stale_agent_provider()
+    test_elo_dist_scale()
     print("\nALL ELO TESTS PASSED")

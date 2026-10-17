@@ -333,6 +333,49 @@ def build_elo_svg(
     return svg + legend
 
 
+def build_elo_scale(elos: list[int]) -> list[tuple[float, int]]:
+    """Анкеры цветовой шкалы распределения: пары (значение Elo, опора палитры).
+
+    Половины растягиваются по пулу вокруг пивота DEFAULT_ELO: минимум — s0
+    (тёмно-красный), 1200 — s2 (жёлтый), максимум — s4 (тёмно-зелёный).
+    Пул целиком выше/равно 1200 использует только холодную половину,
+    целиком ниже — только тёплую. Вырожденный пул (min == max) расширяется
+    на ±10, как ось графика.
+    """
+    lo, hi = min(elos), max(elos)
+    if lo == hi:
+        lo, hi = lo - 10, hi + 10
+    anchors: list[tuple[float, int]] = []
+    if lo < DEFAULT_ELO:
+        anchors += [
+            (float(lo), 0),
+            ((lo + DEFAULT_ELO) / 2.0, 1),
+        ]
+    anchors.append((float(DEFAULT_ELO), 2))
+    if hi > DEFAULT_ELO:
+        anchors += [
+            ((DEFAULT_ELO + hi) / 2.0, 3),
+            (float(hi), 4),
+        ]
+    return anchors
+
+
+def scale_segment(elo: float, anchors: list[tuple[float, int]]) -> tuple[int, float]:
+    """(номер сегмента, доля 0..1) значения Elo на шкале анкеров.
+
+    На стыке сегментов выбирается правый сегмент с долей 0: цвет на стыке
+    непрерывен (конец левого = начало правого). Ниже первого и выше
+    последнего анкера доля зажата в 0/1.
+    """
+    if elo <= anchors[0][0]:
+        return 0, 0.0
+    for i in range(len(anchors) - 1):
+        seg_lo, seg_hi = anchors[i][0], anchors[i + 1][0]
+        if elo < seg_hi:
+            return i, (elo - seg_lo) / (seg_hi - seg_lo)
+    return len(anchors) - 2, 1.0
+
+
 def build_elo_distribution_svg(entries: list[dict], width: int = 860,
                                highlight: bool = False) -> str:
     """Строит SVG bar-chart распределения ELO пула моделей.
@@ -340,7 +383,10 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
     entries: список {elo: int, name: str = "", games: int = 0,
     caption: str = "", hit: bool = True}; сортировка
     по убыванию Elo — внутри. У каждого бара имя модели и значение.
-    Бары ниже 1200 отличаются цветом. Вертикальные линии: старт 1200
+    Бары окрашены непрерывным градиентом по Elo (см. build_elo_scale):
+    минимум пула — тёмно-красный, 1200 — жёлтый, максимум — тёмно-зелёный;
+    пара опор и доля смешивания передаются в inline --a/--b/--p.
+    Вертикальные линии: старт 1200
     и среднее. Ось начинается около минимума (не от нуля).
     Пустой список → заглушка «Нет данных».
     highlight: режим «Подсвечивать» — барам с hit=True добавляется класс
@@ -355,6 +401,7 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
     elos = [p.get("elo", DEFAULT_ELO) for p in pts]
     n = len(elos)
     mean = sum(elos) / n
+    scale = build_elo_scale(elos)
 
     lo, hi = min(elos), max(elos)
     if lo == hi:
@@ -380,9 +427,15 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
     bars = ""
     for i, p in enumerate(pts):
         v = p.get("elo", DEFAULT_ELO)
-        cls = "dist-pt-below" if v < DEFAULT_ELO else "dist-pt-above"
+        seg, frac = scale_segment(v, scale)
+        cls = "dist-pt"
         if any_hits:
             cls += " filter-hit" if p.get("hit") else " filter-miss"
+        style = (
+            f"--a:var(--dist-s{scale[seg][1]});"
+            f"--b:var(--dist-s{scale[seg + 1][1]});"
+            f"--p:{frac * 100:.1f}%"
+        )
         cy = top + i * row_h + row_h / 2
         caption = str(p.get("caption", ""))
         tip_name = (
@@ -392,7 +445,8 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
         label = html.escape(str(p.get("name", "")))
         bars += (
             f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
-            f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" class="{cls}">'
+            f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" '
+            f'class="{cls}" style="{style}">'
             f"<title>{tip}</title></rect>"
             f'<text x="{left - 8}" y="{cy + 4:.1f}" text-anchor="end" '
             f'class="dist-name">{label}<title>{tip}</title></text>'
