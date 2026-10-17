@@ -1,7 +1,7 @@
 [project]
 name = "benchmark-elo"
-# Статический трек: версия заморожена, бампы прекращены (docs/versioning.md).
-version = "0.1.0"
+# Релизный трек: версия меняется только в момент релиза (docs/versioning.md).
+version = "0.2.0"
 description = "ELO Benchmark web server (tools/server.py)"
 requires-python = ">=3.10"
 dependencies = [
