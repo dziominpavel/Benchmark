@@ -65,12 +65,29 @@ from flask import Flask, request, redirect, url_for
 
 app = Flask(__name__)
 
+# Режим «только просмотр»: включён в статическом слепке витрины (export_web).
+# Роуты читают флаг из app.config, шаблоны — через функцию read_only(),
+# поэтому экспорт переключает режим одной строкой до рендера страниц.
+app.config["READ_ONLY"] = False
+
+
+def read_only() -> bool:
+    """Включён ли режим «только просмотр» (в шаблонах: `{% if read_only() %}`)."""
+    return bool(app.config.get("READ_ONLY"))
+
+
+app.jinja_env.globals["read_only"] = read_only
+
 
 # ─── Helpers ────────────────────────────────────────────────────────
 
 
 def _load_index() -> dict:
-    """Читает index.json один раз; устаревший или битый — пересобирает."""
+    """Читает index.json один раз; устаревший или битый — пересобирает.
+
+    В режиме «только просмотр» устаревший кэш пересчитывается в памяти
+    и не перезаписывается (слепок витрины не меняет данные репозитория).
+    """
     idx = None
     if INDEX_PATH.exists():
         try:
@@ -79,7 +96,8 @@ def _load_index() -> dict:
             idx = None
     if idx is None or is_index_stale(idx, digest=data_cache.data_key()[0]):
         idx = generate_index()
-        save_index(idx)
+        if not read_only():
+            save_index(idx)
     return idx
 
 
@@ -900,7 +918,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             <tbody>
               {% for m in models_visible %}
               <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
-                <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ m.rank }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
+                <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span>{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
                   <div>
                     <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
@@ -982,14 +1000,18 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             {% if rec.is_rematch %}<div class="rec-rematch">доп. точность: рематч</div>{% endif %}
             <div class="rec-task">таск: {{ rec.recommended_task }}</div>
           </div>
+          {% if read_only() %}
+          <button class="rec-btn" type="button" disabled>Прогнать</button>
+          {% else %}
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}', '{{ rec.recommended_task }}')">Прогнать</button>
+          {% endif %}
         </div>
       </div>
       {% endif %}
       <div class="card">
         <h2>Записать результат</h2>
         {% if models_list|length >= 2 %}
-        <form method="POST" action="/verdict" id="verdictForm">
+        {% if read_only() %}<fieldset disabled>{% else %}<form method="POST" action="/verdict" id="verdictForm">{% endif %}
           <div class="verdict-row">
             <div class="form-group">
               <label>Модель A</label>
@@ -1024,7 +1046,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             <button type="submit" name="winner" value="b" class="btn btn-lose" id="btnB" disabled>Победила B</button>
             <button type="submit" name="winner" value="draw" class="btn btn-draw" id="btnDraw" disabled>Ничья</button>
           </div>
-        </form>
+        {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
         {% else %}
         <div class="empty-state">
           Нужно минимум 2 модели, чтобы записать результат.
@@ -1034,6 +1056,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
     </div>
   </div>
 
+{% if not read_only() %}
 <script>
 function validate() {
   const a = document.getElementById('modelA').value;
@@ -1053,6 +1076,7 @@ function usePair(a, b, task) {
 }
 validate();
 </script>
+{% endif %}
 {% endblock %}
 """
 
@@ -1086,7 +1110,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     {% endcall %}
   </div>
 
-  <div class="card">
+  <div class="card" id="history-list">
     <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
@@ -1129,7 +1153,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     </span>
     <span class="detail-elo">{{ detail.elo }}</span>
     {% if detail.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
-    <a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>
+    {% if read_only() %}<span class="btn btn-secondary" aria-disabled="true">Изменить</span>{% else %}<a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>{% endif %}
   </div>
 
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
@@ -1566,7 +1590,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         «Изменить» в списке моделей.
       </div>
       <div class="card-actions">
-        <a href="/add" class="btn btn-primary">+ Добавить модель</a>
+        {% if read_only() %}<span class="btn btn-primary" aria-disabled="true">+ Добавить модель</span>{% else %}<a href="/add" class="btn btn-primary">+ Добавить модель</a>{% endif %}
       </div>
     </div>
 
@@ -1589,17 +1613,17 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
               {% if t.current %}<span class="status-pill status-active">текущая</span>{% endif %}
             </td>
             <td class="actions-col">
-              <form method="POST" action="/task/{{ t.id }}/current" class="form-inline">
+              {% if read_only() %}<fieldset disabled class="form-inline">{% else %}<form method="POST" action="/task/{{ t.id }}/current" class="form-inline">{% endif %}
                 {{ filter_hidden() }}
                 <button type="submit" class="btn btn-secondary btn-sm" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
-              </form>
-              <form method="POST" action="/task/{{ t.id }}/toggle" class="form-inline ms-1">
+              {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
+              {% if read_only() %}<fieldset disabled class="form-inline ms-1">{% else %}<form method="POST" action="/task/{{ t.id }}/toggle" class="form-inline ms-1">{% endif %}
                 {{ filter_hidden() }}
                 <button type="submit" class="btn btn-secondary btn-sm">
                   {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
                 </button>
-              </form>
-              <a href="/edit_task/{{ t.id }}" class="btn btn-secondary btn-sm ms-1">Изменить</a>
+              {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
+              {% if read_only() %}<span class="btn btn-secondary btn-sm ms-1" aria-disabled="true">Изменить</span>{% else %}<a href="/edit_task/{{ t.id }}" class="btn btn-secondary btn-sm ms-1">Изменить</a>{% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -1615,7 +1639,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         файлы задачи остаются.
       </div>
       <div class="card-actions">
-        <a href="/add_task" class="btn btn-primary">+ Добавить таску</a>
+        {% if read_only() %}<span class="btn btn-primary" aria-disabled="true">+ Добавить таску</span>{% else %}<a href="/add_task" class="btn btn-primary">+ Добавить таску</a>{% endif %}
       </div>
     </div>
   </div>
@@ -1634,7 +1658,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     </div>
     {% if answer_active_tasks %}
     {% if answer_rows %}
-    <form method="POST" action="/answer_flags" id="flagsForm">
+    {% if read_only() %}<fieldset disabled id="flagsForm">{% else %}<form method="POST" action="/answer_flags" id="flagsForm">{% endif %}
       {{ filter_hidden() }}
       <div class="table-wrap">
         <table class="flags-table">
@@ -1677,7 +1701,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       <div class="card-actions">
         <button type="submit" class="btn btn-primary">Сохранить</button>
       </div>
-    </form>
+    {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
     {% else %}
     <div class="empty-state">
       {% if filter_active %}
@@ -1762,11 +1786,11 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     {% for section in lookup_sections %}
     <div class="lookup-section">
       <h3>{{ section.title }}</h3>
-      <form method="POST" action="/lookups/add" class="lookups-add">
+      {% if read_only() %}<fieldset disabled class="lookups-add">{% else %}<form method="POST" action="/lookups/add" class="lookups-add">{% endif %}
         <input type="hidden" name="kind" value="{{ section.kind }}">
         <input type="text" name="value" class="lookup-input" placeholder="Новое значение" aria-label="Новое значение — {{ section.title|lower }}">
         <button type="submit" class="btn btn-primary btn-sm">Добавить</button>
-      </form>
+      {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
       <div class="table-wrap">
         <table class="lookups-table">
           <thead>
@@ -1782,23 +1806,23 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
               <td>{{ row.count }}</td>
               <td class="actions-col">
                 {% if row.external %}
-                <form method="POST" action="/lookups/promote" class="form-inline">
+                {% if read_only() %}<fieldset disabled class="form-inline">{% else %}<form method="POST" action="/lookups/promote" class="form-inline">{% endif %}
                   <input type="hidden" name="kind" value="{{ section.kind }}">
                   <input type="hidden" name="value" value="{{ row.value }}">
                   <button type="submit" class="btn btn-secondary btn-sm">внести в справочник</button>
-                </form>
+                {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
                 {% else %}
-                <form method="POST" action="/lookups/rename" class="form-inline">
+                {% if read_only() %}<fieldset disabled class="form-inline">{% else %}<form method="POST" action="/lookups/rename" class="form-inline">{% endif %}
                   <input type="hidden" name="kind" value="{{ section.kind }}">
                   <input type="hidden" name="old" value="{{ row.value }}">
                   <input type="text" name="new" value="{{ row.value }}" class="lookup-input" aria-label="Новое значение для «{{ row.value }}»">
                   <button type="submit" class="btn btn-secondary btn-sm">Переименовать</button>
-                </form>
-                <form method="POST" action="/lookups/delete" class="form-inline ms-1">
+                {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
+                {% if read_only() %}<fieldset disabled class="form-inline ms-1">{% else %}<form method="POST" action="/lookups/delete" class="form-inline ms-1">{% endif %}
                   <input type="hidden" name="kind" value="{{ section.kind }}">
                   <input type="hidden" name="value" value="{{ row.value }}">
                   <button type="submit" class="btn btn-secondary btn-sm"{% if row.count %} disabled title="Значение используют {{ row.count }} моделей"{% endif %}>{% if row.count %}используется у {{ row.count }}{% else %}Удалить{% endif %}</button>
-                </form>
+                {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
                 {% endif %}
               </td>
             </tr>

@@ -6,10 +6,18 @@
 <title>{% block title %}ELO Benchmark{% endblock %}</title>
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0a0b10">
-<script src="/static/js/theme.js"></script>
-<link rel="stylesheet" href="/static/css/console.css">
+{% if read_only() %}<link rel="icon" href="__root__icon.svg">
+{% endif %}<script src="/static/js/theme.js"></script>
+{% if read_only() %}<script src="/static/js/mirror.js" defer></script>
+{% endif %}<link rel="stylesheet" href="/static/css/console.css">
 </head>
 <body>
+{% if read_only() %}
+<div class="mirror-banner">
+  <span>демонстрационная копия консоли — только просмотр</span>
+  <a href="__catalog__">Мои приложения</a>
+</div>
+{% endif %}
 {% set path = request.path %}
 {% set nav = 'rating' if path == '/' else
              'history' if path.startswith('/history') else
@@ -45,7 +53,11 @@
 </main>
 
 <footer class="site-footer">
+  {% if read_only() %}
+  <p>ELO Benchmark · демонстрационная копия · данные на момент сборки слепка · <a href="/settings">Настройки</a></p>
+  {% else %}
   <p>ELO Benchmark · локальная консоль · данные: data/index.json · <a href="/settings">Настройки</a></p>
+  {% endif %}
 </footer>
 </body>
 </html>

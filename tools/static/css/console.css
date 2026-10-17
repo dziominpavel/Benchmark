@@ -152,6 +152,12 @@ body {
 
 a { color: var(--accent); }
 
+/* Режим «только просмотр» (слепок витрины): fieldset-обёртки не меняют вид,
+   обезвреженные действия выглядят кнопками, но не кликабельны. */
+fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+
+.btn[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+
 h1, h2, h3 {
   line-height: var(--lh-tight);
   letter-spacing: -0.02em;
@@ -174,6 +180,23 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
     scroll-behavior: auto !important;
   }
 }
+
+/* --- плашка зеркала (только read-only слепок) ----------------------------- */
+
+.mirror-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) clamp(24px, 4%, 32px);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.mirror-banner a { color: var(--accent); }
 
 /* --- шапка (sticky + blur) ------------------------------------------------ */
 

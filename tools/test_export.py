@@ -1,0 +1,500 @@
+#!/usr/bin/env python3
+"""
+test_export.py — статический слепок витрины: read-only режим и команда экспорта.
+
+Проверяет:
+  * 1.1 — в обычном рендере плашки зеркала нет, в read-only есть
+    (плашка со ссылкой в каталог, футер без «локальной консоли», favicon).
+  * 1.2 — в read-only нет POST-форм и write-ссылок; обычный режим не изменился.
+  * 1.3 — в read-only устаревший index.json пересчитывается без записи файла.
+  * 2.1 — состав и детерминизм вывода export_web.py.
+  * 2.2 — каждая внутренняя ссылка слепка разрешается в файл, маркеров нет.
+  * 2.3 — целостность и пороги: нарушитель → ненулевой код, чистая сборка → 0.
+  * 3.1 — строки архива и остров реестра «Рейтинга», номера рангов в span.
+  * 3.2 — шаблон строк архива матрицы «Настроек» и данные участников истории.
+  * 3.3 — JSON-остров аналитики содержит все модели полного состава.
+
+Запуск: python tools/test_export.py
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import re
+import sys
+import tempfile
+from contextlib import contextmanager, redirect_stdout
+from datetime import datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import data_cache
+import elo
+import export_web
+import lookups
+import server
+
+MODELS_YAML = """\
+models:
+  - id: alpha
+    name: Alpha
+    agent: Agent
+    provider: Prov
+    added: 2026-01-01
+    status: active
+  - id: beta
+    name: Beta
+    agent: Agent
+    provider: Prov
+    added: 2026-01-01
+    status: active
+  - id: gamma
+    name: Gamma
+    agent: Agent
+    provider: Prov
+    added: 2026-01-01
+    status: archived
+"""
+
+SETTINGS_YAML = """\
+current_task: T-001
+tasks:
+  T-001: active
+"""
+
+FLAGS_YAML = """\
+answer_flags:
+  T-001:
+    alpha: true
+    beta: true
+"""
+
+LOOKUPS_YAML = """\
+agents:
+  - Agent
+providers:
+  - Prov
+"""
+
+JOURNAL_LINE = (
+    '{"version": 1, "seq": 1, "task": "T-001", "matchup": "T-001/001", '
+    '"model_a": "alpha", "model_b": "beta", "model_a_id": "alpha", '
+    '"model_b_id": "beta", "winner": "a", "date": "2026-01-02", '
+    '"recorded_at": "2026-01-02T10:00:00+03:00", '
+    '"elo": {"alpha": {"before": 1200, "after": 1220, "delta": 20}, '
+    '"beta": {"before": 1200, "after": 1180, "delta": -20}}}\n'
+)
+
+TASK_MD = """\
+---
+id: T-001
+title: "Smoke"
+project: "Benchmark"
+baseline_commit: ""
+---
+
+Тело smoke-задачи.
+"""
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+@contextmanager
+def _temp_storage():
+    """tmp-хранилище с подменой путей elo/server/lookups на время теста."""
+    with tempfile.TemporaryDirectory(prefix="bench_export_") as tmp_str:
+        tmp = Path(tmp_str)
+        paths = {
+            "tmp": tmp,
+            "journal": tmp / "matchups" / "journal.jsonl",
+            "models": tmp / "models.yaml",
+            "flags": tmp / "answer_flags.yaml",
+            "settings": tmp / "settings.yaml",
+            "lookups": tmp / "lookups.yaml",
+            "index": tmp / "index.json",
+            "tasks": tmp / "tasks",
+        }
+        _write(paths["models"], MODELS_YAML)
+        _write(paths["settings"], SETTINGS_YAML)
+        _write(paths["flags"], FLAGS_YAML)
+        _write(paths["lookups"], LOOKUPS_YAML)
+        _write(paths["journal"], JOURNAL_LINE)
+        _write(paths["tasks"] / "T-001-smoke" / "task.md", TASK_MD)
+
+        saved = {
+            "elo.JOURNAL_PATH": elo.JOURNAL_PATH,
+            "elo.MODELS_PATH": elo.MODELS_PATH,
+            "elo.ANSWER_FLAGS_PATH": elo.ANSWER_FLAGS_PATH,
+            "elo.SETTINGS_PATH": elo.SETTINGS_PATH,
+            "elo.TASKS_DIR": elo.TASKS_DIR,
+            "elo.INDEX_PATH": elo.INDEX_PATH,
+            "lookups.LOOKUPS_PATH": lookups.LOOKUPS_PATH,
+            "server.INDEX_PATH": server.INDEX_PATH,
+            "server.MODELS_PATH": server.MODELS_PATH,
+            "server.TASKS_DIR": server.TASKS_DIR,
+        }
+        elo.JOURNAL_PATH = paths["journal"]
+        elo.MODELS_PATH = paths["models"]
+        elo.ANSWER_FLAGS_PATH = paths["flags"]
+        elo.SETTINGS_PATH = paths["settings"]
+        elo.TASKS_DIR = paths["tasks"]
+        elo.INDEX_PATH = paths["index"]
+        lookups.LOOKUPS_PATH = paths["lookups"]
+        server.INDEX_PATH = paths["index"]
+        server.MODELS_PATH = paths["models"]
+        server.TASKS_DIR = paths["tasks"]
+        data_cache.clear()
+        try:
+            yield paths
+        finally:
+            data_cache.clear()
+            elo.JOURNAL_PATH = saved["elo.JOURNAL_PATH"]
+            elo.MODELS_PATH = saved["elo.MODELS_PATH"]
+            elo.ANSWER_FLAGS_PATH = saved["elo.ANSWER_FLAGS_PATH"]
+            elo.SETTINGS_PATH = saved["elo.SETTINGS_PATH"]
+            elo.TASKS_DIR = saved["elo.TASKS_DIR"]
+            elo.INDEX_PATH = saved["elo.INDEX_PATH"]
+            lookups.LOOKUPS_PATH = saved["lookups.LOOKUPS_PATH"]
+            server.INDEX_PATH = saved["server.INDEX_PATH"]
+            server.MODELS_PATH = saved["server.MODELS_PATH"]
+            server.TASKS_DIR = saved["server.TASKS_DIR"]
+
+
+@contextmanager
+def _read_only():
+    """Включает режим «только просмотр» и гарантированно возвращает флаг."""
+    saved = bool(server.app.config.get("READ_ONLY"))
+    server.app.config["READ_ONLY"] = True
+    try:
+        yield
+    finally:
+        server.app.config["READ_ONLY"] = saved
+
+
+def test_read_only_two_modes():
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Обычная локальная консоль: плашки зеркала нет
+        html = client.get("/").get_data(as_text=True)
+        assert "mirror-banner" not in html, "плашка не должна появляться в локальной консоли"
+        assert "локальная консоль" in html, "пропал футер локальной консоли"
+        assert "__catalog__" not in html, "маркер каталога просочился в обычный рендер"
+
+        # Read-only слепок: плашка, ссылка в каталог, favicon, футер зеркала
+        with _read_only():
+            html = client.get("/").get_data(as_text=True)
+        assert "mirror-banner" in html, "в read-only нет плашки зеркала"
+        assert "только просмотр" in html, "нет пометки «только просмотр»"
+        assert "__catalog__" in html, "нет ссылки в каталог по маркеру"
+        assert '__root__icon.svg' in html, "нет favicon по маркеру __root__"
+        assert "локальная консоль" not in html, "футер read-only упоминает локальную консоль"
+        assert "демонстрационная копия" in html
+
+        # Возврат к обычному режиму: плашка исчезает
+        html = client.get("/").get_data(as_text=True)
+        assert "mirror-banner" not in html, "флаг read-only не вернулся в исходное состояние"
+    print("1.1 read-only two modes: OK")
+
+
+def test_read_only_inert_controls():
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Обычный режим: контролы записи на месте (условия их не отключили)
+        home = client.get("/").get_data(as_text=True)
+        assert 'method="POST"' in home and 'action="/verdict"' in home
+        assert "usePair(" in home, "пропал скрипт формы вердикта"
+        assert "this.form.submit()" in home, "фильтры обычной консоли потеряли автоприменение"
+        model_html = client.get("/model/alpha").get_data(as_text=True)
+        assert 'href="/edit/alpha"' in model_html
+        settings = client.get("/settings").get_data(as_text=True)
+        assert 'action="/answer_flags"' in settings
+        assert 'href="/add"' in settings and 'href="/add_task"' in settings
+
+        # Слепок: POST-форм и write-адресов нет, контролы — в disabled fieldset
+        with _read_only():
+            home = client.get("/").get_data(as_text=True)
+            model_html = client.get("/model/alpha").get_data(as_text=True)
+            settings = client.get("/settings").get_data(as_text=True)
+
+        for name, page in (("главная", home), ("модель", model_html),
+                           ("настройки", settings)):
+            assert "method=" + '"POST"' not in page, f"{name}: осталась POST-форма"
+            for ref in ('href="/edit', 'href="/add', 'action="/verdict"',
+                        'action="/answer_flags"', 'action="/lookups',
+                        'action="/task/'):
+                assert ref not in page, f"{name}: остался write-адрес {ref}"
+
+        assert "<fieldset disabled" in home and "<fieldset disabled" in settings
+        assert "Прогнать" in home and "disabled>Прогнать</button>" in home
+        assert 'onclick="usePair(' not in home, "кнопка запуска осталась активной"
+        assert "function validate" not in home, "скрипт записи отрендерен в read-only"
+        assert 'aria-disabled="true"' in model_html, "«Изменить» не обезврежена"
+    print("1.2 read-only inert controls: OK")
+
+
+def test_read_only_no_cache_write():
+    with _temp_storage() as paths:
+        # Заведомо устаревший кэш: дайджест не совпадает с журналом
+        _write(paths["index"], json.dumps({"matchups_digest": "stale"}))
+        stale_text = paths["index"].read_text(encoding="utf-8")
+
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        with _read_only():
+            resp = client.get("/")
+            assert resp.status_code == 200
+            assert paths["index"].read_text(encoding="utf-8") == stale_text, (
+                "read-only перезаписал устаревший index.json"
+            )
+            idx = server.ensure_index()
+            assert idx.get("matchups_digest") != "stale", (
+                "устаревший индекс не пересчитан в памяти"
+            )
+
+        # Обычный режим: тот же устаревший кэш обновляется на диске
+        data_cache.clear()
+        client.get("/")
+        assert paths["index"].read_text(encoding="utf-8") != stale_text, (
+            "обычный режим не обновил устаревший index.json"
+        )
+    print("1.3 read-only keeps stale cache: OK")
+
+
+def _big_journal(count: int) -> str:
+    """Синтетический журнал на count вердиктов между alpha и beta."""
+    base = datetime(2026, 1, 2, 10, 0, 0)
+    lines = []
+    for seq in range(1, count + 1):
+        ts = base + timedelta(minutes=seq)
+        lines.append(json.dumps({
+            "version": 1,
+            "seq": seq,
+            "task": "T-001",
+            "matchup": f"T-001/{seq:04d}",
+            "model_a": "alpha",
+            "model_b": "beta",
+            "model_a_id": "alpha",
+            "model_b_id": "beta",
+            "winner": "a" if seq % 2 else "b",
+            "date": ts.date().isoformat(),
+            "recorded_at": ts.isoformat(timespec="seconds"),
+        }, ensure_ascii=False))
+    return "\n".join(lines) + "\n"
+
+
+def test_export_output_and_determinism():
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_a_") as dir_a, \
+                tempfile.TemporaryDirectory(prefix="bench_mirror_b_") as dir_b:
+            with _read_only():
+                assert export_web.main(["--out", dir_a]) == 0
+                assert export_web.main(["--out", dir_b]) == 0
+            files_a = {
+                p.relative_to(dir_a).as_posix(): p.read_bytes()
+                for p in Path(dir_a).rglob("*") if p.is_file()
+            }
+            files_b = {
+                p.relative_to(dir_b).as_posix(): p.read_bytes()
+                for p in Path(dir_b).rglob("*") if p.is_file()
+            }
+            assert set(files_a) == set(files_b), "состав сборок различается"
+            for name, data in files_a.items():
+                assert files_b[name] == data, f"содержимое различается: {name}"
+            for expected in (
+                "index.html", "history/index.html", "stats/index.html",
+                "settings/index.html", "model/alpha/index.html",
+                "model/gamma/index.html", "static/css/console.css",
+                "static/js/theme.js", "static/js/mirror.js", "icon.svg",
+            ):
+                assert expected in files_a, f"нет файла вывода: {expected}"
+    print("2.1 export output and determinism: OK")
+
+
+def test_export_links_and_markers():
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_links_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out, "--catalog-depth", "3"]) == 0
+            errors = export_web.check_output(Path(out), 3)
+            assert not errors, f"целостность нарушена: {errors}"
+            html = (Path(out) / "index.html").read_text(encoding="utf-8")
+            assert "../../../" in html, "ссылка в каталог не учла --catalog-depth"
+            assert "__root__" not in html and "__catalog__" not in html
+            history = (Path(out) / "history" / "index.html").read_text(encoding="utf-8")
+            assert 'href="../static/css/console.css"' in history
+            model = (Path(out) / "model" / "alpha" / "index.html").read_text(encoding="utf-8")
+            assert 'src="../../static/js/theme.js"' in model
+    print("2.2 links and markers: OK")
+
+
+def test_export_queue_pages():
+    ids = [f"m{i:02d}" for i in range(15)]
+    with _temp_storage() as paths:
+        models_yaml = ["models:"]
+        for mid in ids:
+            models_yaml += [
+                f"  - id: {mid}",
+                f"    name: Model {mid}",
+                "    agent: Agent",
+                "    provider: Prov",
+                "    added: 2026-01-01",
+                "    status: active",
+            ]
+        flags_yaml = ["answer_flags:", "  T-001:"]
+        flags_yaml += [f"    {mid}: true" for mid in ids]
+        _write(paths["models"], "\n".join(models_yaml) + "\n")
+        _write(paths["flags"], "\n".join(flags_yaml) + "\n")
+        _write(paths["journal"], "")
+        data_cache.clear()
+
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_queue_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            root = Path(out)
+            assert (root / "settings" / "queue-002" / "index.html").is_file(), \
+                "нет второй страницы очереди"
+            page1 = (root / "settings" / "index.html").read_text(encoding="utf-8")
+            assert "queue-002/" in page1, "ссылка на вторую страницу не переписана в файл"
+            assert "queue_page=" not in page1, "остались query-ссылки очереди"
+            page2 = (root / "settings" / "queue-002" / "index.html").read_text(
+                encoding="utf-8")
+            assert "page-arrow" in page2, "на второй странице нет виджета пагинации"
+            assert 'class="rank">101</td>' in page2, "вторая страница без строк 101+"
+            assert 'id="mirror-models"' in page2, "страница очереди без острова реестра"
+    print("2.2 queue pages: OK")
+
+
+def _island_of(html: str, island_id: str) -> dict:
+    """Разбирает JSON-остров зеркала по id."""
+    match = re.search(
+        r'<script type="application/json" id="' + island_id + r'">(.*?)</script>',
+        html, re.S)
+    assert match, f"нет острова {island_id}"
+    return json.loads(match.group(1))
+
+
+def test_export_mirror_layer():
+    """3.1–3.3: острова данных, шаблоны архива, скрипт зеркала, снятые onchange.
+
+    Обычный рендер (без экспорта) автоприменение фильтров сохраняет — его
+    снимает именно postprocess слепка, чью работу исполняет mirror.js.
+    """
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_layer_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            root = Path(out)
+            index = (root / "index.html").read_text(encoding="utf-8")
+            history = (root / "history" / "index.html").read_text(encoding="utf-8")
+            stats = (root / "stats" / "index.html").read_text(encoding="utf-8")
+            settings = (root / "settings" / "index.html").read_text(encoding="utf-8")
+
+            # Скрипт зеркала подключён относительной ссылкой, файл в сборке
+            assert 'src="static/js/mirror.js"' in index
+            assert 'src="../static/js/mirror.js"' in settings
+            script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
+            for marker in ("mirror-archived-rows", "mirror-table-wrap",
+                           "mirror-stats-data", "HISTORY_PAGE_SIZE"):
+                assert marker in script, f"mirror.js: нет маркера {marker}"
+
+            # Навигационные onchange фильтров сняты (их роль играет mirror.js)
+            for name, page in (("главная", index), ("история", history),
+                               ("аналитика", stats), ("настройки", settings)):
+                assert "this.form.submit()" not in page, f"{name}: остался onchange фильтров"
+
+            # Остров реестра: полный состав, архивы отмечены
+            island = _island_of(index, "mirror-models")
+            assert set(island) == {"alpha", "beta", "gamma"}
+            assert island["alpha"]["s"] == "active" and island["gamma"]["s"] == "archived"
+            assert _island_of(history, "mirror-models") == island
+            assert _island_of(settings, "mirror-models") == island
+            assert set(_island_of(stats, "mirror-stats-data")) == {"alpha", "beta", "gamma"}
+
+            # 3.1: номера рангов выделены в span под клиентскую перенумерацию
+            assert '<span class="rank-num">1</span>' in index
+            assert '<span class="rank-num">2</span>' in index
+
+            # 3.1: шаблон архива главной несёт строку gamma (и только её)
+            assert '<template id="mirror-archived-rows">' in index
+            index_tpl = index.split('<template id="mirror-archived-rows">', 1)[1]
+            index_tpl = index_tpl.split("</template>", 1)[0]
+            assert "model/gamma/" in index_tpl, "в шаблоне архива нет ссылки на gamma"
+            assert 'class="archived' in index_tpl, "строка архива без статусной пометки"
+            assert "model/alpha/" not in index_tpl and "model/beta/" not in index_tpl
+
+            # 3.2: шаблон архива матрицы «Настроек» — строка gamma с чекбоксами
+            assert '<template id="mirror-archived-rows">' in settings
+            settings_tpl = settings.split('<template id="mirror-archived-rows">', 1)[1]
+            settings_tpl = settings_tpl.split("</template>", 1)[0]
+            assert 'value="gamma||T-001"' in settings_tpl
+
+            # 3.2: строки истории несут участников для серверных фильтров
+            assert 'data-a="alpha" data-b="beta"' in history
+    print("3.x mirror data layer: OK")
+
+
+def test_check_output_violations():
+    with tempfile.TemporaryDirectory(prefix="bench_mirror_bad_") as out:
+        root = Path(out)
+        (root / "bad.html").write_text(
+            '<a href="/root">1</a>'
+            '<a href="https://example.com/x">2</a>'
+            '<a href="missing.html">3</a>'
+            '<form method="POST" action="/x"></form>'
+            "маркер __root__",
+            encoding="utf-8",
+        )
+        errors = export_web.check_output(root, 2)
+        text = "\n".join(errors)
+        assert "корневой адрес" in text
+        assert "внешний ресурс" in text
+        assert "файл не найден" in text
+        assert "POST-форма" in text
+        assert "остаточный маркер" in text
+        assert len(errors) >= 5, errors
+    print("2.3 check violations: OK")
+
+
+def test_export_history_threshold_warning():
+    with _temp_storage() as paths:
+        count = export_web.HISTORY_WARN_RECORDS + 100
+        _write(paths["journal"], _big_journal(count))
+        data_cache.clear()
+
+        buffer = io.StringIO()
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_big_") as out:
+            with redirect_stdout(buffer):
+                with _read_only():
+                    code = export_web.main(["--out", out])
+            assert code == 0, "сборка с большой историей упала"
+            printed = buffer.getvalue()
+            assert "ПРЕДУПРЕЖДЕНИЕ" in printed and "история" in printed, printed
+            assert "Слепок собран" in printed, printed
+            history_html = (Path(out) / "history" / "index.html").read_text(
+                encoding="utf-8")
+            rows = history_html.count('<div data-a="')
+            assert rows == count, f"история неполная: {rows} из {count}"
+    print("2.3 history threshold warning: OK")
+
+
+if __name__ == "__main__":
+    test_read_only_two_modes()
+    test_read_only_inert_controls()
+    test_read_only_no_cache_write()
+    test_export_output_and_determinism()
+    test_export_links_and_markers()
+    test_export_queue_pages()
+    test_export_mirror_layer()
+    test_check_output_violations()
+    test_export_history_threshold_warning()
+    print("\nALL EXPORT TESTS PASSED")

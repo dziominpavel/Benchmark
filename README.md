@@ -92,7 +92,9 @@ Benchmark/
 │   ├── archive_model.py   # Архивация/разархивация модели (--restore)
 │   ├── data_cache.py      # Memo-слой сервера: кэш дайджестов и производных данных
 │   ├── migrate_journal.py # Одноразовая миграция вердиктов в единый журнал journal.jsonl
-│   └── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
+│   ├── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
+│   ├── export_web.py      # Статический слепок консоли для витрины (read-only, относительные ссылки)
+│   └── test_export.py     # Тесты слепка: read-only режим, состав, ссылки, клиентский слой
 │
 └── openspec/              # Спецификации системы (по факту кода MVP)
     ├── config.yaml
@@ -117,6 +119,10 @@ uv run python tools/server.py
 # Пересчитать ELO вручную / проверить свежесть кэша
 uv run python tools/elo.py
 uv run python tools/elo.py --check
+
+# Собрать статический слепок консоли для витрины (полный, только просмотр;
+# каталог вывода должен быть пуст, --catalog-depth — глубина от корня витрины)
+uv run python tools/export_web.py --out <каталог>
 
 # Юнит-тесты движка
 uv run python tools/test_elo.py
