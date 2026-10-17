@@ -22,6 +22,9 @@
   --text: #e9edf4;
   --muted: #9aa7b8;
 
+  /* подписи моделей «Компания · Агент» — единая приглушённость */
+  --caption-opacity: 0.45;
+
   /* акцент */
   --accent: #7aa5ff;
   --accent-strong: #1d4ed8;
@@ -1173,13 +1176,14 @@ tr.archived td { opacity: 0.6; }
 .dist-line-mean { stroke: var(--chart-line); stroke-width: 2; }
 .dist-name { fill: var(--text); font-size: 12px; }
 .dist-value { fill: var(--muted); font-size: 12px; }
-.dist-caption { fill: var(--muted); font-size: 10px; }
+.dist-caption { fill: var(--muted); font-size: 10px; opacity: var(--caption-opacity); }
 
 /* --- блок «Фильтр» и подписи моделей -------------------------------------- */
 
 .model-caption {
   display: block;
   color: var(--muted);
+  opacity: var(--caption-opacity);
   font-size: var(--fs-xs);
   font-weight: 400;
   line-height: 1.3;
