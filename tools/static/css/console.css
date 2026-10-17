@@ -598,6 +598,18 @@ tr.top-3:hover td { background: var(--surface-2); }
 
 tr.archived td { opacity: 0.6; }
 
+/* режим «Подсвечивать»: отобранные строки — акцентный фон и полоса слева,
+   неотобранные — приглушены (при наведении приглушение ослабляется).
+   Правила идут ниже комбинаций top-1..3 и archived, чтобы перекрывать их. */
+tr.filter-hit td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+tr.filter-hit td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+tr.filter-hit:hover td { background: var(--surface-2); }
+tr.filter-miss td { opacity: 0.55; }
+tr.filter-miss:hover td { opacity: 0.85; }
+tr.archived.filter-hit td { opacity: 0.8; }
+tr.archived.filter-miss td { opacity: 0.45; }
+tr.archived.filter-miss:hover td { opacity: 0.75; }
+
 .edit-link { color: var(--text); text-decoration: none; font-weight: 600; }
 .edit-link:hover { color: var(--accent); text-decoration: underline; }
 
@@ -887,6 +899,15 @@ tr.archived td { opacity: 0.6; }
 }
 
 .history-item:last-child { border-bottom: none; }
+
+/* режим «Подсвечивать»: подсветка/приглушение строк ленты */
+.history-item.filter-hit {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: var(--sp-3);
+}
+.history-item.filter-miss { opacity: 0.55; }
+.history-item.filter-miss:hover { opacity: 0.85; }
 .history-model { font-weight: 600; color: var(--text); min-width: 140px; }
 .history-elo {
   font-weight: 700;
@@ -1172,6 +1193,9 @@ tr.archived td { opacity: 0.6; }
 
 .dist-pt-below { fill: var(--neg); }
 .dist-pt-above { fill: var(--pos); }
+/* режим «Подсвечивать»: контур отобранных баров, приглушение остальных */
+rect.filter-hit { stroke: var(--accent); stroke-width: 2; }
+rect.filter-miss { opacity: 0.5; }
 .dist-line-start { stroke: var(--chart-baseline); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .dist-line-mean { stroke: var(--chart-line); stroke-width: 2; }
 .dist-name { fill: var(--text); font-size: 12px; }
@@ -1226,6 +1250,35 @@ tr.archived td { opacity: 0.6; }
 .filter-reset:hover {
   color: var(--text);
   border-bottom-color: var(--border-strong);
+}
+
+/* свёрнутая раскрывашка «Настройки фильтра» */
+.filter-settings {
+  margin-bottom: var(--sp-3);
+}
+
+.filter-settings > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.filter-settings > summary:hover,
+.filter-settings[open] > summary {
+  color: var(--text);
+}
+
+.filter-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
 }
 
 .filter-rows {

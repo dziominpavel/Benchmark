@@ -156,15 +156,18 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
 
 
 def format_elo_history(history: list[dict], name_map: dict,
-                       caption_map: dict | None = None) -> list[dict]:
+                       caption_map: dict | None = None,
+                       highlight: bool = False) -> list[dict]:
     """Преобразует match-centric elo_history в форму для рендеринга.
 
     caption_map: id → подпись «Компания · Агент» (опционально).
+    highlight: режим «Подсвечивать» — отдаёт item["hit"] (признак отобранной
+    записи, проставленный роутом в исходных словарях); иначе hit=False.
     Возвращает список словарей с полями:
       model_a_name, model_b_name, model_a_caption, model_b_caption,
       elo_a_before, elo_a_after, elo_a_delta, elo_a_delta_str, elo_a_delta_class,
       elo_b_before, elo_b_after, elo_b_delta, elo_b_delta_str, elo_b_delta_class,
-      date_str.
+      date_str, hit.
     """
     items = []
     for item in history:
@@ -208,6 +211,7 @@ def format_elo_history(history: list[dict], name_map: dict,
             "elo_b_delta_str": b_delta_str,
             "elo_b_delta_class": b_delta_class,
             "date_str": date_str,
+            "hit": bool(item.get("hit")) if highlight else False,
         })
     return items
 
@@ -329,20 +333,25 @@ def build_elo_svg(
     return svg + legend
 
 
-def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
+def build_elo_distribution_svg(entries: list[dict], width: int = 860,
+                               highlight: bool = False) -> str:
     """Строит SVG bar-chart распределения ELO пула моделей.
 
     entries: список {elo: int, name: str = "", games: int = 0,
-    caption: str = ""}; сортировка
+    caption: str = "", hit: bool = True}; сортировка
     по убыванию Elo — внутри. У каждого бара имя модели и значение.
     Бары ниже 1200 отличаются цветом. Вертикальные линии: старт 1200
     и среднее. Ось начинается около минимума (не от нуля).
     Пустой список → заглушка «Нет данных».
+    highlight: режим «Подсвечивать» — барам с hit=True добавляется класс
+    filter-hit (акцентный контур), остальным — filter-miss (приглушение);
+    если отобранных нет, классы не навешиваются (без приглушения).
     """
     if not entries:
         return '<div class="chart-empty">Нет данных</div>'
 
     pts = sorted(entries, key=lambda e: e.get("elo", DEFAULT_ELO), reverse=True)
+    any_hits = highlight and any(p.get("hit") for p in pts)
     elos = [p.get("elo", DEFAULT_ELO) for p in pts]
     n = len(elos)
     mean = sum(elos) / n
@@ -372,6 +381,8 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860) -> str:
     for i, p in enumerate(pts):
         v = p.get("elo", DEFAULT_ELO)
         cls = "dist-pt-below" if v < DEFAULT_ELO else "dist-pt-above"
+        if any_hits:
+            cls += " filter-hit" if p.get("hit") else " filter-miss"
         cy = top + i * row_h + row_h / 2
         caption = str(p.get("caption", ""))
         tip_name = (

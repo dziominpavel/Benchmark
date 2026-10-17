@@ -23,6 +23,7 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlencode
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -135,6 +136,18 @@ def valid_answer_filter(value: str | None) -> str:
     return v if v in ("active", "all", "inactive") else "active"
 
 
+def valid_filter_view(value: str | None) -> str:
+    """Валидирует режим отображения блока «Фильтр»; невалидное → 'hide'."""
+    v = (value or "hide").strip().lower()
+    return v if v in ("hide", "highlight") else "hide"
+
+
+def valid_chips_order(value: str | None) -> str:
+    """Валидирует порядок чипов блока «Фильтр»; невалидное → 'alpha'."""
+    v = (value or "alpha").strip().lower()
+    return v if v in ("alpha", "elo") else "alpha"
+
+
 # ─── Блок «Фильтр» ──────────────────────────────────────────────────
 
 TAG_NONE = "none"
@@ -197,6 +210,22 @@ def model_passes_tags(info: dict, agent_sel: set[str], provider_sel: set[str]) -
     return True
 
 
+def _sort_tags_by_elo(values: list[str], models: dict, key: str) -> list[str]:
+    """Чипы «по ELO»: убывание максимального ELO группы; ничьи — алфавит.
+
+    Учитывается полный реестр, включая архивные модели.
+    """
+    def max_elo(value: str) -> int:
+        elos = [
+            info.get("elo", DEFAULT_ELO)
+            for info in models.values()
+            if str(info.get(key) or "").strip() == value
+        ]
+        return max(elos, default=DEFAULT_ELO)
+
+    return sorted(values, key=lambda v: (-max_elo(v), v.lower()))
+
+
 def filter_panel_context(models: dict, action: str, reset_url: str,
                          hidden_fields: list[dict] | None = None,
                          reset_extra: bool = False) -> dict:
@@ -208,9 +237,17 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
     reset_extra — применён ли на странице собственный фильтр («Показывать»,
     модель, «только долги»): ссылка «Сбросить» показывается, только когда
     отфильтровано хоть что-то.
+    Настройки отображения (`view`, `chips`) читаются из query и возвращаются
+    как `filter_view`/`filter_chips`; в «Сбросить» и hidden-поля они попадают,
+    только когда отличаются от значений по умолчанию.
     """
+    filter_view = valid_filter_view(request.args.get("view"))
+    filter_chips = valid_chips_order(request.args.get("chips"))
     agents, agents_none = _tag_values(models, "agent")
     providers, providers_none = _tag_values(models, "provider")
+    if filter_chips == "elo":
+        agents = _sort_tags_by_elo(agents, models, "agent")
+        providers = _sort_tags_by_elo(providers, models, "provider")
     agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
     provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
     agents_csv = _tags_csv(agent_sel)
@@ -220,9 +257,26 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         hidden.append({"name": "agents", "value": agents_csv})
     if providers_csv:
         hidden.append({"name": "providers", "value": providers_csv})
+    if filter_view != "hide":
+        hidden.append({"name": "view", "value": filter_view})
+    if filter_chips != "alpha":
+        hidden.append({"name": "chips", "value": filter_chips})
+    reset = reset_url
+    reset_extra_params = {}
+    if filter_view != "hide":
+        reset_extra_params["view"] = filter_view
+    if filter_chips != "alpha":
+        reset_extra_params["chips"] = filter_chips
+    if reset_extra_params:
+        reset = reset + ("&" if "?" in reset else "?") + urlencode(reset_extra_params)
+    badge_parts = []
+    if filter_view == "highlight":
+        badge_parts.append("подсветка")
+    if filter_chips == "elo":
+        badge_parts.append("чипы по ELO")
     return {
         "filter_action": action,
-        "filter_reset_url": reset_url,
+        "filter_reset_url": reset,
         "filter_hidden_fields": hidden,
         "filter_active": bool(agent_sel or provider_sel),
         "filter_reset_visible": bool(agent_sel or provider_sel) or bool(reset_extra),
@@ -240,6 +294,9 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         "filter_providers_csv": providers_csv,
         "filter_agent_sel": agent_sel,
         "filter_provider_sel": provider_sel,
+        "filter_view": filter_view,
+        "filter_chips": filter_chips,
+        "filter_settings_badge": " · ".join(badge_parts),
     }
 
 
@@ -648,7 +705,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="controls">
     <div class="stats">
-      Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
+      {% if filter_view == 'highlight' %}Моделей: {{ models_count }} · подсвечено {{ highlight_hits }}{% else %}Моделей: {{ filtered_count }} из {{ models_count }}{% endif %} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
     <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
     {% call filter_panel() %}
@@ -683,8 +740,8 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             </thead>
             <tbody>
               {% for m in models_visible %}
-              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and filter != 'inactive' }}">
-                <td class="rank">{% if m.id in medals and filter != 'inactive' %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ m.rank }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
+              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
+                <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}{{ m.rank }}{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
                   <div>
                     <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
@@ -705,6 +762,9 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             </tbody>
           </table>
         </div>
+        {% if filter_view == 'highlight' and not highlight_hits %}
+        <div class="hint">Ничего не подсвечено — ни одна модель не проходит выбранные условия.</div>
+        {% endif %}
         {% elif models_sorted %}
         <div class="empty-state">
           Под выбранный фильтр не попала ни одна модель.
@@ -721,7 +781,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           {% endif %}
         </div>
         {% endif %}
-        {% if filter == 'active' and archived_list %}
+        {% if filter == 'active' and archived_list and filter_view == 'hide' %}
         <details class="archived-section">
           <summary>Архивные модели ({{ archived_list|length }})</summary>
           <ul>
@@ -850,7 +910,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="controls">
     <div class="stats">
-      Всего записей: {{ history_total }}{% if model %} · Фильтр: {{ model_name }}{% endif %}
+      Всего записей: {{ history_total }}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
     </div>
     {% call filter_panel() %}
       <span class="filter-label">Модель</span>
@@ -870,7 +930,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
-    <div class="history-item">
+    <div class="history-item{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}">
       <span class="history-model">
         <span class="history-side">{{ item.model_a_name }}{% if item.model_a_caption %}<span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
         <span class="history-vs">vs</span>
@@ -883,6 +943,9 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
       <span class="history-date">{{ item.date_str }}</span>
     </div>
     {% endfor %}
+    {% if filter_view == 'highlight' and not history_hits %}
+    <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
+    {% endif %}
     {% if history_pages > 1 %}
     <div class="pagination">
       {% for p in range(1, history_pages + 1) %}
@@ -1071,7 +1134,7 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
     <thead><tr><th>Модель</th><th>Статус</th><th>ELO</th><th>Игр</th><th></th></tr></thead>
     <tbody>
       {% for m in models_list %}
-      <tr class="{{ 'archived' if m.status == 'archived' }}">
+      <tr class="{{ 'archived' if m.status == 'archived' }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
         <td>
           <a href="/edit/{{ m.id }}" class="edit-link">{{ m.name }}</a>
           {% if m.caption %}<div class="model-caption">{{ m.caption }}</div>{% endif %}
@@ -1087,6 +1150,9 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
       {% endfor %}
     </tbody>
   </table>
+  {% if filter_view == 'highlight' and not highlight_hits %}
+  <div class="hint">Ничего не подсвечено — ни одна модель не проходит выбранные условия.</div>
+  {% endif %}
 </div>
 {% elif filter_active %}
 <div class="card">
@@ -1431,7 +1497,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           </thead>
           <tbody>
             {% for r in answer_rows %}
-            <tr class="{{ 'archived' if r.status == 'archived' }}">
+            <tr class="{{ 'archived' if r.status == 'archived' }}{% if filter_view == 'highlight' and answer_hits %} {{ 'filter-hit' if r.hit else 'filter-miss' }}{% endif %}">
               <td class="model-cell">
                 <div>{{ r.name }}{% if r.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}</div>
                 {% if r.caption %}<div class="model-caption">{{ r.caption }}</div>{% endif %}
@@ -1446,6 +1512,9 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           </tbody>
         </table>
       </div>
+      {% if filter_view == 'highlight' and not answer_hits %}
+      <div class="hint">Ничего не подсвечено — ни одна модель не проходит выбранные условия.</div>
+      {% endif %}
       {% if answer_inactive_tasks %}
       <div class="hint">Неактивные таски скрыты: {{ answer_inactive_tasks|join(', ') }}. Их флаги сохраняются без изменений.</div>
       {% endif %}
@@ -1621,12 +1690,16 @@ def history_page():
         reset_extra=bool(model_id) or include_inactive,
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
-    # Параметры для ссылок пагинации: все фильтры страницы как были
+    filter_view = filter_ctx["filter_view"]
+    highlight = filter_view == "highlight"
+    # Параметры для ссылок пагинации: все фильтры страницы и настройки отображения как были
     history_params = {
         "model": model_id or None,
         "include_inactive": "1" if include_inactive else None,
         "agents": filter_ctx["filter_agents_csv"] or None,
         "providers": filter_ctx["filter_providers_csv"] or None,
+        "view": filter_view if filter_view != "hide" else None,
+        "chips": filter_ctx["filter_chips"] if filter_ctx["filter_chips"] != "alpha" else None,
     }
 
     # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
@@ -1652,7 +1725,20 @@ def history_page():
     caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
     raw_history = list(reversed(index_data.get("elo_history", [])))
 
-    if model_id:
+    if highlight:
+        # «Подсвечивать»: состав записей не сужается, отобранные помечаются
+        # по правилам состава скрывающего режима (модель / чипы агента и компании).
+        for h in raw_history:
+            if model_id:
+                h["hit"] = (
+                    h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
+                )
+            else:
+                h["hit"] = (
+                    model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
+                    or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
+                )
+    elif model_id:
         raw_history = [
             h for h in raw_history
             if h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
@@ -1668,6 +1754,7 @@ def history_page():
     # Пагинация по 20 записей
     page_size = 20
     total_history = len(raw_history)
+    history_hits = sum(1 for h in raw_history if h.get("hit")) if highlight else 0
     history_pages = (total_history + page_size - 1) // page_size if total_history else 1
     history_page_num = request.args.get("page", "1").strip()
     try:
@@ -1677,7 +1764,8 @@ def history_page():
     history_page_num = max(1, min(history_page_num, history_pages))
     start = (history_page_num - 1) * page_size
     end = start + page_size
-    history = format_elo_history(raw_history[start:end], name_map, caption_map)
+    history = format_elo_history(raw_history[start:end], name_map, caption_map,
+                                 highlight=highlight)
 
     model_name = name_map.get(model_id, model_id) if model_id else ""
 
@@ -1687,6 +1775,7 @@ def history_page():
         history_page=history_page_num,
         history_pages=history_pages,
         history_total=total_history,
+        history_hits=history_hits,
         models_dropdown=dropdown,
         model=model_id,
         model_name=model_name,
@@ -1740,11 +1829,6 @@ def stats_page():
     if stats_filter not in ("active", "all"):
         stats_filter = "active"
 
-    if stats_filter == "active":
-        pool = [info for info in models.values() if is_model_active(info)]
-    else:
-        pool = list(models.values())
-
     filter_ctx = filter_panel_context(
         models,
         action="/stats",
@@ -1752,17 +1836,33 @@ def stats_page():
         reset_extra=stats_filter != "active",
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
-    pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
+    filter_view = filter_ctx["filter_view"]
+    highlight = filter_view == "highlight"
 
-    entries = [
-        {
+    if highlight:
+        # «Подсвечивать»: пул — весь реестр; статус и чипы — критерии подсветки.
+        pool = list(models.values())
+    elif stats_filter == "active":
+        pool = [info for info in models.values() if is_model_active(info)]
+    else:
+        pool = list(models.values())
+    if not highlight:
+        pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
+
+    entries = []
+    for m in pool:
+        entry = {
             "elo": m.get("elo", DEFAULT_ELO),
             "name": m.get("name", m.get("id", "")),
             "games": m.get("games", 0),
             "caption": format_model_caption(m),
         }
-        for m in pool
-    ]
+        if highlight:
+            entry["hit"] = (
+                (stats_filter == "all" or is_model_active(m))
+                and model_passes_tags(m, agent_sel, provider_sel)
+            )
+        entries.append(entry)
 
     if entries:
         elos = sorted(e["elo"] for e in entries)
@@ -1774,6 +1874,8 @@ def stats_page():
             f"выше/равно 1200: {n - below} · "
             f"среднее: {mean:.0f}"
         )
+        if highlight:
+            summary += f" · подсветчено: {sum(1 for e in entries if e['hit'])}"
     else:
         summary = "моделей: 0"
 
@@ -1782,7 +1884,7 @@ def stats_page():
         summary=summary,
         stats_filter=stats_filter,
         pool_count=len(entries),
-        chart_svg=build_elo_distribution_svg(entries),
+        chart_svg=build_elo_distribution_svg(entries, highlight=highlight),
         **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
@@ -1812,8 +1914,21 @@ def leaderboard():
         reset_extra=filter_mode != "active",
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    filter_view = filter_ctx["filter_view"]
+    highlight = filter_view == "highlight"
 
-    if filter_mode == "active":
+    def status_matches(info: dict) -> bool:
+        """Статусный критерий блока «Показывать» (в подсветке — критерий hit)."""
+        if filter_mode == "active":
+            return is_model_active(info)
+        if filter_mode == "inactive":
+            return not is_model_active(info)
+        return True
+
+    if highlight:
+        # «Подсвечивать»: виден весь реестр; ранги/медали/d5 — по полному пулу.
+        models_sorted = list(models.values())
+    elif filter_mode == "active":
         models_sorted = [
             info for info in models.values()
             if is_model_active(info)
@@ -1829,14 +1944,22 @@ def leaderboard():
     models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
 
     # Места/медали/d5 считаются по полному (статусному) пулу: блок «Фильтр»
-    # только скрывает строки, номера мест не пересчитываются.
+    # только скрывает строки, номера мест не пересчитываются. В подсветке
+    # пул — весь реестр без пропусков.
     for rank, m in enumerate(models_sorted, start=1):
         m["rank"] = rank
         m["caption"] = format_model_caption(m)
 
-    models_visible = [
-        m for m in models_sorted if model_passes_tags(m, agent_sel, provider_sel)
-    ]
+    if highlight:
+        for m in models_sorted:
+            m["hit"] = status_matches(m) and model_passes_tags(m, agent_sel, provider_sel)
+        models_visible = models_sorted
+        highlight_hits = sum(1 for m in models_sorted if m["hit"])
+    else:
+        models_visible = [
+            m for m in models_sorted if model_passes_tags(m, agent_sel, provider_sel)
+        ]
+        highlight_hits = 0
 
     # Для формы вердикта — только активные модели
     active_models = {
@@ -1876,6 +1999,7 @@ def leaderboard():
         key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")),
     )
     medals = {info["id"]: rank for rank, info in enumerate(top_active[:3], start=1)}
+    show_medals = filter_mode != "inactive" or highlight
     archived_list = sorted(
         (info for info in models.values() if not is_model_active(info)),
         key=lambda m: m.get("elo", DEFAULT_ELO),
@@ -1926,6 +2050,8 @@ def leaderboard():
         models_visible=models_visible,
         models_count=len(models),
         filtered_count=len(models_visible),
+        highlight_hits=highlight_hits,
+        show_medals=show_medals,
         matchups_count=matchups_count,
         updated=index_data.get("updated", ""),
         models_list=models_list,
@@ -1977,7 +2103,16 @@ def add_page():
         reset_url=url_for("add_page"),
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
-    models_list = [m for m in models_list if model_passes_tags(m, agent_sel, provider_sel)]
+    filter_view = filter_ctx["filter_view"]
+    highlight = filter_view == "highlight"
+    if highlight:
+        # «Подсвечивать»: список не сужается, отобранные строки помечаются.
+        for m in models_list:
+            m["hit"] = model_passes_tags(m, agent_sel, provider_sel)
+        highlight_hits = sum(1 for m in models_list if m["hit"])
+    else:
+        models_list = [m for m in models_list if model_passes_tags(m, agent_sel, provider_sel)]
+        highlight_hits = 0
 
     # Агент и компания — выпадающие списки только из справочника
     lookup_data = load_lookups()
@@ -1985,6 +2120,7 @@ def add_page():
     return render_template_string(
         ADD_TEMPLATE,
         models_list=models_list,
+        highlight_hits=highlight_hits,
         agent_options=lookup_data["agents"],
         provider_options=lookup_data["providers"],
         default_elo=DEFAULT_ELO,
@@ -2133,6 +2269,8 @@ def settings_page():
         reset_extra=answer_filter != "active" or only_debts,
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    filter_view = filter_ctx["filter_view"]
+    highlight = filter_view == "highlight"
 
     models_active_list, models_archived_list = [], []
     for mid, info in models.items():
@@ -2144,7 +2282,8 @@ def settings_page():
             "provider": info.get("provider", ""),
             "caption": format_model_caption(info),
         }
-        if not model_passes_tags(entry, agent_sel, provider_sel):
+        # В «Подсвечивать» фильтр не сужает раскрытые списки и счётчики.
+        if not highlight and not model_passes_tags(entry, agent_sel, provider_sel):
             continue
         if is_model_active(info):
             models_active_list.append(entry)
@@ -2154,18 +2293,36 @@ def settings_page():
     models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
 
     matrix = get_answer_matrix(settings)
-    if answer_filter == "active":
-        answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
-    elif answer_filter == "inactive":
-        answer_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
-    else:
+    if highlight:
+        # «Подсвечивать»: матрица не сужается; «Показывать», чипы и «Только
+        # долги» — критерии подсветки строк.
         answer_rows = list(matrix["rows"])
-    answer_rows = [
-        r for r in answer_rows
-        if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
-    ]
-    if only_debts:
-        answer_rows = [r for r in answer_rows if r.get("debt", 0) > 0]
+        for r in answer_rows:
+            status_ok = (
+                answer_filter == "all"
+                or (answer_filter == "active" and r["status"] != "archived")
+                or (answer_filter == "inactive" and r["status"] == "archived")
+            )
+            r["hit"] = (
+                status_ok
+                and model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
+                and (not only_debts or r.get("debt", 0) > 0)
+            )
+        answer_hits = sum(1 for r in answer_rows if r["hit"])
+    else:
+        if answer_filter == "active":
+            answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
+        elif answer_filter == "inactive":
+            answer_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
+        else:
+            answer_rows = list(matrix["rows"])
+        answer_rows = [
+            r for r in answer_rows
+            if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
+        ]
+        if only_debts:
+            answer_rows = [r for r in answer_rows if r.get("debt", 0) > 0]
+        answer_hits = 0
     for r in answer_rows:
         r["caption"] = format_model_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
@@ -2230,6 +2387,7 @@ def settings_page():
         models_active_list=models_active_list,
         models_archived_list=models_archived_list,
         answer_rows=answer_rows,
+        answer_hits=answer_hits,
         answer_filter=answer_filter,
         answer_active_tasks=matrix["active_tasks"],
         answer_inactive_tasks=answer_inactive,
@@ -2283,8 +2441,9 @@ def _settings_redirect(error: str = "", success: str = ""):
 def _settings_filter_params(models: dict) -> dict:
     """Параметры блока «Фильтр» /settings из формы/query — для redirect.
 
-    Возвращает answer_filter и непустые agents/providers/only_debts, чтобы
-    POST-действия страницы не теряли состояние фильтров.
+    Возвращает answer_filter и непустые agents/providers/only_debts и
+    не-дефолтные настройки отображения view/chips, чтобы POST-действия
+    страницы не теряли состояние фильтров и режим.
     """
     params: dict = {
         "answer_filter": valid_answer_filter(request.values.get("answer_filter")),
@@ -2301,6 +2460,12 @@ def _settings_filter_params(models: dict) -> dict:
         params["providers"] = providers_csv
     if (request.values.get("only_debts") or "").strip() == "1":
         params["only_debts"] = "1"
+    view = valid_filter_view(request.values.get("view"))
+    if view != "hide":
+        params["view"] = view
+    chips = valid_chips_order(request.values.get("chips"))
+    if chips != "alpha":
+        params["chips"] = chips
     return params
 
 
@@ -2428,13 +2593,20 @@ def save_answer_flags_route():
     tasks_all = known_tasks(settings)
     active_set = set(active_tasks(settings))
 
-    # Модели вне текущих фильтров в форме скрыты — сохраняем как было.
+    # Модели вне текущих фильтров в форме скрыты — сохраняем как было;
+    # в режиме «Подсвечивать» отрисованы все строки реестра, поэтому видимы все.
     answer_filter = valid_answer_filter(
         request.args.get("answer_filter") or request.form.get("answer_filter")
     )
     only_debts = (
         request.args.get("only_debts") or request.form.get("only_debts") or ""
     ).strip() == "1"
+    filter_view = valid_filter_view(
+        request.args.get("view") or request.form.get("view")
+    )
+    chips_order = valid_chips_order(
+        request.args.get("chips") or request.form.get("chips")
+    )
     agent_sel = _parse_tag_tokens(
         _tag_query_csv(request.args, "agents") or _tag_query_csv(request.form, "agents"),
         _tag_values(models, "agent")[0],
@@ -2443,23 +2615,26 @@ def save_answer_flags_route():
         _tag_query_csv(request.args, "providers") or _tag_query_csv(request.form, "providers"),
         _tag_values(models, "provider")[0],
     )
-    visible = set()
-    for mid, info in models.items():
-        status = info.get("status", "active")
-        if answer_filter == "active" and status == "archived":
-            continue
-        if answer_filter == "inactive" and status != "archived":
-            continue
-        if not model_passes_tags(info, agent_sel, provider_sel):
-            continue
-        visible.add(mid)
-    if only_debts:
-        # Строки без долгов скрыты фильтром — тоже сохраняем как было.
-        debt_by_id = {
-            r["id"]: r.get("debt", 0)
-            for r in get_answer_matrix(settings)["rows"]
-        }
-        visible = {mid for mid in visible if debt_by_id.get(mid, 0) > 0}
+    if filter_view == "highlight":
+        visible = set(model_ids)
+    else:
+        visible = set()
+        for mid, info in models.items():
+            status = info.get("status", "active")
+            if answer_filter == "active" and status == "archived":
+                continue
+            if answer_filter == "inactive" and status != "archived":
+                continue
+            if not model_passes_tags(info, agent_sel, provider_sel):
+                continue
+            visible.add(mid)
+        if only_debts:
+            # Строки без долгов скрыты фильтром — тоже сохраняем как было.
+            debt_by_id = {
+                r["id"]: r.get("debt", 0)
+                for r in get_answer_matrix(settings)["rows"]
+            }
+            visible = {mid for mid in visible if debt_by_id.get(mid, 0) > 0}
 
     submitted = set(request.form.getlist("flag"))
     existing = load_answer_flags()
@@ -2485,6 +2660,10 @@ def save_answer_flags_route():
         redirect_params["agents"] = agents_csv
     if providers_csv:
         redirect_params["providers"] = providers_csv
+    if filter_view != "hide":
+        redirect_params["view"] = filter_view
+    if chips_order != "alpha":
+        redirect_params["chips"] = chips_order
     return redirect(url_for(
         "settings_page",
         success=f"Учёт ответов сохранён: закрыто {matrix['filled']} из {matrix['total']}.",
