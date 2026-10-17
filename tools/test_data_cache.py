@@ -15,12 +15,17 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
   * 2.6 — очередь `/settings` постранична (100 строк): сквозная
     нумерация, счётчик = все открытые ячейки, номер вне диапазона
     приводится к граничной странице, первая строка = топ-1.
+  * 2.7 — виджет пагинации `/history` и очереди: окно ±2 вокруг
+    текущей страницы, троеточия в разрывах (разрыв в одну страницу
+    склеивается номером), неактивные стрелки на краях; алгоритм
+    pagination_items (страниц <= 10 — все номера подряд).
 
 Запуск: python tools/test_data_cache.py
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -34,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_cache
 import elo
 import lookups
+import render_helpers
 import server
 
 MODELS_YAML = """\
@@ -372,6 +378,110 @@ def test_routes_smoke():
     print("2.4 routes smoke: OK")
 
 
+def test_pagination_items_window():
+    """Окно виджета: первая/последняя/текущая ±2, троеточия, склейка разрыва."""
+    items = render_helpers.pagination_items
+    assert items(1, 1) == [1]
+    assert items(1, 2) == [1, 2]
+    assert items(2, 2) == [1, 2]
+    assert items(5, 8) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert items(10, 10) == list(range(1, 11))
+    # pages = 11: окно уже действует, троеточия с обеих сторон
+    assert items(6, 11) == [1, None, 4, 5, 6, 7, 8, None, 11]
+    # Длинная история: начало, середина, конец
+    assert items(1, 27) == [1, 2, 3, None, 27]
+    assert items(14, 27) == [1, None, 12, 13, 14, 15, 16, None, 27]
+    assert items(27, 27) == [1, None, 25, 26, 27]
+    # Разрыв ровно в одну страницу печатается номером, больший — троеточием
+    assert items(5, 12) == [1, 2, 3, 4, 5, 6, 7, None, 12]
+    print("2.7 pagination items window: OK")
+
+
+def _history_journal(events: int) -> str:
+    """Журнал alpha vs beta с ELO-снэпшотами, посчитанными тем же реплеем."""
+    elo_a = elo_b = elo.DEFAULT_ELO
+    games_a = games_b = 0
+    lines: list[str] = []
+    for seq in range(1, events + 1):
+        winner = "a" if seq % 2 else "b"
+        s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0)
+        before_a, before_b = elo_a, elo_b
+        e_a = elo.expected_score(before_a, before_b)
+        new_a, new_b = elo.update_elo(
+            before_a, elo.k_factor(games_a), s_a, e_a,
+            before_b, elo.k_factor(games_b), s_b, 1.0 - e_a,
+        )
+        elo_a, elo_b = new_a, new_b
+        games_a += 1
+        games_b += 1
+        lines.append(json.dumps({
+            "version": elo.VERDICT_VERSION,
+            "seq": seq,
+            "task": "T-001",
+            "matchup": f"T-001/{seq:03d}",
+            "model_a": "alpha",
+            "model_b": "beta",
+            "model_a_id": "alpha",
+            "model_b_id": "beta",
+            "winner": winner,
+            "date": "2026-01-02",
+            "recorded_at": f"2026-01-02T10:{seq % 60:02d}:00+03:00",
+            "elo": {
+                "alpha": {"before": before_a, "after": new_a, "delta": new_a - before_a},
+                "beta": {"before": before_b, "after": new_b, "delta": new_b - before_b},
+            },
+        }, ensure_ascii=False))
+    return "\n".join(lines) + "\n"
+
+
+def test_history_pagination_widget():
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Одностраничная история — виджета нет
+        html = client.get("/history").get_data(as_text=True)
+        assert 'class="pagination"' not in html, "виджет при одной странице"
+
+        # 540 событий → 27 страниц по 20 записей
+        _write(paths["journal"], _history_journal(540))
+        data_cache.clear()
+
+        def href(n: int) -> str:
+            return f'href="/history?page={n}"'
+
+        html1 = client.get("/history").get_data(as_text=True)
+        assert href(2) in html1 and href(3) in html1 and href(27) in html1
+        assert href(4) not in html1 and href(26) not in html1
+        assert html1.count('class="ellipsis"') == 1
+        assert '<span class="current" aria-current="page">1</span>' in html1
+        assert html1.count("page-arrow disabled") == 1, "на первой странице «←» неактивна"
+        assert 'rel="next"' in html1 and 'rel="prev"' not in html1
+
+        html14 = client.get("/history?page=14").get_data(as_text=True)
+        for n in (1, 12, 13, 15, 16, 27):
+            assert href(n) in html14, f"нет ссылки на страницу {n}"
+        for n in (2, 11, 17, 26):
+            assert href(n) not in html14, f"лишняя ссылка на страницу {n}"
+        assert html14.count('class="ellipsis"') == 2
+        assert '<span class="current" aria-current="page">14</span>' in html14
+        assert 'href="/history?page=13" rel="prev"' in html14
+
+        html27 = client.get("/history?page=27").get_data(as_text=True)
+        assert href(26) in html27 and href(25) in html27 and href(1) in html27
+        assert 'href="/history?page=28"' not in html27
+        assert html27.count('class="ellipsis"') == 1
+        assert html27.count("page-arrow disabled") == 1, "на последней странице «→» неактивна"
+
+        # Ссылки виджета сохраняют фильтр модели
+        htmlf = client.get("/history?model=alpha").get_data(as_text=True)
+        assert (
+            'href="/history?page=2&amp;model=alpha"' in htmlf
+            or 'href="/history?model=alpha&amp;page=2"' in htmlf
+        ), "ссылка пагинации не сохраняет model"
+    print("2.7 history pagination widget: OK")
+
+
 def test_settings_queue_pagination():
     ids = [f"m{i:02d}" for i in range(15)]
     with _temp_storage() as paths:
@@ -404,7 +514,10 @@ def test_settings_queue_pagination():
         assert "queue_page=3" not in html, "лишняя третья страница"
         assert 'class="rank">100</td>' in html
         assert 'class="rank">101</td>' not in html
-        assert "страница 1 из 2" in html
+        assert '<span class="current" aria-current="page">1</span>' in html
+        assert "queue_page=1" not in html, "текущая страница не должна быть ссылкой"
+        assert html.count("page-arrow disabled") == 1, "на первой странице «←» неактивна"
+        assert "← Назад</a>" not in html and "Вперёд →</a>" not in html
 
         resp = client.get("/settings?queue_page=2")
         html2 = resp.get_data(as_text=True)
@@ -413,7 +526,8 @@ def test_settings_queue_pagination():
         assert 'class="rank">106</td>' not in html2
         assert "queue_page=1" in html2, "нет перехода назад"
         assert "queue_page=3" not in html2, "после последней страницы ссылки нет"
-        assert "страница 2 из 2" in html2
+        assert '<span class="current" aria-current="page">2</span>' in html2
+        assert html2.count("page-arrow disabled") == 1, "на последней странице «→» неактивна"
 
         # Номер вне диапазона → последняя страница; невалидный → первая
         html99 = client.get("/settings?queue_page=99").get_data(as_text=True)
@@ -443,5 +557,7 @@ if __name__ == "__main__":
     test_parallel_cached_single_build()
     test_requests_do_not_reread_journal()
     test_routes_smoke()
+    test_pagination_items_window()
     test_settings_queue_pagination()
+    test_history_pagination_widget()
     print("\nALL DATA CACHE TESTS PASSED")

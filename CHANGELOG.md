@@ -36,6 +36,7 @@ Benchmark — статический трек: версия в `pyproject.toml` 
 - Вердикты хранятся единым журналом data/matchups/journal.jsonl; обновление существующего хранилища — tools/migrate_journal.py.
 - Главная и фильтры консоли укладываются в 0.5 секунды, остальные страницы — в 1 секунду: проверено на 1000 моделей и 10 000 вердиктов.
 - Очередь ответов в настройках выводится страницами по 100 строк со сквозной нумерацией.
+- Листание истории и очереди ответов — компактный список страниц: окно вокруг текущей, троеточия в разрывах и стрелки.
 
 ### Добавлено
 
@@ -100,6 +101,17 @@ Benchmark — статический трек: версия в `pyproject.toml` 
 - Документация: `README.md`, `docs/architecture.md`, `docs/elo-mechanics.md`,
   скилл `benchmark-batch-judge`; дельты спек `data-storage` (REMOVED),
   `leaderboard-ui` (бюджеты, пагинация), Purpose `matchup-management`.
+- Change `compact-pagination`: общий виджет пагинации — `pagination_items()`
+  (`tools/render_helpers.py`) и макрос `pagination()` (`tools/templates/_pagination.html`):
+  первая/последняя и текущая ±2, до 10 страниц — все номера, троеточия в разрывах
+  (разрыв в одну страницу печатается номером), стрелки `rel="prev|next"` с неактивными
+  краями, при одной странице виджет скрыт; `/history` и очередь `/settings` переведены
+  на виджет (полный перечень номеров и кнопки «Назад/Вперёд» с подписью «страница X
+  из Y» убраны), параметры URL сохранены (`page`, `queue_page`, фильтры, `view`/`chips`,
+  анкор `#recommendation-queue`).
+- Тесты: `tools/test_data_cache.py` — truth-table `pagination_items` (окно, порог 10,
+  склейка разрыва), route-тест `/history` на 27 страницах, обновлённый тест очереди;
+  `tools/test_elo.py`, `tools/test_trends.py` — зелёные.
 
 ### Исправлено
 

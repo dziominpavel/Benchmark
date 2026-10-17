@@ -1,0 +1,20 @@
+{# Общий виджет пагинации консоли (change compact-pagination).
+   Первая страница, последняя и текущая ±2; пункты считает pagination_items()
+   (tools/render_helpers.py), None в items — троеточие. page_url — callable
+   page -> url, сохраняющий фильтры и настройки отображения страницы. #}
+
+{% macro pagination(page, pages, items, page_url) %}
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Пагинация">
+  {% if page > 1 %}<a class="page-arrow" href="{{ page_url(page - 1) }}" rel="prev" aria-label="Назад">←</a>
+  {% else %}<span class="page-arrow disabled" aria-disabled="true">←</span>{% endif %}
+  {% for item in items %}
+    {% if item is none %}<span class="ellipsis" aria-hidden="true">...</span>
+    {% elif item == page %}<span class="current" aria-current="page">{{ item }}</span>
+    {% else %}<a href="{{ page_url(item) }}">{{ item }}</a>{% endif %}
+  {% endfor %}
+  {% if page < pages %}<a class="page-arrow" href="{{ page_url(page + 1) }}" rel="next" aria-label="Вперёд">→</a>
+  {% else %}<span class="page-arrow disabled" aria-disabled="true">→</span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

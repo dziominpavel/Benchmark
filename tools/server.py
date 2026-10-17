@@ -52,7 +52,7 @@ from register_task import (
 
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
-    build_elo_distribution_svg, compute_rank_trends,
+    build_elo_distribution_svg, compute_rank_trends, pagination_items,
 )
 
 from register_model import parse_existing, format_model
@@ -1061,6 +1061,7 @@ validate();
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel with context %}
+{% from "_pagination.html" import pagination %}
 {% block title %}История — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -1106,12 +1107,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
     {% endif %}
     {% if history_pages > 1 %}
-    <div class="pagination">
-      {% for p in range(1, history_pages + 1) %}
-      {% if p == history_page %}<span class="current">{{ p }}</span>
-      {% else %}<a href="{{ url_for('history_page', page=p, **history_params) }}">{{ p }}</a>{% endif %}
-      {% endfor %}
-    </div>
+    {{ pagination(history_page, history_pages, history_items, history_page_url) }}
     {% endif %}
     {% else %}
     <div class="empty-state">Нет истории</div>
@@ -1484,6 +1480,7 @@ EDIT_TASK_TEMPLATE = """{% extends "shell.html" %}
 
 SETTINGS_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
+{% from "_pagination.html" import pagination %}
 {% block title %}Настройки — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -1732,11 +1729,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       </table>
     </div>
     {% if queue_pages > 1 %}
-    <div class="queue-pager">
-      {% if queue_prev_url %}<a class="btn btn-secondary" href="{{ queue_prev_url }}">← Назад</a>{% endif %}
-      <span class="hint">страница {{ queue_page }} из {{ queue_pages }}</span>
-      {% if queue_next_url %}<a class="btn btn-secondary" href="{{ queue_next_url }}">Вперёд →</a>{% endif %}
-    </div>
+    {{ pagination(queue_page, queue_pages, queue_items, queue_page_url) }}
     {% endif %}
     {% else %}
     <div class="empty-state">Очередь пуста — открытых пар нет.</div>
@@ -1951,17 +1944,22 @@ def history_page():
 
     model_name = name_map.get(model_id, model_id) if model_id else ""
 
+    def _history_page_url(page: int) -> str:
+        """Ссылка на страницу истории с сохранением фильтров и настроек отображения."""
+        return url_for("history_page", page=page, **history_params)
+
     return HISTORY_TEMPLATE.render(
         history=history,
         history_page=history_page_num,
         history_pages=history_pages,
         history_total=total_history,
         history_hits=history_hits,
+        history_items=pagination_items(history_page_num, history_pages),
+        history_page_url=_history_page_url,
         models_dropdown=dropdown,
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
-        history_params=history_params,
         **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
@@ -2545,11 +2543,6 @@ def settings_page():
         args["queue_page"] = [str(page)]
         return url_for("settings_page", **args) + "#recommendation-queue"
 
-    queue_prev_url = _queue_page_url(queue_page - 1) if queue_page > 1 else ""
-    queue_next_url = (
-        _queue_page_url(queue_page + 1) if queue_page < queue_pages else ""
-    )
-
     # Разбивка остатка очереди по таскам в порядке приоритета очереди
     # (порядок активных тасков T-NNN по возрастанию). Первое число в
     # скобках — первый активный таск, второе — второй и т.д. Счёт ведётся
@@ -2626,8 +2619,8 @@ def settings_page():
         queue_page=queue_page,
         queue_pages=queue_pages,
         queue_page_start=queue_page_start,
-        queue_prev_url=queue_prev_url,
-        queue_next_url=queue_next_url,
+        queue_items=pagination_items(queue_page, queue_pages),
+        queue_page_url=_queue_page_url,
         queue_filled=coverage.get("filled", 0),
         queue_total=coverage.get("total", 0),
         queue_remaining=coverage.get("total", 0) - coverage.get("filled", 0),

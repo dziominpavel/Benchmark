@@ -39,6 +39,34 @@ def format_winrate(wins: int, games: int) -> str:
     return f"{(wins / games) * 100:.1f}%"
 
 
+def pagination_items(page: int, pages: int) -> list[int | None]:
+    """Пункты виджета пагинации: номера страниц, None — троеточие.
+
+    Первая, последняя и текущая ±2 страницы; при 10 страницах и меньше —
+    все номера подряд. Разрыв ровно в одну страницу закрывается её номером,
+    больший — троеточием. Номер страницы уже приведён к диапазону 1..pages.
+    """
+    if pages <= 10:
+        return list(range(1, pages + 1))
+
+    visible = {1, pages}
+    for p in range(page - 2, page + 3):
+        if 1 <= p <= pages:
+            visible.add(p)
+
+    items: list[int | None] = []
+    ordered = sorted(visible)
+    for index, p in enumerate(ordered):
+        if index:
+            gap = p - ordered[index - 1]
+            if gap == 2:
+                items.append(p - 1)
+            elif gap > 2:
+                items.append(None)
+        items.append(p)
+    return items
+
+
 def get_model_detail(index_data: dict, model_id: str) -> dict | None:
     """Агрегирует данные страницы модели из кэша index.json.
 
