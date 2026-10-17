@@ -531,6 +531,33 @@ def _rank_positions(pool_ids: list[str], elo: dict[str, int]) -> dict[str, int]:
     return {mid: i + 1 for i, mid in enumerate(ordered)}
 
 
+class _Fenwick:
+    """Дерево Фенвика для порядковых статистик пула (занятые пары ELO×id)."""
+
+    def __init__(self, size: int) -> None:
+        self._n = size
+        self._tree = [0] * (size + 1)
+
+    def add(self, pos: int, delta: int) -> None:
+        """Прибавляет delta на позиции pos (0-based)."""
+        i = pos + 1
+        n = self._n
+        tree = self._tree
+        while i <= n:
+            tree[i] += delta
+            i += i & (-i)
+
+    def prefix(self, pos: int) -> int:
+        """Сумма на позициях [0, pos)."""
+        total = 0
+        i = pos
+        tree = self._tree
+        while i > 0:
+            total += tree[i]
+            i -= i & (-i)
+        return total
+
+
 def compute_rank_trends(
     elo_history: list[dict],
     pool_ids: list[str],
@@ -538,7 +565,7 @@ def compute_rank_trends(
     window: int = TREND_WINDOW,
     stale_gap: int = STALE_GLOBAL_GAP,
 ) -> dict[str, dict]:
-    """Считает динамику позиции d5 для видимого пула.
+    """Считает динамику позиции d5 для видимого пула (один проход по истории).
 
     Для модели с k играми (k >= window + 1) база — ELO-срез сразу после
     ее (k - window)-й личной игры; rank_then — ранг в том же пуле по срезу
@@ -546,6 +573,11 @@ def compute_rank_trends(
     Дельта = rank_then - rank_now. При k < window + 1 базы нет.
     Модель без личных игр в последних stale_gap глобальных вердиктах
     считается застоявшейся: вместо стрелки нейтраль с пояснением.
+
+    Ранги на моменты срезов считаются одним проходом: занятость пар
+    «(ELO-после, id)» поддерживается деревом Фенвика, запрос ранга —
+    O(log N) без перескана истории на каждую модель. Порядок рангов —
+    как в _rank_positions (ELO по убыванию, затем id по возрастанию).
     """
     pool = list(pool_ids)
     pool_set = set(pool)
@@ -554,14 +586,21 @@ def compute_rank_trends(
     rank_now_map = _rank_positions(pool, current_elo)
 
     personal: dict[str, list[int]] = {mid: [] for mid in pool}
+    pairs: set[tuple[int, str]] = {(-DEFAULT_ELO, mid) for mid in pool}
     for e in history:
         seq = e.get("seq", 0)
         a_id = e.get("model_a_id", "")
-        b_id = e.get("model_b_id", "")
         if a_id in pool_set:
             personal[a_id].append(seq)
+            val = e.get("elo_a", {}).get("after")
+            if val is not None:
+                pairs.add((-int(val), a_id))
+        b_id = e.get("model_b_id", "")
         if b_id in pool_set:
             personal[b_id].append(seq)
+            val = e.get("elo_b", {}).get("after")
+            if val is not None:
+                pairs.add((-int(val), b_id))
 
     baseline: dict[str, int] = {}
     stale: set[str] = set()
@@ -574,19 +613,61 @@ def compute_rank_trends(
             else:
                 baseline[mid] = seqs[len(seqs) - window - 1]
 
-    snapshots: dict[int, dict[str, int]] = {}
-    for cut in sorted(set(baseline.values())):
-        snap: dict[str, int] = {mid: DEFAULT_ELO for mid in pool}
-        for e in history:
-            if e.get("seq", 0) > cut:
-                break
-            a_id = e.get("model_a_id", "")
-            b_id = e.get("model_b_id", "")
-            if a_id in pool_set:
-                snap[a_id] = e.get("elo_a", {}).get("after", snap[a_id])
-            if b_id in pool_set:
-                snap[b_id] = e.get("elo_b", {}).get("after", snap[b_id])
-        snapshots[cut] = snap
+    # Ранги на срезы: один проход по истории. Каждая модель в каждый
+    # момент занимает ровно одну пару «(ELO-после, id)»; занятость пар
+    # и число строго более высоких пар поддерживает дерево Фенвика.
+    queries: dict[int, list[str]] = {}
+    for mid, cut in baseline.items():
+        queries.setdefault(cut, []).append(mid)
+    pending = sorted(queries)
+
+    # Ключи пар — (-ELO, id): порядок сортировки совпадает с
+    # (ELO по убыванию, id по возрастанию) без key-функции.
+    ordered_pairs = sorted(pairs)
+    pos = {pair: i for i, pair in enumerate(ordered_pairs)}
+    fenwick = _Fenwick(len(ordered_pairs))
+    current: dict[str, int] = {mid: DEFAULT_ELO for mid in pool}
+    for mid in pool:
+        fenwick.add(pos[(-DEFAULT_ELO, mid)], 1)
+
+    rank_then_map: dict[str, int] = {}
+    snap_value: dict[str, int] = {}
+
+    def _answer(cut: int) -> None:
+        for mid_q in queries[cut]:
+            snap_value[mid_q] = current[mid_q]
+            rank_then_map[mid_q] = (
+                fenwick.prefix(pos[(-current[mid_q], mid_q)]) + 1
+            )
+
+    def _apply_event(e: dict) -> None:
+        for side, elo_key in (("model_a_id", "elo_a"), ("model_b_id", "elo_b")):
+            mid = e.get(side, "")
+            if mid not in pool_set:
+                continue
+            val = e.get(elo_key, {}).get("after")
+            if val is None:
+                continue
+            new = int(val)
+            old = current[mid]
+            if new == old:
+                continue
+            fenwick.add(pos[(-old, mid)], -1)
+            current[mid] = new
+            fenwick.add(pos[(-new, mid)], 1)
+
+    qi = 0
+    for e in history:
+        seq = e.get("seq", 0)
+        # Срез cut полон, когда встретилось событие с seq > cut:
+        # все события с seq <= cut уже применены.
+        while qi < len(pending) and pending[qi] < seq:
+            _answer(pending[qi])
+            qi += 1
+        _apply_event(e)
+    while qi < len(pending):
+        _answer(pending[qi])
+        qi += 1
 
     trends: dict[str, dict] = {}
     for mid in pool:
@@ -624,11 +705,9 @@ def compute_rank_trends(
                 "has_baseline": False,
             }
             continue
-        cut = baseline[mid]
-        snap = snapshots[cut]
-        rank_then = _rank_positions(pool, snap)[mid]
+        rank_then = rank_then_map[mid]
         delta = rank_then - rank_now
-        elo_delta = current_elo.get(mid, DEFAULT_ELO) - snap.get(mid, DEFAULT_ELO)
+        elo_delta = current_elo.get(mid, DEFAULT_ELO) - snap_value.get(mid, DEFAULT_ELO)
         if delta > 0:
             label, css = f"↑{delta}", "history-delta-up"
             arrow, num = "↑", str(delta)

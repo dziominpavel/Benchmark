@@ -641,6 +641,15 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
   box-shadow: inset 0 -1px 0 var(--border);
 }
 
+.queue-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-top: var(--sp-4);
+}
+
+.queue-pager .hint { margin-top: 0; }
+
 /* --- пилюли статусов ------------------------------------------------------ */
 
 .status-pill {

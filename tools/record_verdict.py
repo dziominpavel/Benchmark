@@ -2,18 +2,18 @@
 """
 record_verdict.py — единственная точка записи вердиктов в журнал.
 
+Хранилище — `data/matchups/journal.jsonl`: одна строка = одно событие.
+Запись — append под межпроцессным lock (см. elo.journal_lock), чтение/
+проверка — `python tools/elo.py --check`.
+
 Использование:
     # Вердикт с явными реальными id моделей:
     python tools/record_verdict.py --task T-001 \
         --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
         --winner b
 
-    # Ручной прогон / веб-форма (корзина general):
-    python tools/record_verdict.py --task general \
-        --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
-        --winner a
-
-    # Аннулировать ошибочный вердикт (tombstone, файл не удаляется):
+    # Аннулировать ошибочный вердикт: в журнал дозаписывается
+    # tombstone-событие, исходная строка не удаляется:
     python tools/record_verdict.py --void T-001/001 --reason "ошибка записи"
 
     # Без регенерации index.json (для пакетной записи):
@@ -42,9 +42,12 @@ from elo import record_verdict, void_matchup, REPO_ROOT
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Запись вердикта в журнал matchups/"
+        description=(
+            "Запись вердиктов в журнал data/matchups/journal.jsonl "
+            "(append; проверка — python tools/elo.py --check)"
+        )
     )
-    parser.add_argument("--task", help="ID задачи (T-001) или 'general'")
+    parser.add_argument("--task", help="ID задачи вида T-NNN")
     parser.add_argument("--model-a", dest="model_a",
                         help="Модель A: реальный id из models.yaml")
     parser.add_argument("--model-b", dest="model_b",
@@ -52,7 +55,8 @@ def main() -> int:
     parser.add_argument("--winner", choices=["a", "b", "draw"],
                         help="Победитель: a | b | draw")
     parser.add_argument("--void", metavar="MATCHUP_ID",
-                        help="Аннулировать вердикт <task>/<NNN> (tombstone)")
+                        help="Аннулировать вердикт <task>/<NNN> "
+                             "(tombstone-событие в журнале)")
     parser.add_argument("--reason", default="", help="Причина аннулирования")
     parser.add_argument("--no-index", action="store_true",
                         help="Не перегенерировать index.json")
@@ -61,7 +65,8 @@ def main() -> int:
     try:
         if args.void:
             result = void_matchup(args.void, args.reason)
-            print(f"✓ Вердикт {args.void} аннулирован → {result['path']}")
+            print(f"✓ Вердикт {args.void} аннулирован: "
+                  f"tombstone-событие {result['matchup_id']} → {result['path']}")
             return 0
 
         if not args.task:
@@ -79,7 +84,7 @@ def main() -> int:
             regenerate_index=not args.no_index,
         )
         v = result["verdict"]
-        print(f"✓ Вердикт записан: {result['path']}")
+        print(f"✓ Вердикт записан: {result['matchup_id']} → {result['path']}")
         print(f"  seq={v['seq']}  recorded_at={v['recorded_at']}")
         for side, mid in (("A", v["model_a_id"]), ("B", v["model_b_id"])):
             snap = v["elo"][mid]

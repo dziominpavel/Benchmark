@@ -28,7 +28,7 @@
 ③ Судья                   @benchmark-judge T-001 (или вручную по docs/judge-prompt.md)
                           → только выбор победителя
 ④ Записать вердикт        координатор: веб-UI localhost:5000 или record_verdict.py
-                           с явным --task T-NNN и --model-a/--model-b → data/matchups/T-NNN/NNN.json
+                           с явным --task T-NNN и --model-a/--model-b → событие в data/matchups/journal.jsonl
 ⑤ Leaderboard             веб-UI (localhost:5000)
 ```
 
@@ -75,9 +75,7 @@ Benchmark/
 │   │       └── modelB.md
 │   │
 │   └── matchups/          # Вердикты (попарные сравнения)
-│       ├── state.json     # Счётчик seq журнала
-│       └── T-NNN/
-│           └── NNN.json   # От record_verdict.py: task, model_a/b, winner, date, elo
+│       └── journal.jsonl  # Append-only журнал: строка = событие (вердикт / tombstone)
 │
 ├── docs/
 │   ├── architecture.md    # Полная архитектура
@@ -86,12 +84,14 @@ Benchmark/
 │   └── judge-prompt.md    # Шаблон промпта судьи (ручное судейство)
 │
 ├── tools/
-│   ├── elo.py             # ELO-движок (пересчёт из data/matchups → data/index.json) + --check
+│   ├── elo.py             # ELO-движок (реплей журнала data/matchups/journal.jsonl → data/index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
 │   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
 │   ├── register_model.py  # Регистрация модели (+ --agent/--provider; --auto для саморегистрации)
 │   ├── register_task.py   # Регистрация задачи T-NNN
 │   ├── archive_model.py   # Архивация/разархивация модели (--restore)
+│   ├── data_cache.py      # Memo-слой сервера: кэш дайджестов и производных данных
+│   ├── migrate_journal.py # Одноразовая миграция вердиктов в единый журнал journal.jsonl
 │   └── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
 │
 └── openspec/              # Спецификации системы (по факту кода MVP)

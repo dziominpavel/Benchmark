@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-10-17",
-  "matchups_digest": "4daabcfcb63d16a0cad0db840fd335946928f8824407978fe056d4b5c5cb5a1d",
+  "matchups_digest": "94479ff1b0fa8665e9fb6eedf8638468fd2f8e6c6f4326579182588adc3b2765",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -18,7 +18,7 @@
     "cursor-composer-2-5": {
       "name": "Cursor Composer 2.5",
       "agent": "Cursor",
-      "provider": "Cursor",
+      "provider": "SpaceXAI",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1005,
@@ -54,7 +54,7 @@
     "cursor-grok-4-6": {
       "name": "Cursor Grok 4.6 Extra High",
       "agent": "Cursor",
-      "provider": "xAI",
+      "provider": "SpaceXAI",
       "added": "2026-09-05",
       "status": "active",
       "elo": 1303,
@@ -66,7 +66,7 @@
     "cursor-grok-4-6-low": {
       "name": "Cursor Grok 4.6 Low",
       "agent": "Cursor",
-      "provider": "xAI",
+      "provider": "SpaceXAI",
       "added": "2026-09-06",
       "status": "active",
       "elo": 1218,
@@ -282,7 +282,7 @@
     "opencode-grok-4-7-xhigh": {
       "name": "OpenCode Grok 4.7 Xhigh",
       "agent": "OpenCode",
-      "provider": "xAI",
+      "provider": "SpaceXAI",
       "added": "2026-09-22",
       "status": "active",
       "elo": 1466,

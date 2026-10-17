@@ -18,6 +18,7 @@ server.py — локальный веб-сервер для бенчмарка L
 
 from __future__ import annotations
 
+import heapq
 import json
 import re
 import sys
@@ -33,14 +34,16 @@ if hasattr(sys.stderr, "reconfigure"):
 # Добавляем tools/ в path для импорта elo.py
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import data_cache
+
 from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
-    is_index_stale, record_verdict, resolve_matchup_models,
+    is_index_stale, record_verdict,
     load_settings, save_settings, known_tasks, active_tasks, is_task_active,
     resolve_current_task, get_coverage, is_valid_task_id,
     load_answer_flags, save_answer_flags, get_answer_matrix,
     DEFAULT_ELO,
-    MATCHUPS_DIR, TASKS_DIR, INDEX_PATH, MODELS_PATH,
+    TASKS_DIR, INDEX_PATH, MODELS_PATH,
 )
 
 from register_task import (
@@ -58,7 +61,7 @@ from lookups import (
     load_lookups, save_lookups, has_value, find_value, add_value,
 )
 
-from flask import Flask, request, redirect, url_for, render_template_string
+from flask import Flask, request, redirect, url_for
 
 app = Flask(__name__)
 
@@ -66,13 +69,28 @@ app = Flask(__name__)
 # ─── Helpers ────────────────────────────────────────────────────────
 
 
+def _load_index() -> dict:
+    """Читает index.json один раз; устаревший или битый — пересобирает."""
+    idx = None
+    if INDEX_PATH.exists():
+        try:
+            idx = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            idx = None
+    if idx is None or is_index_stale(idx, digest=data_cache.data_key()[0]):
+        idx = generate_index()
+        save_index(idx)
+    return idx
+
+
 def ensure_index() -> dict:
-    """Загружает index.json, пересчитывает если устарел."""
-    if is_index_stale():
-        data = generate_index()
-        save_index(data)
-        return data
-    return json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+    """Возвращает index.json (memo по дайджесту журнала и управляющих файлов)."""
+    return data_cache.cached("index", _load_index)
+
+
+def get_journal_events() -> list[dict]:
+    """События журнала в порядке реплея (memo по дайджесту журнала)."""
+    return data_cache.cached("journal_events", load_matchups)
 
 
 def slugify(name: str, existing_ids: list[str]) -> str:
@@ -88,41 +106,81 @@ def slugify(name: str, existing_ids: list[str]) -> str:
     return slug
 
 
+def memo_models() -> list[dict]:
+    """Реестр моделей из models.yaml (memo, общий для производных)."""
+    return data_cache.cached("models", load_models_yaml)
+
+
 def get_model_name_map() -> dict[str, str]:
-    """Возвращает {id: name} из models.yaml."""
-    models = load_models_yaml()
-    return {m["id"]: m.get("name", m["id"]) for m in models}
+    """Возвращает {id: name} из models.yaml (memo)."""
+    return data_cache.cached(
+        "model_name_map",
+        lambda: {m["id"]: m.get("name", m["id"]) for m in memo_models()},
+    )
 
 
 def get_pair_stats() -> dict[frozenset[str], dict]:
-    """Возвращает статистику пары: {frozenset{id_a, id_b}: {"games": int, "wins": {id: int}}}.
+    """Статистика пар (memo): {frozenset{id_a, id_b}: {"games": int, "wins": {id: int}}}.
 
     Использует resolved ids (model_a_id/model_b_id) и пропускает
     tombstone- и аннулированные вердикты. `winner: "draw"` увеличивает
     только games, не меняя счёт побед.
     """
-    model_ids = {m["id"] for m in load_models_yaml()}
+    return data_cache.cached("pair_scan", _build_pair_scan)[0]
+
+
+def _build_pair_scan() -> tuple[dict[frozenset[str], dict],
+                                dict[frozenset[str], set[str]]]:
+    """Один проход по журналу для pair_stats и pair_task_verdicts (memo).
+
+    Резолв id и отсев tombstone/аннулированных событий общие для обеих
+    структур, поэтому скан журнала выполняется один раз.
+    """
+    model_ids = {m["id"] for m in memo_models()}
     stats: dict[frozenset[str], dict] = {}
-    if not MATCHUPS_DIR.exists():
-        return stats
-    matchups = load_matchups()
+    verdicts: dict[frozenset[str], set[str]] = {}
+    matchups = get_journal_events()
     voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
     for mu in matchups:
-        if mu.get("void_of"):
+        if mu.get("void_of") or mu.get("_matchup_id") in voided:
             continue
-        if mu.get("_matchup_id") in voided:
+        a = mu.get("model_a_id")
+        if a:
+            if a not in model_ids:
+                a = None
+        else:
+            a = mu.get("model_a")
+            if a not in model_ids:
+                a = None
+        b = mu.get("model_b_id")
+        if b:
+            if b not in model_ids:
+                b = None
+        else:
+            b = mu.get("model_b")
+            if b not in model_ids:
+                b = None
+        if not a or not b:
             continue
-        a, b = resolve_matchup_models(mu, model_ids)
-        if a and b:
-            key = frozenset({a, b})
-            st = stats.setdefault(key, {"games": 0, "wins": {a: 0, b: 0}})
-            st["games"] += 1
-            winner = mu.get("winner")
-            if winner == "a":
-                st["wins"][a] += 1
-            elif winner == "b":
-                st["wins"][b] += 1
-    return stats
+        key = frozenset({a, b})
+        st = stats.get(key)
+        if st is None:
+            st = stats[key] = {"games": 0, "wins": {a: 0, b: 0}}
+        st["games"] += 1
+        winner = mu.get("winner")
+        if winner == "a":
+            st["wins"][a] += 1
+        elif winner == "b":
+            st["wins"][b] += 1
+        task = mu.get("task")
+        if not task:
+            task = str(mu.get("_matchup_id", "")).split("/", 1)[0]
+        if task:
+            tasks_set = verdicts.get(key)
+            if tasks_set is None:
+                tasks_set = verdicts[key] = set()
+            tasks_set.add(task)
+    return stats, verdicts
 
 
 def is_model_active(model: dict) -> bool:
@@ -146,6 +204,22 @@ def valid_chips_order(value: str | None) -> str:
     """Валидирует порядок чипов блока «Фильтр»; невалидное → 'alpha'."""
     v = (value or "alpha").strip().lower()
     return v if v in ("alpha", "elo") else "alpha"
+
+
+QUEUE_PAGE_SIZE = 100
+
+
+def valid_queue_page(value: str | None, pages: int) -> int:
+    """Валидирует номер страницы очереди: 1..pages; невалидное → 1."""
+    try:
+        page = int((value or "").strip() or "1")
+    except ValueError:
+        return 1
+    if page < 1:
+        return 1
+    if page > pages:
+        return pages
+    return page
 
 
 # ─── Блок «Фильтр» ──────────────────────────────────────────────────
@@ -314,31 +388,62 @@ def format_model_caption(info: dict) -> str:
 
 def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
     """Возвращает {frozenset{id_a, id_b}: set(task_id)} с тасками,
-    в которых у пары есть неаннулированный вердикт.
+    в которых у пары есть неаннулированный вердикт (memo).
 
     Использует resolved ids (model_a_id/model_b_id) и пропускает
     tombstone- и аннулированные вердикты.
     """
-    model_ids = {m["id"] for m in load_models_yaml()}
-    verdicts: dict[frozenset[str], set[str]] = {}
-    if not MATCHUPS_DIR.exists():
-        return verdicts
-    matchups = load_matchups()
-    voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
-    for mu in matchups:
-        if mu.get("void_of"):
-            continue
-        if mu.get("_matchup_id") in voided:
-            continue
-        a, b = resolve_matchup_models(mu, model_ids)
-        if a and b:
-            key = frozenset({a, b})
-            task = mu.get("task")
-            if not task:
-                task = str(mu.get("_matchup_id", "")).split("/", 1)[0]
-            if task:
-                verdicts.setdefault(key, set()).add(task)
-    return verdicts
+    return data_cache.cached("pair_scan", _build_pair_scan)[1]
+
+
+# ─── Memo-обёртки роутов ────────────────────────────────────────────
+# Сборка под DataKey мемо-слоя (data_cache); переиспользуют разобранные
+# события журнала, чтобы повторные запросы не перечитывали файлы.
+
+
+def memo_coverage() -> dict:
+    """Покрытие прогона (memo)."""
+    return data_cache.cached(
+        "coverage",
+        lambda: get_coverage(
+            matchups=get_journal_events(),
+            models=memo_models(),
+            verdicts=get_pair_task_verdicts(),
+            tasks=memo_active_tasks(),
+        ),
+    )
+
+
+def memo_answer_matrix() -> dict:
+    """Матрица наличия ответов (memo)."""
+    return data_cache.cached(
+        "answer_matrix",
+        lambda: get_answer_matrix(journal=get_journal_events(), models=memo_models()),
+    )
+
+
+def memo_current_task() -> str:
+    """Текущая таска (memo)."""
+    return data_cache.cached(
+        "current_task",
+        lambda: resolve_current_task(journal=get_journal_events()),
+    )
+
+
+def memo_known_tasks() -> list[str]:
+    """Известные таски (memo)."""
+    return data_cache.cached(
+        "known_tasks",
+        lambda: known_tasks(journal=get_journal_events()),
+    )
+
+
+def memo_active_tasks() -> list[str]:
+    """Активные таски (memo)."""
+    return data_cache.cached(
+        "active_tasks",
+        lambda: active_tasks(journal=get_journal_events()),
+    )
 
 
 def find_task_dir(task_id: str) -> Path | None:
@@ -466,7 +571,7 @@ def toggle_task_status(task_id: str) -> bool:
 
     # Если деактивировали текущую — переключаем current на первую активную
     if new_status == "inactive" and settings.get("current_task") == task_id:
-        active = [t for t in known_tasks(settings) if is_task_active(settings, t) and t != task_id]
+        active = [t for t in memo_known_tasks() if is_task_active(settings, t) and t != task_id]
         settings["current_task"] = active[0] if active else ""
 
     save_settings(settings)
@@ -564,14 +669,24 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
 
     pair_stats = get_pair_stats()
     pair_task_verdicts = get_pair_task_verdicts()
-    active_task_ids = active_tasks(load_settings())
+    active_task_ids = active_tasks(load_settings(), get_journal_events())
     flags = load_answer_flags()
+
+    # Ключи пар — канонические кортежи `(id_меньший, id_больший)`: перебор
+    # идёт по позициям отсортированного model_ids, поэтому пара уже
+    # каноническая и frozenset на каждый кандидат не нужен. ELO и игры —
+    # плоскими списками по позициям, без словарных lookup по строке.
+    stats_by_pair = {tuple(sorted(key)): st for key, st in pair_stats.items()}
+    verdicts_by_pair = {
+        tuple(sorted(key)): tasks for key, tasks in pair_task_verdicts.items()
+    }
+    elo_list = [elo_map[mid] for mid in model_ids]
+    games_list = [games_map[mid] for mid in model_ids]
 
     def _build_rec(a: str, b: str, recommended_task: str,
                    is_rematch: bool) -> dict:
-        pair_key = frozenset({a, b})
-        st = pair_stats.get(pair_key)
-        pair_games = st["games"] if st else 0
+        st = stats_by_pair.get((a, b))
+        pair_games = st["games"] if st is not None else 0
         pair_wins_a = st["wins"].get(a, 0) if st else 0
         pair_wins_b = st["wins"].get(b, 0) if st else 0
 
@@ -600,8 +715,7 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
         else:
             h2h_label = "личные встречи: не встречались"
 
-        # score = близость ELO: монотонно убывает с ростом diff,
-        # внутри тира больший score идёт первым
+        # score = близость ELO: монотонно убывает с ростом diff
         closeness = 1.0 / (1.0 + elo_diff / 100.0)
 
         return {
@@ -623,36 +737,81 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
         }
 
     # Обычный режим: READY-ячейки (оба ответа есть, вердикта в таске нет).
-    ready = []
-    for order, task in enumerate(active_task_ids):
-        task_flags = flags.get(task) or {}
-        for i in range(len(model_ids)):
-            for j in range(i + 1, len(model_ids)):
-                a, b = model_ids[i], model_ids[j]
-                if not task_flags.get(a) or not task_flags.get(b):
-                    continue
-                if task in pair_task_verdicts.get(frozenset({a, b}), set()):
-                    continue
-                rec = _build_rec(a, b, task, False)
-                ready.append(
-                    (order, rec["pair_games"], rec["tier"], -rec["score"], rec)
-                )
+    # Перебор — только моделей с флагами ответов; ключ отбора — кортеж
+    # (порядок таска, pair_games, тир, ΔELO): сортировка по ΔELO
+    # эквивалентна сортировке по -closeness (монотонная замена), но
+    # целочисленна. Хвост хвостового ключа (id A, id B, таск) повторяет
+    # стабильный порядок перебора: пары идут лексикографически, таски —
+    # по возрастанию id. top-K берётся heapq.nsmallest без key — самый
+    # дешёвый путь для потока кортежей.
+    def _ready_candidates():
+        for order, task in enumerate(active_task_ids):
+            task_flags = flags.get(task) or {}
+            flagged = [i for i, mid in enumerate(model_ids) if task_flags.get(mid)]
+            for ii in range(len(flagged)):
+                i = flagged[ii]
+                a = model_ids[i]
+                elo_i = elo_list[i]
+                games_i = games_list[i]
+                for jj in range(ii + 1, len(flagged)):
+                    j = flagged[jj]
+                    b = model_ids[j]
+                    verdicts = verdicts_by_pair.get((a, b))
+                    if verdicts is not None and task in verdicts:
+                        continue
+                    st = stats_by_pair.get((a, b))
+                    pair_games = st["games"] if st is not None else 0
+                    elo_diff = elo_i - elo_list[j]
+                    if elo_diff < 0:
+                        elo_diff = -elo_diff
+                    games_j = games_list[j]
+                    min_games = games_i if games_i <= games_j else games_j
+                    if min_games == 0:
+                        tier = 0
+                    elif min_games < 3:
+                        tier = 1
+                    else:
+                        tier = 2
+                    yield order, pair_games, tier, elo_diff, a, b, task
+
+    ready = heapq.nsmallest(top_n, _ready_candidates())
     if ready:
-        ready.sort(key=lambda c: (c[0], c[1], c[2], c[3]))
-        return [c[4] for c in ready[:top_n]]
+        return [
+            _build_rec(a, b, task, False)
+            for (_order, _games, _tier, _diff, a, b, task) in ready
+        ]
 
     # Режим рематчей: READY пуст — все активные пары без учёта флагов.
+    # Те же ключи (pair_games, тир, ΔELO) при том же порядке перебора.
     default_task = active_task_ids[0] if active_task_ids else ""
-    rematches = []
-    for i in range(len(model_ids)):
-        for j in range(i + 1, len(model_ids)):
-            a, b = model_ids[i], model_ids[j]
-            rec = _build_rec(a, b, default_task, True)
-            rematches.append(
-                (rec["pair_games"], rec["tier"], -rec["score"], rec)
-            )
-    rematches.sort(key=lambda c: (c[0], c[1], c[2]))
-    return [c[3] for c in rematches[:top_n]]
+
+    def _rematch_candidates():
+        for i in range(len(model_ids)):
+            a = model_ids[i]
+            elo_i = elo_list[i]
+            games_i = games_list[i]
+            for j in range(i + 1, len(model_ids)):
+                b = model_ids[j]
+                st = stats_by_pair.get((a, b))
+                pair_games = st["games"] if st is not None else 0
+                elo_diff = elo_i - elo_list[j]
+                if elo_diff < 0:
+                    elo_diff = -elo_diff
+                games_j = games_list[j]
+                min_games = games_i if games_i <= games_j else games_j
+                if min_games == 0:
+                    tier = 0
+                elif min_games < 3:
+                    tier = 1
+                else:
+                    tier = 2
+                yield pair_games, tier, elo_diff, a, b
+
+    rematches = heapq.nsmallest(top_n, _rematch_candidates())
+    return [
+        _build_rec(a, b, default_task, True)
+        for (_games, _tier, _diff, a, b) in rematches
+    ]
 
 
 def format_reason(rec: dict) -> str:
@@ -1564,7 +1723,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         <tbody>
           {% for q in queue %}
           <tr>
-            <td class="rank">{{ loop.index }}</td>
+            <td class="rank">{{ queue_page_start + loop.index }}</td>
             <td class="model-cell"><a href="/model/{{ q.model_a }}" class="edit-link">{{ q.name_a }}</a> vs <a href="/model/{{ q.model_b }}" class="edit-link">{{ q.name_b }}</a></td>
             <td>{{ q.recommended_task if q.recommended_task else "—" }}</td>
           </tr>
@@ -1572,6 +1731,13 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         </tbody>
       </table>
     </div>
+    {% if queue_pages > 1 %}
+    <div class="queue-pager">
+      {% if queue_prev_url %}<a class="btn btn-secondary" href="{{ queue_prev_url }}">← Назад</a>{% endif %}
+      <span class="hint">страница {{ queue_page }} из {{ queue_pages }}</span>
+      {% if queue_next_url %}<a class="btn btn-secondary" href="{{ queue_next_url }}">Вперёд →</a>{% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">Очередь пуста — открытых пар нет.</div>
     {% if rematch %}
@@ -1666,6 +1832,22 @@ function colSet(task, val) {
 </script>
 {% endblock %}
 """
+
+
+# ─── Прекомпиляция шаблонов ─────────────────────────────────────────
+# Jinja парсит и компилирует шаблон один раз при импорте, рендер
+# переиспользует скомпилированный код (прежний путь пересобирал
+# шаблон на каждый запрос, ~21 мс).
+
+INDEX_TEMPLATE = app.jinja_env.from_string(INDEX_TEMPLATE)
+HISTORY_TEMPLATE = app.jinja_env.from_string(HISTORY_TEMPLATE)
+MODEL_TEMPLATE = app.jinja_env.from_string(MODEL_TEMPLATE)
+STATS_TEMPLATE = app.jinja_env.from_string(STATS_TEMPLATE)
+ADD_TEMPLATE = app.jinja_env.from_string(ADD_TEMPLATE)
+EDIT_TEMPLATE = app.jinja_env.from_string(EDIT_TEMPLATE)
+ADD_TASK_TEMPLATE = app.jinja_env.from_string(ADD_TASK_TEMPLATE)
+EDIT_TASK_TEMPLATE = app.jinja_env.from_string(EDIT_TASK_TEMPLATE)
+SETTINGS_TEMPLATE = app.jinja_env.from_string(SETTINGS_TEMPLATE)
 
 
 # ─── Routes ─────────────────────────────────────────────────────────
@@ -1769,8 +1951,7 @@ def history_page():
 
     model_name = name_map.get(model_id, model_id) if model_id else ""
 
-    return render_template_string(
-        HISTORY_TEMPLATE,
+    return HISTORY_TEMPLATE.render(
         history=history,
         history_page=history_page_num,
         history_pages=history_pages,
@@ -1794,12 +1975,11 @@ def model_page(model_id: str):
     index_data = ensure_index()
     detail = get_model_detail(index_data, model_id)
     if detail is None:
-        return render_template_string(
+        return (
             "<h1>404</h1><p>Модель не найдена</p>"
             '<p><a href="/">Назад к рейтингу</a></p>'
         ), 404
-    return render_template_string(
-        MODEL_TEMPLATE,
+    return MODEL_TEMPLATE.render(
         detail=detail,
         detail_caption=format_model_caption(detail),
         chart_svg=build_elo_svg(
@@ -1879,8 +2059,7 @@ def stats_page():
     else:
         summary = "моделей: 0"
 
-    return render_template_string(
-        STATS_TEMPLATE,
+    return STATS_TEMPLATE.render(
         summary=summary,
         stats_filter=stats_filter,
         pool_count=len(entries),
@@ -1927,19 +2106,20 @@ def leaderboard():
 
     if highlight:
         # «Подсвечивать»: виден весь реестр; ранги/медали/d5 — по полному пулу.
-        models_sorted = list(models.values())
+        # Копии строк: рендер аннотирует rank/hit/trend, мемо-index остаётся чистым.
+        models_sorted = [dict(info) for info in models.values()]
     elif filter_mode == "active":
         models_sorted = [
-            info for info in models.values()
+            dict(info) for info in models.values()
             if is_model_active(info)
         ]
     elif filter_mode == "inactive":
         models_sorted = [
-            info for info in models.values()
+            dict(info) for info in models.values()
             if not is_model_active(info)
         ]
     else:
-        models_sorted = list(models.values())
+        models_sorted = [dict(info) for info in models.values()]
 
     models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
 
@@ -1971,9 +2151,8 @@ def leaderboard():
     )
 
     # Настройки нужны раньше — для валидации предзаполнения.
-    settings = load_settings()
-    task_options = active_tasks(settings)
-    current_task = resolve_current_task(settings)
+    task_options = memo_active_tasks()
+    current_task = memo_current_task()
 
     # Предзаполнение формы вердикта из query (?model_a=&model_b=&task=,
     # короткие алиасы ?a=&b=). Невалидные id/таск игнорируются.
@@ -1989,7 +2168,9 @@ def leaderboard():
     if pre_task not in task_options:
         pre_task = ""
     # Рекомендации пар (+ строка-обоснование для отображения)
-    recommendations = get_recommendations(index_data, top_n=1)
+    recommendations = data_cache.cached(
+        "recommendations:1", lambda: get_recommendations(index_data, top_n=1)
+    )
     for rec in recommendations:
         rec["reason"] = format_reason(rec)
 
@@ -2013,11 +2194,15 @@ def leaderboard():
         info["caption"] = format_model_caption(info)
 
     # Тренд позиций d5: оба конца в текущем видимом пуле,
-    # чтобы архивация не дергала чужие стрелки.
+    # чтобы архивация не дергала чужие стрелки. Пул детерминирован
+    # парой (highlight, filter_mode) — memo по этому имени.
     pool_ids = [m.get("id", "") for m in models_sorted]
     current_elo = {m.get("id", ""): m.get("elo", DEFAULT_ELO) for m in models_sorted}
-    trends = compute_rank_trends(
-        index_data.get("elo_history", []), pool_ids, current_elo,
+    trends = data_cache.cached(
+        f"trends:{'all' if highlight else filter_mode}",
+        lambda: compute_rank_trends(
+            index_data.get("elo_history", []), pool_ids, current_elo,
+        ),
     )
     for m in models_sorted:
         t = trends.get(m.get("id", ""), {})
@@ -2027,8 +2212,8 @@ def leaderboard():
         m["trend_class"] = t.get("css", "history-delta-neutral")
         m["trend_title"] = t.get("title", "")
 
-    # Настройки: прогресс покрытия (settings/current_task/task_options уже выше)
-    coverage = get_coverage(settings)
+    # Настройки: прогресс покрытия (memo; task_options/current_task уже выше)
+    coverage = memo_coverage()
     coverage_pct = None
     coverage_done = False
     if coverage["percent"] is not None:
@@ -2044,8 +2229,7 @@ def leaderboard():
     else:
         matchups_count = len(index_data.get("matchups_index", []))
 
-    return render_template_string(
-        INDEX_TEMPLATE,
+    return INDEX_TEMPLATE.render(
         models_sorted=models_sorted,
         models_visible=models_visible,
         models_count=len(models),
@@ -2117,8 +2301,7 @@ def add_page():
     # Агент и компания — выпадающие списки только из справочника
     lookup_data = load_lookups()
 
-    return render_template_string(
-        ADD_TEMPLATE,
+    return ADD_TEMPLATE.render(
         models_list=models_list,
         highlight_hits=highlight_hits,
         agent_options=lookup_data["agents"],
@@ -2235,9 +2418,9 @@ def record_verdict_route():
 @app.route("/settings")
 def settings_page():
     settings = load_settings()
-    current = resolve_current_task(settings)
+    current = memo_current_task()
     tasks_list = []
-    for t in known_tasks(settings):
+    for t in memo_known_tasks():
         info = get_task_info(t)
         if info:
             title = info.get("title", "")
@@ -2292,11 +2475,12 @@ def settings_page():
     models_active_list.sort(key=lambda m: m["elo"], reverse=True)
     models_archived_list.sort(key=lambda m: m["elo"], reverse=True)
 
-    matrix = get_answer_matrix(settings)
+    matrix = memo_answer_matrix()
+    # Копии строк: рендер аннотирует hit/caption — мемо-значение остаётся чистым.
+    answer_rows = [dict(r) for r in matrix["rows"]]
     if highlight:
         # «Подсвечивать»: матрица не сужается; «Показывать», чипы и «Только
         # долги» — критерии подсветки строк.
-        answer_rows = list(matrix["rows"])
         for r in answer_rows:
             status_ok = (
                 answer_filter == "all"
@@ -2311,11 +2495,9 @@ def settings_page():
         answer_hits = sum(1 for r in answer_rows if r["hit"])
     else:
         if answer_filter == "active":
-            answer_rows = [r for r in matrix["rows"] if r["status"] != "archived"]
+            answer_rows = [r for r in answer_rows if r["status"] != "archived"]
         elif answer_filter == "inactive":
-            answer_rows = [r for r in matrix["rows"] if r["status"] == "archived"]
-        else:
-            answer_rows = list(matrix["rows"])
+            answer_rows = [r for r in answer_rows if r["status"] == "archived"]
         answer_rows = [
             r for r in answer_rows
             if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
@@ -2326,29 +2508,74 @@ def settings_page():
     for r in answer_rows:
         r["caption"] = format_model_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
-    coverage = get_coverage(settings)
-    active_task_ids = active_tasks(settings)
+    coverage = memo_coverage()
+    active_task_ids = memo_active_tasks()
     n_active_models = sum(1 for info in models.values() if is_model_active(info))
     n_active_tasks = len(active_task_ids)
     queue_bound = n_active_tasks * n_active_models * (n_active_models - 1) // 2
-    full_recs = get_recommendations(index_data, top_n=queue_bound) if queue_bound > 0 else []
+    queue_open = coverage.get("total", 0) - coverage.get("filled", 0)
+    queue_pages = max(1, (queue_open + QUEUE_PAGE_SIZE - 1) // QUEUE_PAGE_SIZE)
+    queue_page = valid_queue_page(request.args.get("queue_page"), queue_pages)
+    queue_page_start = (queue_page - 1) * QUEUE_PAGE_SIZE
+    if queue_bound > 0:
+        # Для страницы P достаточно первых (offset + размер страницы)
+        # рекомендаций. Пустая очередь запрашивает top-1 — сработает
+        # fallback рематча.
+        needed = (
+            min(queue_page_start + QUEUE_PAGE_SIZE, queue_open)
+            if queue_open > 0
+            else 1
+        )
+        full_recs = data_cache.cached(
+            f"recommendations:{needed}",
+            lambda: get_recommendations(index_data, top_n=needed),
+        )
+    else:
+        full_recs = []
     if full_recs and full_recs[0].get("is_rematch"):
         queue = []
         rematch = full_recs[:1]
     else:
-        queue = full_recs
+        queue = full_recs[queue_page_start:queue_page_start + QUEUE_PAGE_SIZE]
         rematch = []
+
+    def _queue_page_url(page: int) -> str:
+        """Ссылка на страницу очереди с сохранением остальных параметров."""
+        args = request.args.to_dict(flat=False)
+        args["queue_page"] = [str(page)]
+        return url_for("settings_page", **args) + "#recommendation-queue"
+
+    queue_prev_url = _queue_page_url(queue_page - 1) if queue_page > 1 else ""
+    queue_next_url = (
+        _queue_page_url(queue_page + 1) if queue_page < queue_pages else ""
+    )
+
     # Разбивка остатка очереди по таскам в порядке приоритета очереди
     # (порядок активных тасков T-NNN по возрастанию). Первое число в
-    # скобках — первый активный таск, второе — второй и т.д.
+    # скобках — первый активный таск, второе — второй и т.д. Счёт ведётся
+    # по флагам и вердиктам (C(k,2) минус закрытые ячейки), без
+    # материализации полного списка очереди.
     queue_breakdown: list = []
     queue_breakdown_str = ""
     queue_breakdown_legend = ""
-    if len(active_task_ids) > 1 and queue:
-        counts: dict = {t: 0 for t in active_task_ids}
-        for rec in queue:
-            t = rec.get("recommended_task") or ""
-            counts[t] = counts.get(t, 0) + 1
+    if len(active_task_ids) > 1 and queue_open > 0:
+        flags_all = load_answer_flags()
+        active_set = {mid for mid, info in models.items() if is_model_active(info)}
+        closed: dict = {t: 0 for t in active_task_ids}
+        for pair, pair_tasks in get_pair_task_verdicts().items():
+            a, b = tuple(pair)
+            if a not in active_set or b not in active_set:
+                continue
+            for t in pair_tasks:
+                if t in closed:
+                    task_flags = flags_all.get(t) or {}
+                    if task_flags.get(a) and task_flags.get(b):
+                        closed[t] += 1
+        counts: dict = {}
+        for t in active_task_ids:
+            task_flags = flags_all.get(t) or {}
+            k = sum(1 for mid in active_set if task_flags.get(mid))
+            counts[t] = k * (k - 1) // 2 - closed[t]
         ordered = [t for t in active_task_ids if t in counts]
         ordered += [t for t in counts if t not in active_task_ids]
         queue_breakdown = [{"task": t, "count": counts[t]} for t in ordered]
@@ -2378,8 +2605,7 @@ def settings_page():
         ]
         lookup_sections.append({"kind": kind, "title": title, "rows": rows})
 
-    return render_template_string(
-        SETTINGS_TEMPLATE,
+    return SETTINGS_TEMPLATE.render(
         tasks_list=tasks_list,
         models_total=len(models),
         models_active=len(models_active_list),
@@ -2397,6 +2623,11 @@ def settings_page():
         answer_has_active=matrix["has_active"],
         queue=queue,
         rematch=rematch,
+        queue_page=queue_page,
+        queue_pages=queue_pages,
+        queue_page_start=queue_page_start,
+        queue_prev_url=queue_prev_url,
+        queue_next_url=queue_next_url,
         queue_filled=coverage.get("filled", 0),
         queue_total=coverage.get("total", 0),
         queue_remaining=coverage.get("total", 0) - coverage.get("filled", 0),
@@ -2585,13 +2816,12 @@ def lookup_delete():
 @app.route("/answer_flags", methods=["POST"])
 def save_answer_flags_route():
     """Сохраняет ручной учёт наличия ответов (матрица из /settings)."""
-    settings = load_settings()
     index_data = ensure_index()
     models = index_data.get("models", {})
     model_ids = set(models)
 
-    tasks_all = known_tasks(settings)
-    active_set = set(active_tasks(settings))
+    tasks_all = memo_known_tasks()
+    active_set = set(memo_active_tasks())
 
     # Модели вне текущих фильтров в форме скрыты — сохраняем как было;
     # в режиме «Подсвечивать» отрисованы все строки реестра, поэтому видимы все.
@@ -2632,7 +2862,7 @@ def save_answer_flags_route():
             # Строки без долгов скрыты фильтром — тоже сохраняем как было.
             debt_by_id = {
                 r["id"]: r.get("debt", 0)
-                for r in get_answer_matrix(settings)["rows"]
+                for r in memo_answer_matrix()["rows"]
             }
             visible = {mid for mid in visible if debt_by_id.get(mid, 0) > 0}
 
@@ -2650,7 +2880,7 @@ def save_answer_flags_route():
                 new_flags.setdefault(tid, {})[mid] = True
     save_answer_flags(new_flags)
 
-    matrix = get_answer_matrix(settings)
+    matrix = memo_answer_matrix()
     redirect_params = {"answer_filter": answer_filter}
     if only_debts:
         redirect_params["only_debts"] = "1"
@@ -2681,8 +2911,7 @@ def edit_page(model_id: str):
     # Агент и компания — выпадающие списки только из справочника
     lookup_data = load_lookups()
 
-    return render_template_string(
-        EDIT_TEMPLATE,
+    return EDIT_TEMPLATE.render(
         model={
             "id": model_id,
             "name": info.get("name", ""),
@@ -2745,8 +2974,7 @@ def edit_model(model_id: str):
 
 @app.route("/add_task")
 def add_task_page():
-    return render_template_string(
-        ADD_TASK_TEMPLATE,
+    return ADD_TASK_TEMPLATE.render(
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -2779,8 +3007,7 @@ def edit_task_page(task_id: str):
     info = get_task_info(task_id)
     if not info:
         return redirect(url_for("settings_page", error="Таска не найдена"))
-    return render_template_string(
-        EDIT_TASK_TEMPLATE,
+    return EDIT_TASK_TEMPLATE.render(
         task=info,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),

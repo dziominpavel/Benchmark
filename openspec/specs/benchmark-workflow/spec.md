@@ -45,14 +45,14 @@ leaderboard. Минимальный прогон: 1 задача + 2 ответ�
 
 ### Requirement: Шаг 3 — Судья через skill
 
-Судейство SHALL выполняться skill `benchmark-judge` (`@benchmark-judge T-001`): проверяет наличие обоих слотов `modelA.md` / `modelB.md`, читает `task.md` и оба ответа, при противоречиях сверяется с кодом проекта на `baseline_commit`, оценивает по рубрике задачи и объявляет победителя. Слот определяется только именем файла; поле `model` внутри файла (если осталось от старого формата) SHALL игнорироваться и MUST NOT блокировать оценку. Skill судьи MUST NOT писать `data/matchups/T-NNN/NNN.json`, MUST NOT запускать `python tools/elo.py`, MUST NOT вызывать `tools/record_verdict.py` и MUST NOT иметь доступа к реальным `id` моделей. Судья возвращает только `winner` (`a` | `b` | `draw`); запись вердикта выполняется координатором отдельным шагом.
+Судейство SHALL выполняться skill `benchmark-judge` (`@benchmark-judge T-001`): проверяет наличие обоих слотов `modelA.md` / `modelB.md`, читает `task.md` и оба ответа, при противоречиях сверяется с кодом проекта на `baseline_commit`, оценивает по рубрике задачи и объявляет победителя. Слот определяется только именем файла; поле `model` внутри файла (если осталось от старого формата) SHALL игнорироваться и MUST NOT блокировать оценку. Skill судьи MUST NOT писать в `data/matchups/journal.jsonl`, MUST NOT запускать `python tools/elo.py`, MUST NOT вызывать `tools/record_verdict.py` и MUST NOT иметь доступа к реальным `id` моделей. Судья возвращает только `winner` (`a` | `b` | `draw`); запись вердикта выполняется координатором отдельным шагом.
 
 #### Scenario: Судья выбирает победителя
 
 - **WHEN** оба слота на T-001 готовы и вызван `@benchmark-judge T-001`
 - **THEN** skill выводит таблицу оценок, обоснование и победителя (`a` | `b` | `draw`)
 - **AND** skill сообщает: "Запишите вердикт через веб-UI или `record_verdict.py` с реальными id"
-- **AND** matchups-файл не создаётся
+- **AND** строка журнала не создаётся
 
 #### Scenario: Ничья
 
@@ -77,18 +77,18 @@ leaderboard. Минимальный прогон: 1 задача + 2 ответ�
 - **AND** пользователь переносит итог в `record_verdict.py --task T-001 --model-a <id> --model-b <id> --winner <a|b|draw>` или форму на `localhost:5000`
 
 ### Requirement: Шаг 4 — Запись вердикта и leaderboard
-Вердикт SHALL попадать в систему через единую точку записи: `tools/record_verdict.py` с явными реальными идентификаторами моделей и обязательным параметром `--task T-NNN`. Веб-сервер MAY предоставлять UI для ручной записи, который внутри вызывает ту же точку записи. Запись SHALL принимать реальные `id` в аргументах `model_a`/`model_b` (CLI) или в форме (UI), SHALL писать `data/matchups/<task>/<NNN>.json`, SHALL сохранять ELO-снэпшот и SHALL пересчитывать `data/index.json`. Запись MUST NOT разрешать слоты `modelA`/`modelB` через `data/answers/<task>/slots.json`. Корзины `general` не существует; каждый вердикт привязан к конкретной задаче `T-NNN`.
+Вердикт SHALL попадать в систему через единую точку записи: `tools/record_verdict.py` с явными реальными идентификаторами моделей и обязательным параметром `--task T-NNN`. Веб-сервер MAY предоставлять UI для ручной записи, который внутри вызывает ту же точку записи. Запись SHALL принимать реальные `id` в аргументах `model_a`/`model_b` (CLI) или в форме (UI), SHALL добавлять строку в `data/matchups/journal.jsonl` (событие с `matchup` вида `<task>/<NNN>`), SHALL сохранять ELO-снэпшот и SHALL пересчитывать `data/index.json`. Запись MUST NOT разрешать слоты `modelA`/`modelB` через `data/answers/<task>/slots.json`. Корзины `general` не существует; каждый вердикт привязан к конкретной задаче `T-NNN`.
 
 #### Scenario: Запись через skill судьи
 - **WHEN** `@benchmark-judge` завершил оценку и выбрал победителя
 - **THEN** пользователь запускает `python tools/record_verdict.py --task T-001 --model-a <id> --model-b <id> --winner <a|b|draw>`
-- **AND** `record_verdict.py` создаёт `data/matchups/T-001/NNN.json` с `task: T-001`
+- **AND** `record_verdict.py` добавляет в `data/matchups/journal.jsonl` событие с `task: T-001` и `matchup: T-001/NNN`
 - **AND** `record_verdict.py` пересчитывает `data/index.json`
 
 #### Scenario: Запись через веб-UI
 - **WHEN** пользователь выбрал модель A, модель B, таск `T-001` и победителя в форме
 - **THEN** сервер вызывает `record_verdict` с `task: T-001` и реальными `id`
-- **AND** создаётся `data/matchups/T-001/NNN.json`
+- **AND** создаётся событие журнала `T-001/NNN`
 - **AND** сервер пересчитывает ELO и показывает обновлённый leaderboard
 
 #### Scenario: Попытка записать слот вместо id
@@ -127,8 +127,8 @@ leaderboard. Минимальный прогон: 1 задача + 2 ответ�
 
 Новая задача создаётся копированием `data/tasks/_TEMPLATE.md` под следующим номером,
 когда текущая исчерпана. Модели SHALL переносить текущий ELO на новую задачу
-(сброса нет); ответы пишутся в `data/answers/T-NNN/`, вердикты skill-пути — в
-`data/matchups/T-NNN/`.
+(сброса нет); ответы пишутся в `data/answers/T-NNN/`, вердикты skill-пути попадают
+строками журнала с `task: T-NNN`.
 
 #### Scenario: Переход к новой задаче
 

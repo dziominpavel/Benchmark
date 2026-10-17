@@ -2,19 +2,22 @@
 """
 elo.py — ELO-движок и журнал вердиктов для бенчмарка LLM-моделей.
 
-Вердикты — append-only журнал событий в matchups/<task>/NNN.json.
-Каждое событие (версия 2) содержит:
+Вердикты — append-only журнал событий data/matchups/journal.jsonl
+(одна JSON-строка на событие). Каждое событие (версия 2) содержит:
   seq         — глобальный монотонный номер (порядок реплея)
+  matchup     — id события вида <task>/<NNN>
   recorded_at — ISO 8601 с таймзоной (ставит инструмент, не человек)
   model_a/model_b       — как записано (слот modelA/modelB или id)
   model_a_id/model_b_id — разрешённые id из models.yaml
   elo_before/elo_after/delta — снэпшот рейтинга на момент записи
-  void_of     — (tombstone) id аннулируемого вердикта, сам игр не создаёт
+  void_of     — (tombstone) id аннулируемого события, сам игр не создаёт
 
-Порядок реплея: события с seq — строго по seq; события без seq —
-легаси, сортируются по (date, matchup_id) и идут ДО событий с seq.
+Порядок реплея — строго по возрастанию seq. Оборванная последняя строка
+(аварийное прерывание записи) игнорируется чтением с предупреждением.
+Запись — append под межпроцессным lock, flush + fsync (см. record_verdict).
 --check проверяет: снэпшоты сходятся с реплеем (детект правки истории),
-seq уникален, recorded_at неубывает вместе с seq, модели разрешимы.
+seq уникален, recorded_at неубывает вместе с seq, модели разрешимы,
+нет невалидных строк и висячих void_of-ссылок.
 
 index.json — производная проекция, всегда пересчитывается из журнала.
 
@@ -32,8 +35,15 @@ import json
 import os
 import re
 import sys
+import time
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -43,16 +53,21 @@ if hasattr(sys.stderr, "reconfigure"):
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
 MATCHUPS_DIR = DATA_DIR / "matchups"
+JOURNAL_PATH = MATCHUPS_DIR / "journal.jsonl"
+JOURNAL_REL = "data/matchups/journal.jsonl"
 ANSWERS_DIR = DATA_DIR / "answers"
 TASKS_DIR = DATA_DIR / "tasks"
 INDEX_PATH = DATA_DIR / "index.json"
 MODELS_PATH = DATA_DIR / "models.yaml"
-STATE_PATH = MATCHUPS_DIR / "state.json"
 SETTINGS_PATH = DATA_DIR / "settings.yaml"
 ANSWER_FLAGS_PATH = DATA_DIR / "answer_flags.yaml"
 
 DEFAULT_ELO = 1200
 VERDICT_VERSION = 2
+
+# Append-протокол (см. journal_lock): таймаут ожидания лока и шаг опроса.
+LOCK_TIMEOUT = 15.0
+LOCK_POLL = 0.05
 
 TASK_ID_RE = re.compile(r"^(T-\d+)")
 
@@ -98,63 +113,91 @@ def now_iso() -> str:
 
 
 def matchup_sort_key(mu: dict):
-    """Ключ сортировки реплея.
+    """Ключ сортировки реплея — строго по возрастанию `seq`.
 
-    События с seq идут строго по seq. События без seq — легаси:
-    сортируются по (date, matchup_id) и располагаются ДО событий с seq.
+    События без seq (защита от битого журнала) идут первыми и
+    репортируются `--check` как проблема.
     """
     seq = mu.get("seq")
-    if seq is not None:
-        return (1, int(seq), "")
-    return (0, mu.get("date", ""), mu.get("_matchup_id", ""))
+    return int(seq) if seq is not None else 0
+
+
+def read_journal() -> tuple[list[dict], list[str]]:
+    """Читает `data/matchups/journal.jsonl` → (события, проблемы).
+
+    События — в порядке возрастания `seq`; `_matchup_id` заполняется из
+    поля `matchup`, `_file` — диагностический относительный путь.
+    Оборванная последняя строка (аварийное прерывание) и невалидные
+    строки пропускаются и возвращаются в списке проблем; печать — на
+    вызывающей стороне (load_matchups / --check).
+    """
+    events: list[dict] = []
+    problems: list[str] = []
+    if not JOURNAL_PATH.exists():
+        return events, problems
+
+    try:
+        text = JOURNAL_PATH.read_text(encoding="utf-8")
+    except OSError as e:
+        problems.append(f"{JOURNAL_REL}: не читается: {e}")
+        return events, problems
+
+    lines = text.splitlines()
+    ordered = True
+    prev_seq = -1
+    for i, raw in enumerate(lines):
+        if not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            where = (
+                "оборванная последняя строка"
+                if i == len(lines) - 1
+                else f"строка {i + 1}"
+            )
+            problems.append(f"{JOURNAL_REL}: невалидный JSON ({where}): {e}")
+            continue
+        if not isinstance(data, dict):
+            problems.append(f"{JOURNAL_REL}: строка {i + 1} — не объект события")
+            continue
+        seq = data.get("seq")
+        if seq is None:
+            ordered = False
+        else:
+            seq_int = int(seq)
+            if seq_int < prev_seq:
+                ordered = False
+            prev_seq = seq_int
+        data["_matchup_id"] = data.get("matchup", "")
+        data["_file"] = JOURNAL_REL
+        events.append(data)
+
+    if not ordered:
+        events.sort(key=matchup_sort_key)
+    return events, problems
 
 
 def load_matchups() -> list[dict]:
-    """Загружает все вердикты из matchups/ в порядке реплея.
-
-    Порядок: seq (события v2), затем легаси по (date, matchup_id).
-    """
-    matchups = []
-    if not MATCHUPS_DIR.exists():
-        return matchups
-
-    for task_dir in sorted(MATCHUPS_DIR.iterdir()):
-        if not task_dir.is_dir():
-            continue
-        for f in sorted(task_dir.glob("*.json")):
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-                data["_file"] = str(f.relative_to(REPO_ROOT))
-                data["_matchup_id"] = f"{task_dir.name}/{f.stem}"
-                matchups.append(data)
-            except (json.JSONDecodeError, OSError) as e:
-                print(f"WARNING: не удалось прочитать {f}: {e}", file=sys.stderr)
-
-    matchups.sort(key=matchup_sort_key)
-    return matchups
+    """Загружает все события журнала в порядке реплея (по `seq`)."""
+    events, problems = read_journal()
+    for p in problems:
+        print(f"WARNING: {p}", file=sys.stderr)
+    return events
 
 
 def matchups_digest() -> str:
-    """sha256 над содержимым всех файлов вердиктов (путь + байты).
+    """sha256 содержимого `data/matchups/journal.jsonl`.
 
-    Используется для инвалидации index.json: любая правка/удаление/
-    переименование файла в matchups/ меняет дайджест.
+    Используется для инвалидации index.json и memo-слоя: любая правка/
+    удаление/дописывание строки журнала меняет дайджест. Отсутствующий
+    файл — дайджест пустого хранилища.
     """
     h = hashlib.sha256()
-    if not MATCHUPS_DIR.exists():
-        return h.hexdigest()
-    files = sorted(
-        p for p in MATCHUPS_DIR.rglob("*.json")
-        if p.name != STATE_PATH.name
-    )
-    for p in files:
-        h.update(str(p.relative_to(REPO_ROOT)).encode("utf-8"))
-        h.update(b"\0")
-        try:
-            h.update(p.read_bytes())
-        except OSError:
-            continue
-        h.update(b"\0")
+    try:
+        h.update(JOURNAL_PATH.read_bytes())
+    except OSError:
+        pass
     return h.hexdigest()
 
 
@@ -184,38 +227,77 @@ def resolve_matchup_models(mu: dict, model_ids: set[str]) -> tuple[str | None, s
 # ─── Ledger write path ──────────────────────────────────────────────
 
 
-def load_state() -> dict:
-    """matchups/state.json — {next_seq}. Самовосстановление по max(seq)+1."""
-    state = {}
-    if STATE_PATH.exists():
+@contextmanager
+def journal_lock(timeout: float = LOCK_TIMEOUT):
+    """Межпроцессный эксклюзивный lock журнала для read-modify-append.
+
+    Windows: `msvcrt.locking` на байте за пределами файла — читатели
+    (lock не берут) не упираются в заблокированный диапазон данных.
+    POSIX: `fcntl.flock`. Ожидание с ретраями до `timeout` секунд.
+    """
+    JOURNAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    f = open(JOURNAL_PATH, "a+b")
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if os.name == "nt":
+                    f.seek(1 << 40)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"не удалось получить блокировку журнала за {timeout:.0f} с"
+                    )
+                time.sleep(LOCK_POLL)
+        yield f
+    finally:
         try:
-            state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            state = {}
-    max_seq = 0
-    for mu in load_matchups():
-        if mu.get("seq") is not None:
-            max_seq = max(max_seq, int(mu["seq"]))
-    next_seq = max(int(state.get("next_seq", 0) or 0), max_seq + 1)
-    return {"next_seq": next_seq}
+            if os.name == "nt":
+                f.seek(1 << 40)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        f.close()
 
 
-def save_state(state: dict) -> None:
-    MATCHUPS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, STATE_PATH)
+def append_event(f, event: dict) -> None:
+    """Дозаписывает событие в журнал: один write + flush + fsync.
+
+    Вызывается только с открытым дескриптором под `journal_lock`.
+    """
+    line = json.dumps(event, ensure_ascii=False) + "\n"
+    f.write(line.encode("utf-8"))
+    f.flush()
+    os.fsync(f.fileno())
 
 
-def next_matchup_path(task: str) -> Path:
-    """Следующий matchups/<task>/NNN.json — max существующих + 1."""
-    task_dir = MATCHUPS_DIR / task
-    task_dir.mkdir(parents=True, exist_ok=True)
+def next_matchup_id(task: str, events: list[dict] | None = None) -> str:
+    """Следующий id события задачи: max существующего NNN + 1 (<task>/NNN)."""
+    if events is None:
+        events = load_matchups()
+    prefix = f"{task}/"
     max_n = 0
-    for f in task_dir.glob("*.json"):
-        if f.stem.isdigit():
-            max_n = max(max_n, int(f.stem))
-    return task_dir / f"{max_n + 1:03d}.json"
+    for mu in events:
+        mid = mu.get("_matchup_id", "")
+        if mid.startswith(prefix):
+            tail = mid[len(prefix):]
+            if tail.isdigit():
+                max_n = max(max_n, int(tail))
+    return f"{task}/{max_n + 1:03d}"
+
+
+def _next_seq(events: list[dict]) -> int:
+    """Глобальный seq следующего события: max существующего + 1."""
+    return max(
+        (int(mu["seq"]) for mu in events if mu.get("seq") is not None),
+        default=0,
+    ) + 1
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
@@ -224,18 +306,18 @@ def _atomic_write_json(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def _current_elo_state(model_ids: list[str]) -> tuple[dict, dict]:
-    """Реплей текущего журнала → (elo, stats). Нужно для снэпшота."""
-    matchups = load_matchups()
+def _replay_state(matchups: list[dict], model_ids: list[str]) -> tuple[dict, dict]:
+    """Реплей событий журнала → (elo, stats). Нужно для снэпшота записи."""
     elo: dict[str, int] = {mid: DEFAULT_ELO for mid in model_ids}
     stats: dict[str, dict] = {
         mid: {"games": 0, "wins": 0, "losses": 0, "draws": 0} for mid in model_ids
     }
     voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+    model_id_set = set(model_ids)
     for mu in matchups:
         if mu.get("void_of") or mu["_matchup_id"] in voided:
             continue
-        a, b = resolve_matchup_models(mu, set(model_ids))
+        a, b = resolve_matchup_models(mu, model_id_set)
         if not a or not b:
             continue
         winner = mu.get("winner")
@@ -264,9 +346,12 @@ def record_verdict(
     """Записывает вердикт в журнал — ЕДИНСТВЕННАЯ точка записи.
 
     - model_a/model_b SHALL быть реальными id из models.yaml.
-    - Назначает глобальный seq и штампует recorded_at системным временем.
+    - Назначает глобальный seq и matchup (<task>/NNN), штампует
+      recorded_at системным временем.
     - Вычисляет и записывает снэпшот ELO (before/after/delta) — делает
       подмену или вставку задним числом детектируемой через --check.
+    - Дозаписывает строку в data/matchups/journal.jsonl под
+      межпроцессным lock (append + flush + fsync).
     - Перегенерирует index.json (если regenerate_index).
 
     Возвращает dict с path и записанным вердиктом. Бросает ValueError.
@@ -279,94 +364,98 @@ def record_verdict(
         raise ValueError("Модели A и B должны различаться")
 
     settings = load_settings()
-    if task not in active_tasks(settings):
-        raise ValueError(f"Таск '{task}' неактивна или неизвестна.")
 
     model_ids = {m["id"] for m in load_models_yaml()}
 
     # model_a/model_b SHALL быть реальными id из models.yaml
     id_a = model_a if model_a in model_ids else None
     id_b = model_b if model_b in model_ids else None
-    if not id_a:
-        raise ValueError(
-            f"Модель A не разрешена: '{model_a}'. "
-            f"Укажи реальный id из models.yaml."
+
+    # Read-modify-append под межпроцессным lock: seq, matchup, проверка
+    # таска и снэпшот считаются от одного и того же состояния журнала.
+    with journal_lock() as f:
+        events = load_matchups()
+        if task not in active_tasks(settings, events):
+            raise ValueError(f"Таск '{task}' неактивна или неизвестна.")
+        if not id_a:
+            raise ValueError(
+                f"Модель A не разрешена: '{model_a}'. "
+                f"Укажи реальный id из models.yaml."
+            )
+        if not id_b:
+            raise ValueError(
+                f"Модель B не разрешена: '{model_b}'. "
+                f"Укажи реальный id из models.yaml."
+            )
+        elo, stats = _replay_state(events, sorted(model_ids))
+        r_a, r_b = elo[id_a], elo[id_b]
+        s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0) if winner == "b" else (0.5, 0.5)
+        e_a = expected_score(r_a, r_b)
+        new_a, new_b = update_elo(
+            r_a, k_factor(stats[id_a]["games"]), s_a, e_a,
+            r_b, k_factor(stats[id_b]["games"]), s_b, 1.0 - e_a,
         )
-    if not id_b:
-        raise ValueError(
-            f"Модель B не разрешена: '{model_b}'. "
-            f"Укажи реальный id из models.yaml."
-        )
 
-    # Снэпшот: состояние до вердикта
-    elo, stats = _current_elo_state(sorted(model_ids))
-    r_a, r_b = elo[id_a], elo[id_b]
-    s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0) if winner == "b" else (0.5, 0.5)
-    e_a = expected_score(r_a, r_b)
-    new_a, new_b = update_elo(
-        r_a, k_factor(stats[id_a]["games"]), s_a, e_a,
-        r_b, k_factor(stats[id_b]["games"]), s_b, 1.0 - e_a,
-    )
+        seq = _next_seq(events)
+        matchup_id = next_matchup_id(task, events)
 
-    state = load_state()
-    seq = state["next_seq"]
-
-    verdict = {
-        "version": VERDICT_VERSION,
-        "seq": seq,
-        "task": task,
-        "model_a": model_a,
-        "model_b": model_b,
-        "model_a_id": id_a,
-        "model_b_id": id_b,
-        "winner": winner,
-        "date": date.today().isoformat(),
-        "recorded_at": recorded_at or now_iso(),
-        "elo": {
-            id_a: {"before": r_a, "after": new_a, "delta": new_a - r_a},
-            id_b: {"before": r_b, "after": new_b, "delta": new_b - r_b},
-        },
-    }
-
-    path = next_matchup_path(task)
-    _atomic_write_json(path, verdict)
-    save_state({"next_seq": seq + 1})
+        verdict = {
+            "version": VERDICT_VERSION,
+            "seq": seq,
+            "task": task,
+            "matchup": matchup_id,
+            "model_a": model_a,
+            "model_b": model_b,
+            "model_a_id": id_a,
+            "model_b_id": id_b,
+            "winner": winner,
+            "date": date.today().isoformat(),
+            "recorded_at": recorded_at or now_iso(),
+            "elo": {
+                id_a: {"before": r_a, "after": new_a, "delta": new_a - r_a},
+                id_b: {"before": r_b, "after": new_b, "delta": new_b - r_b},
+            },
+        }
+        append_event(f, verdict)
 
     if regenerate_index:
         save_index(generate_index())
 
-    return {"path": path, "verdict": verdict, "matchup_id": f"{task}/{path.stem}"}
+    return {"path": JOURNAL_PATH, "verdict": verdict, "matchup_id": matchup_id}
 
 
 def void_matchup(matchup_id: str, reason: str = "") -> dict:
-    """Аннулирует вердикт tombstone-событием (не удаляет файл).
+    """Аннулирует вердикт tombstone-событием (сам вердикт не удаляется).
 
-    matchup_id вида 'T-001/001'. Возвращает dict с path нового события.
+    matchup_id вида 'T-001/001'; цель ищется среди событий журнала.
+    Возвращает dict с path журнала и id нового события.
     """
     if "/" not in matchup_id:
         raise ValueError(f"matchup_id должен быть вида '<task>/<NNN>', получено '{matchup_id}'")
     task = matchup_id.split("/", 1)[0]
-    target = MATCHUPS_DIR / f"{matchup_id}.json"
-    if not target.exists():
-        raise ValueError(f"Вердикт {matchup_id} не найден: {target}")
 
-    state = load_state()
-    seq = state["next_seq"]
+    with journal_lock() as f:
+        events = load_matchups()
+        if not any(mu.get("_matchup_id") == matchup_id for mu in events):
+            raise ValueError(f"Вердикт {matchup_id} не найден в журнале")
 
-    tombstone = {
-        "version": VERDICT_VERSION,
-        "seq": seq,
-        "task": task,
-        "void_of": matchup_id,
-        "reason": reason,
-        "date": date.today().isoformat(),
-        "recorded_at": now_iso(),
-    }
-    path = next_matchup_path(task)
-    _atomic_write_json(path, tombstone)
-    save_state({"next_seq": seq + 1})
+        seq = _next_seq(events)
+        new_id = next_matchup_id(task, events)
+
+        tombstone = {
+            "version": VERDICT_VERSION,
+            "seq": seq,
+            "task": task,
+            "matchup": new_id,
+            "void_of": matchup_id,
+            "reason": reason,
+            "date": date.today().isoformat(),
+            "recorded_at": now_iso(),
+        }
+        append_event(f, tombstone)
+
     save_index(generate_index())
-    return {"path": path, "matchup_id": f"{task}/{path.stem}"}
+    return {"path": JOURNAL_PATH, "matchup_id": new_id}
 
 
 # ─── Full recalculation (tasks 2.4, 2.5) ────────────────────────────
@@ -397,7 +486,7 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
 
     for vid in sorted(voided):
         if not any(mu["_matchup_id"] == vid for mu in matchups):
-            warnings.append(f"tombstone ссылается на несуществующий вердикт: {vid}")
+            warnings.append(f"tombstone ссылается на несуществующее событие: {vid}")
 
     for mu in matchups:
         mu_id = mu.get("_matchup_id", "")
@@ -501,7 +590,12 @@ def verify_snapshots(matchups: list[dict], model_ids: list[str]) -> list[str]:
                 problems.append(f"{mu_id}: дубликат seq={seq}")
             seen_seq.add(int(seq))
         else:
-            problems.append(f"{mu_id}: нет seq — легаси/записан вне record_verdict.py")
+            problems.append(f"{mu_id}: нет seq — событие вне append-протокола")
+
+        if not (mu.get("matchup") or mu.get("_matchup_id")):
+            problems.append(f"{mu_id or '?'}: отсутствует поле matchup")
+        if not mu.get("task"):
+            problems.append(f"{mu_id}: отсутствует поле task")
 
         dt = mu.get("recorded_at")
         if not dt:
@@ -597,19 +691,27 @@ def load_models_yaml() -> list[dict]:
     return models
 
 
-def collect_tasks_info() -> dict:
-    """Собирает сводку по задачам из tasks/ и matchups/.
+def collect_tasks_info(journal: list[dict] | None = None) -> dict:
+    """Собирает сводку по задачам из tasks/ и событий журнала.
 
-    Наличие ответов здесь не учитывается: тексты хранятся вне проекта,
-    учёт ведётся вручную в data/answer_flags.yaml (см. answer-coverage).
+    `matchups_count` — число событий журнала с полем `task`, равным id
+    задачи (вердикты, аннулирования, tombstone). Отдельных файлов вердиктов
+    больше нет. Наличие ответов здесь не учитывается: тексты хранятся вне
+    проекта, учёт ведётся вручную в data/answer_flags.yaml.
     """
-    tasks_dir = TASKS_DIR
-    matchups_dir = MATCHUPS_DIR
+    if journal is None:
+        journal = load_matchups()
+
+    per_task: dict[str, int] = {}
+    for mu in journal:
+        task = mu.get("task") or str(mu.get("_matchup_id", "")).split("/", 1)[0]
+        if task:
+            per_task[task] = per_task.get(task, 0) + 1
 
     tasks_info = {}
 
-    if tasks_dir.exists():
-        for d in sorted(tasks_dir.iterdir()):
+    if TASKS_DIR.exists():
+        for d in sorted(TASKS_DIR.iterdir()):
             if not d.is_dir() or d.name.startswith("_"):
                 continue
             # T-001-slug → T-001; если не T-NNN — берём имя целиком
@@ -623,16 +725,10 @@ def collect_tasks_info() -> dict:
                 if m2:
                     title = m2.group(1).strip().strip('"').strip("'")
 
-            matchups_count = 0
-            if matchups_dir.exists():
-                task_matchups = matchups_dir / task_id
-                if task_matchups.exists():
-                    matchups_count = len(list(task_matchups.glob("*.json")))
-
             tasks_info[task_id] = {
                 "slug": d.name,
                 "title": title,
-                "matchups_count": matchups_count,
+                "matchups_count": per_task.get(task_id, 0),
             }
 
     return tasks_info
@@ -641,9 +737,9 @@ def collect_tasks_info() -> dict:
 def build_matchups_summary(applied: list[str], voided: list[str],
                            tombstones: list[str], skipped: list[str],
                            total: int) -> dict:
-    """Агрегат журнала для index.json: счётчики файлов по статусам.
+    """Агрегат журнала для index.json: счётчики событий по статусам.
 
-    Полный список не храним — детали только в файлах data/matchups/.
+    Полный список не храним — детали только в data/matchups/journal.jsonl.
     """
     return {
         "total": total,
@@ -683,7 +779,7 @@ def generate_index() -> dict:
             "draws": elo_info["draws"],
         }
 
-    tasks_info = collect_tasks_info()
+    tasks_info = collect_tasks_info(matchups)
     matchups_summary = build_matchups_summary(
         elo_data["applied"],
         elo_data["voided"],
@@ -719,13 +815,15 @@ def _unquote(val: str) -> str:
     return val
 
 
-def load_settings(path: Path = SETTINGS_PATH) -> dict:
+def load_settings(path: Path | None = None) -> dict:
     """Читает settings.yaml → {"current_task": str, "tasks": {id: status}}.
 
     Файл может отсутствовать или быть частичным — применяются дефолты
     (`current_task: ""`, пустой реестр тасков). Таска без записи
     в реестре считается активной (см. is_task_active).
     """
+    if path is None:
+        path = SETTINGS_PATH
     settings: dict = {"current_task": "", "tasks": {}}
     if not path.exists():
         return settings
@@ -752,8 +850,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> dict:
     return settings
 
 
-def save_settings(settings: dict, path: Path = SETTINGS_PATH) -> None:
+def save_settings(settings: dict, path: Path | None = None) -> None:
     """Записывает settings.yaml (UTF-8 без BOM, детерминированный вид)."""
+    if path is None:
+        path = SETTINGS_PATH
     out = ["# Настройки бенчмарка: активные таски и текущая таска.",
            "# tasks: <id> -> active | inactive; без записи таска активна.",
            f"current_task: {settings.get('current_task', 'general')}",
@@ -763,7 +863,7 @@ def save_settings(settings: dict, path: Path = SETTINGS_PATH) -> None:
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
-def load_answer_flags(path: Path = ANSWER_FLAGS_PATH) -> dict:
+def load_answer_flags(path: Path | None = None) -> dict:
     """Читает answer_flags.yaml → {task_id: {model_id: bool}}.
 
     Разреженный формат: отсутствие записи = false (нет ответа).
@@ -771,6 +871,8 @@ def load_answer_flags(path: Path = ANSWER_FLAGS_PATH) -> dict:
     фильтрация по реестру выполняется при построении матрицы, запись
     таких id никогда не падает.
     """
+    if path is None:
+        path = ANSWER_FLAGS_PATH
     flags: dict = {}
     if not path.exists():
         return flags
@@ -817,7 +919,7 @@ def load_answer_flags(path: Path = ANSWER_FLAGS_PATH) -> dict:
     return flags
 
 
-def save_answer_flags(flags: dict, path: Path = ANSWER_FLAGS_PATH) -> None:
+def save_answer_flags(flags: dict, path: Path | None = None) -> None:
     """Записывает answer_flags.yaml (UTF-8 без BOM, детерминированный вид).
 
     Пишет только true-записи, отсортированные по task и model;
@@ -825,6 +927,8 @@ def save_answer_flags(flags: dict, path: Path = ANSWER_FLAGS_PATH) -> None:
     id (матрица строится по реестру), поэтому мусорные записи при
     сохранении через UI исчезают.
     """
+    if path is None:
+        path = ANSWER_FLAGS_PATH
     out = ["# Ручной учёт наличия ответов: task -> model -> true. Отсутствие = нет ответа.",
            "# Тексты ответов хранятся вне проекта; здесь только флаги."]
     tasks = sorted(t for t, m in flags.items() if any(bool(v) for v in (m or {}).values()))
@@ -845,18 +949,21 @@ def is_valid_task_id(task: str) -> bool:
     return bool(TASK_ID_RE.fullmatch(task or ""))
 
 
-def known_tasks(settings: dict | None = None) -> list[str]:
-    """Известные таски: matchups/T-NNN ∪ tasks/T-NNN-* ∪ settings.tasks (только T-NNN)."""
+def known_tasks(settings: dict | None = None,
+                journal: list[dict] | None = None) -> list[str]:
+    """Известные таски: события журнала ∪ tasks/T-NNN-* ∪ settings.tasks (только T-NNN)."""
     if settings is None:
         settings = load_settings()
+    if journal is None:
+        journal = load_matchups()
     known = {
         t for t in settings.get("tasks", {})
         if is_valid_task_id(t)
     }
-    if MATCHUPS_DIR.exists():
-        for d in MATCHUPS_DIR.iterdir():
-            if d.is_dir() and is_valid_task_id(d.name):
-                known.add(d.name)
+    for mu in journal:
+        task = mu.get("task") or str(mu.get("_matchup_id", "")).split("/", 1)[0]
+        if task not in known and is_valid_task_id(task):
+            known.add(task)
     if TASKS_DIR.exists():
         for d in TASKS_DIR.iterdir():
             if not d.is_dir() or d.name.startswith("_"):
@@ -872,21 +979,26 @@ def is_task_active(settings: dict, task: str) -> bool:
     return settings.get("tasks", {}).get(task, "active") != "inactive"
 
 
-def active_tasks(settings: dict | None = None) -> list[str]:
+def active_tasks(settings: dict | None = None,
+                 journal: list[dict] | None = None) -> list[str]:
     """Список известных активных тасков."""
     if settings is None:
         settings = load_settings()
-    return [t for t in known_tasks(settings) if is_task_active(settings, t)]
+    return [t for t in known_tasks(settings, journal) if is_task_active(settings, t)]
 
 
-def resolve_current_task(settings: dict | None = None) -> str:
+def resolve_current_task(settings: dict | None = None,
+                         journal: list[dict] | None = None) -> str:
     """Текущая таска для формы вердикта; неактивная/неизвестная → первая активная T-NNN."""
     if settings is None:
         settings = load_settings()
     current = settings.get("current_task", "")
-    if is_valid_task_id(current) and current in known_tasks(settings) and is_task_active(settings, current):
+    if (is_valid_task_id(current)
+            and (current in settings.get("tasks", {})
+                 or current in known_tasks(settings, journal))
+            and is_task_active(settings, current)):
         return current
-    active = active_tasks(settings)
+    active = active_tasks(settings, journal)
     return active[0] if active else ""
 
 
@@ -895,6 +1007,8 @@ def get_coverage(
     matchups: list[dict] | None = None,
     models: list[dict] | None = None,
     flags: dict | None = None,
+    verdicts: dict | None = None,
+    tasks: list[str] | None = None,
 ) -> dict:
     """Покрытие прогона: видимые ячейки (таск × пара активных моделей).
 
@@ -909,6 +1023,11 @@ def get_coverage(
     percent=None, если метрика не определена (нет активных тасков,
     <2 активных моделей или видимых ячеек 0). Процент ограничен
     сверху 100.0: есть READY → строго меньше 100%.
+
+    `verdicts` — необязательная готовая карта «пара → таски» с
+    неаннулированными вердиктами (pair_task_verdicts консоли): заменяет
+    пересборку ячеек из `matchups`. `tasks` — необязательный готовый
+    список активных тасков (иначе считается здесь).
     """
     if settings is None:
         settings = load_settings()
@@ -924,39 +1043,59 @@ def get_coverage(
     }
     if len(active_model_ids) < 2:
         return {"filled": 0, "total": 0, "percent": None}
-    tasks = active_tasks(settings)
+    if tasks is None:
+        tasks = active_tasks(settings, matchups)
     if not tasks:
         return {"filled": 0, "total": 0, "percent": None}
 
-    model_ids = {m["id"] for m in models}
-    voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
-    verdict_cells: set[tuple[str, frozenset]] = set()
-    for mu in matchups:
-        if mu.get("void_of") or mu.get("_matchup_id") in voided:
-            continue
-        task = mu.get("task") or str(mu.get("_matchup_id", "")).split("/", 1)[0]
-        if task not in tasks:
-            continue
-        a, b = resolve_matchup_models(mu, model_ids)
-        if not a or not b or a not in active_model_ids or b not in active_model_ids:
-            continue
-        verdict_cells.add((task, frozenset((a, b))))
+    if verdicts is None:
+        model_ids = {m["id"] for m in models}
+        voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+        verdict_cells: set[tuple[str, frozenset]] = set()
+        for mu in matchups:
+            if mu.get("void_of") or mu.get("_matchup_id") in voided:
+                continue
+            task = mu.get("task") or str(mu.get("_matchup_id", "")).split("/", 1)[0]
+            if task not in tasks:
+                continue
+            a, b = resolve_matchup_models(mu, model_ids)
+            if not a or not b or a not in active_model_ids or b not in active_model_ids:
+                continue
+            verdict_cells.add((task, frozenset((a, b))))
 
-    # Видимые ячейки: оба флага true. Порядок пар детерминирован.
-    ordered_ids = sorted(active_model_ids)
-    visible: set[tuple[str, frozenset]] = set()
+    # Знаменатель — пары размеченных моделей (оба флага true) на активный
+    # таск: C(k,2) без перечисления самих пар (до 1000 активных моделей).
+    total = 0
     for task in tasks:
         task_flags = flags.get(task) or {}
-        for i in range(len(ordered_ids)):
-            for j in range(i + 1, len(ordered_ids)):
-                a, b = ordered_ids[i], ordered_ids[j]
-                if task_flags.get(a) and task_flags.get(b):
-                    visible.add((task, frozenset((a, b))))
+        k = sum(1 for mid in active_model_ids if task_flags.get(mid))
+        total += k * (k - 1) // 2
 
-    total = len(visible)
     if total == 0:
         return {"filled": 0, "total": 0, "percent": None}
-    filled = len(verdict_cells & visible)
+
+    # DONE — видимая ячейка с неаннулированным вердиктом (повторы не считаются).
+    filled = 0
+    if verdicts is None:
+        for task, pair in verdict_cells:
+            task_flags = flags.get(task) or {}
+            a, b = tuple(pair)
+            if task_flags.get(a) and task_flags.get(b):
+                filled += 1
+    else:
+        # Готовая карта «пара → таски» (pair_task_verdicts консоли):
+        # ячейки не пересобираются из событий, фильтры — при подсчёте.
+        for pair, pair_tasks in verdicts.items():
+            a, b = tuple(pair)
+            if a not in active_model_ids or b not in active_model_ids:
+                continue
+            for task in pair_tasks:
+                if task not in tasks:
+                    continue
+                task_flags = flags.get(task) or {}
+                if task_flags.get(a) and task_flags.get(b):
+                    filled += 1
+
     return {
         "filled": filled,
         "total": total,
@@ -968,6 +1107,7 @@ def get_answer_matrix(
     settings: dict | None = None,
     models: list[dict] | None = None,
     flags: dict | None = None,
+    journal: list[dict] | None = None,
 ) -> dict:
     """Ручной учёт наличия ответов: матрица модель × таск.
 
@@ -975,7 +1115,8 @@ def get_answer_matrix(
     неизвестных модели/таска игнорируются. Сводка считается только по
     активным моделям × активным таскам; архивные/неактивные возвращаются
     в строках/столбцах со статусом для UI-фильтра. Строки отсортированы
-    по имени модели (case-insensitive, по алфавиту).
+    по имени модели (case-insensitive, по алфавиту). `journal` позволяет
+    переиспользовать уже разобранные события (memo-слой консоли).
     """
     if settings is None:
         settings = load_settings()
@@ -984,8 +1125,8 @@ def get_answer_matrix(
     if flags is None:
         flags = load_answer_flags()
 
-    tasks_all = known_tasks(settings)
-    active_task_ids = active_tasks(settings)
+    tasks_all = known_tasks(settings, journal)
+    active_task_ids = active_tasks(settings, journal)
     active_set = set(active_task_ids)
 
     rows = []
@@ -1025,26 +1166,36 @@ def get_answer_matrix(
 # ─── Integrity check ────────────────────────────────────────────────
 
 
-def is_index_stale() -> bool:
-    """Проверяет, устарел ли index.json vs файлы в matchups/ и models.yaml."""
-    if not INDEX_PATH.exists():
-        return True
-    try:
-        idx = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+def is_index_stale(idx: dict | None = None, digest: str | None = None) -> bool:
+    """Проверяет, устарел ли index.json vs журнал и models.yaml.
+
+    Принимает уже прочитанный объект index.json (`idx`), чтобы консоль
+    не парсила файл дважды; без аргумента читает файл сам. `digest` —
+    заранее вычисленный дайджест журнала (даёт мемо-слой), иначе он
+    считается здесь.
+    """
+    if idx is None:
+        if not INDEX_PATH.exists():
+            return True
+        try:
+            idx = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return True
+
+    # Дайджест содержимого журнала — ловит правки, не только добавления
+    if digest is None:
+        digest = matchups_digest()
+    if idx.get("matchups_digest") != digest:
         return True
 
-    # Дайджест содержимого вердиктов — ловит правки, не только добавления
-    if idx.get("matchups_digest") != matchups_digest():
-        return True
-
+    models = load_models_yaml()
     indexed_models = set(idx.get("models", {}).keys())
-    yaml_models = {m["id"] for m in load_models_yaml()}
+    yaml_models = {m["id"] for m in models}
     if indexed_models != yaml_models:
         return True
 
     # Метаданные моделей (status, name, agent, provider, added) тоже влияют на UI/рекомендации
-    for m in load_models_yaml():
+    for m in models:
         mid = m["id"]
         info = idx.get("models", {}).get(mid, {})
         for key in ("name", "agent", "provider", "status", "added"):
@@ -1060,12 +1211,15 @@ def run_check() -> int:
 
     models = load_models_yaml()
     model_ids = [m["id"] for m in models]
-    matchups = load_matchups()
 
-    # Снэпшоты, порядок seq/recorded_at, дубликаты seq
+    # Оборванная последняя строка и невалидные строки журнала
+    matchups, journal_problems = read_journal()
+    problems.extend(journal_problems)
+
+    # Снэпшоты, порядок seq/recorded_at, дубликаты seq, поля событий
     problems.extend(verify_snapshots(matchups, model_ids))
 
-    # Неразрешённые модели / невалидные winner / void-ссылки
+    # Неразрешённые модели / невалидные winner / висячие void_of-ссылки
     elo_data = recalculate(matchups, model_ids)
     problems.extend(elo_data["warnings"])
 
@@ -1086,7 +1240,9 @@ def run_check() -> int:
 
 def main() -> int:
     import argparse
-    parser = argparse.ArgumentParser(description="ELO-движок бенчмарка")
+    parser = argparse.ArgumentParser(
+        description="ELO-движок бенчмарка: реплей журнала "
+                    "data/matchups/journal.jsonl → data/index.json")
     parser.add_argument("--check", action="store_true",
                         help="Проверить целостность журнала и индекса (без записи)")
     args = parser.parse_args()

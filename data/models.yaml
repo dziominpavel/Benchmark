@@ -44,7 +44,7 @@ models:
   - id: cursor-composer-2-5
     name: "Cursor Composer 2.5"
     agent: Cursor
-    provider: Cursor
+    provider: SpaceXAI
     version: 
     added: 2026-09-05
     status: active
@@ -65,14 +65,14 @@ models:
   - id: cursor-grok-4-6
     name: "Cursor Grok 4.6 Extra High"
     agent: Cursor
-    provider: xAI
+    provider: SpaceXAI
     version: 
     added: 2026-09-05
     status: active
   - id: cursor-grok-4-6-low
     name: "Cursor Grok 4.6 Low"
     agent: Cursor
-    provider: xAI
+    provider: SpaceXAI
     version: 
     added: 2026-09-06
     status: active
@@ -198,7 +198,7 @@ models:
   - id: opencode-grok-4-7-xhigh
     name: "OpenCode Grok 4.7 Xhigh"
     agent: OpenCode
-    provider: xAI
+    provider: SpaceXAI
     version: 
     added: 2026-09-22
     status: active

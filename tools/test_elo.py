@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Unit tests for elo.py — tasks 2.1-2.6."""
+"""Unit tests for elo.py — задачи ELO-движка и журнального хранилища."""
+import contextlib
 import sys
 from pathlib import Path
 
@@ -147,13 +148,17 @@ def test_recorded_at_required():
 
 
 def test_collect_tasks_info():
-    """collect_tasks_info корректно извлекает T-001 из имени директории."""
+    """collect_tasks_info: T-001 из имени директории; счётчик — из событий журнала."""
     from elo import collect_tasks_info
-    # Функция читает реальные директории; проверим, что T-001 существует,
-    # а ключа 'T' нет.
-    info = collect_tasks_info()
+    journal = [
+        {"task": "T-001", "matchup": "T-001/001", "seq": 1},
+        {"task": "T-001", "matchup": "T-001/002", "seq": 2},
+        {"task": "T-001", "matchup": "T-001/003", "seq": 3, "void_of": "T-001/002"},
+    ]
+    info = collect_tasks_info(journal)
     assert "T-001" in info, f"ожидался T-001, получили {list(info.keys())}"
     assert "T" not in info, f"не должен быть ключ T, получили {list(info.keys())}"
+    assert info["T-001"]["matchups_count"] == 3, info["T-001"]
     print("collect_tasks_info: OK")
 
 
@@ -202,10 +207,12 @@ def test_settings_roundtrip():
 
 
 def test_known_tasks():
-    """known_tasks включает только корректные T-NNN из директорий и settings."""
+    """known_tasks включает T-NNN только из журнала, директорий и settings."""
     from elo import known_tasks
-    tasks = known_tasks({"current_task": "", "tasks": {"extra-1": "active"}})
+    journal = [{"task": "T-002", "matchup": "T-002/001", "seq": 1}]
+    tasks = known_tasks({"current_task": "", "tasks": {"extra-1": "active"}}, journal)
     assert "T-001" in tasks, f"ожидался T-001, получили {tasks}"
+    assert "T-002" in tasks, f"ожидался T-002 из событий журнала, получили {tasks}"
     assert "general" not in tasks, f"general больше не таска: {tasks}"
     assert "extra-1" not in tasks, f"extra-1 не T-NNN, не должен быть таской: {tasks}"
     print("known_tasks: OK")
@@ -462,6 +469,257 @@ def test_elo_dist_scale():
     print("elo dist scale: OK")
 
 
+def _write_models(path: Path, ids) -> None:
+    """Минимальный models.yaml для tmp-хранилища."""
+    lines = ["models:"]
+    for mid in ids:
+        lines += [f"  - id: {mid}", f'    name: "{mid}"', "    status: active"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@contextlib.contextmanager
+def _temp_storage(tmp: Path, model_ids=("A", "B")):
+    """Подмена путей elo.py на tmp-хранилище; пути возвращаются на выходе."""
+    import elo as elo_mod
+
+    saved = (elo_mod.JOURNAL_PATH, elo_mod.MODELS_PATH,
+             elo_mod.SETTINGS_PATH, elo_mod.INDEX_PATH)
+    elo_mod.JOURNAL_PATH = tmp / "journal.jsonl"
+    elo_mod.MODELS_PATH = tmp / "models.yaml"
+    elo_mod.SETTINGS_PATH = tmp / "settings.yaml"
+    elo_mod.INDEX_PATH = tmp / "index.json"
+    _write_models(elo_mod.MODELS_PATH, list(model_ids))
+    elo_mod.SETTINGS_PATH.write_text(
+        "current_task: T-001\ntasks:\n  T-001: active\n", encoding="utf-8"
+    )
+    try:
+        yield elo_mod
+    finally:
+        (elo_mod.JOURNAL_PATH, elo_mod.MODELS_PATH,
+         elo_mod.SETTINGS_PATH, elo_mod.INDEX_PATH) = saved
+
+
+def test_journal_roundtrip():
+    """read_journal: порядок по seq, _matchup_id из matchup, следующий id/seq."""
+    import json
+    import tempfile
+    import elo as elo_mod
+
+    with tempfile.TemporaryDirectory() as td:
+        journal = Path(td) / "journal.jsonl"
+        saved = elo_mod.JOURNAL_PATH
+        elo_mod.JOURNAL_PATH = journal
+        try:
+            assert elo_mod.load_matchups() == []
+            events = [
+                {"seq": 2, "task": "T-001", "matchup": "T-001/002",
+                 "recorded_at": "2026-09-05T10:00:02+03:00"},
+                {"seq": 1, "task": "T-001", "matchup": "T-001/001",
+                 "recorded_at": "2026-09-05T10:00:01+03:00"},
+            ]
+            journal.write_text(
+                "\n".join(json.dumps(e, ensure_ascii=False) for e in events) + "\n",
+                encoding="utf-8",
+            )
+            loaded = elo_mod.load_matchups()
+            assert [e["seq"] for e in loaded] == [1, 2], loaded
+            assert loaded[0]["_matchup_id"] == "T-001/001"
+            assert loaded[0]["_file"] == "data/matchups/journal.jsonl"
+            assert elo_mod.next_matchup_id("T-001", loaded) == "T-001/003"
+        finally:
+            elo_mod.JOURNAL_PATH = saved
+    print("journal roundtrip: OK")
+
+
+def test_journal_torn_last_line():
+    """Оборванная последняя строка пропускается; предыдущие события применяются."""
+    import json
+    import tempfile
+    import elo as elo_mod
+
+    with tempfile.TemporaryDirectory() as td:
+        journal = Path(td) / "journal.jsonl"
+        saved = elo_mod.JOURNAL_PATH
+        elo_mod.JOURNAL_PATH = journal
+        try:
+            valid = json.dumps(
+                {"seq": 1, "task": "T-001", "matchup": "T-001/001",
+                 "recorded_at": "2026-09-05T10:00:01+03:00"},
+                ensure_ascii=False,
+            )
+            journal.write_text(valid + "\n" + '{"seq": 2, "task": "T-001", "matchu',
+                               encoding="utf-8")
+            events, problems = elo_mod.read_journal()
+            assert [e["seq"] for e in events] == [1], events
+            assert len(problems) == 1, problems
+            assert "оборванная последняя строка" in problems[0], problems
+        finally:
+            elo_mod.JOURNAL_PATH = saved
+    print("journal torn last line: OK")
+
+
+def test_journal_check_problems():
+    """Проверки журнала: дубликат seq, отсутствие matchup, висячий void_of."""
+    import json
+    import tempfile
+    import elo as elo_mod
+
+    lines = [
+        {"seq": 1, "task": "T-001", "matchup": "T-001/001",
+         "model_a_id": "A", "model_b_id": "B", "winner": "a",
+         "recorded_at": "2026-09-05T10:00:01+03:00"},
+        {"seq": 1, "task": "T-001", "matchup": "T-001/002",
+         "void_of": "T-001/999", "recorded_at": "2026-09-05T10:00:02+03:00"},
+        {"seq": 3, "task": "T-001", "recorded_at": "2026-09-05T10:00:03+03:00"},
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        journal = Path(td) / "journal.jsonl"
+        saved = elo_mod.JOURNAL_PATH
+        elo_mod.JOURNAL_PATH = journal
+        try:
+            journal.write_text(
+                "\n".join(json.dumps(e, ensure_ascii=False) for e in lines) + "\n",
+                encoding="utf-8",
+            )
+            events, problems = elo_mod.read_journal()
+            assert not problems, problems
+            vp = elo_mod.verify_snapshots(events, ["A", "B"])
+            assert any("дубликат seq" in p for p in vp), vp
+            assert any("отсутствует поле matchup" in p for p in vp), vp
+            warnings = elo_mod.recalculate(events, ["A", "B"])["warnings"]
+            assert any("несуществующее событие" in w for w in warnings), warnings
+        finally:
+            elo_mod.JOURNAL_PATH = saved
+    print("journal check problems: OK")
+
+
+def test_run_check_reports_journal_problems():
+    """run_check: exit 1 и проблема в выводе для каждого вида порчи журнала."""
+    import io
+    import json
+    import tempfile
+
+    good = {
+        "seq": 1, "task": "T-001", "matchup": "T-001/001",
+        "model_a_id": "A", "model_b_id": "B", "winner": "a",
+        "recorded_at": "2026-09-05T10:00:01+03:00",
+    }
+    good3 = dict(good, seq=3, matchup="T-001/003",
+                 recorded_at="2026-09-05T10:00:03+03:00")
+
+    def run(lines):
+        with tempfile.TemporaryDirectory() as td:
+            with _temp_storage(Path(td)) as elo_mod:
+                elo_mod.JOURNAL_PATH.write_text(
+                    "\n".join(
+                        ln if isinstance(ln, str) else json.dumps(ln, ensure_ascii=False)
+                        for ln in lines
+                    ) + "\n",
+                    encoding="utf-8",
+                )
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = elo_mod.run_check()
+                return code, buf.getvalue()
+
+    # Невалидная строка (не последняя)
+    code, out = run([good, '{"seq": 2, извините', good3])
+    assert code == 1 and "невалидный JSON" in out and "строка 2" in out, out
+    # Дубликат seq
+    code, out = run([good, dict(good, matchup="T-001/00X")])
+    assert code == 1 and "дубликат seq" in out, out
+    # Висячая void_of-ссылка
+    tomb = {"seq": 2, "task": "T-001", "matchup": "T-001/002",
+            "void_of": "T-001/999", "recorded_at": "2026-09-05T10:00:02+03:00"}
+    code, out = run([good, tomb])
+    assert code == 1 and "несуществующее событие" in out, out
+    # Монотонность recorded_at
+    late = dict(good, seq=2, matchup="T-001/002",
+                recorded_at="2026-09-05T09:00:00+03:00")
+    code, out = run([good, late])
+    assert code == 1 and "раньше предыдущего" in out, out
+    print("run_check journal problems: OK")
+
+
+def test_record_verdict_journal():
+    """record_verdict/void_matchup пишут события в journal.jsonl (append)."""
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        with _temp_storage(tmp) as elo_mod:
+            from elo import record_verdict, void_matchup, load_matchups
+
+            r1 = record_verdict("T-001", "A", "B", "a", regenerate_index=False)
+            v1 = r1["verdict"]
+            assert v1["seq"] == 1 and v1["matchup"] == "T-001/001", v1
+            assert v1["elo"]["A"] == {"before": 1200, "after": 1220, "delta": 20}, v1["elo"]
+            assert v1["elo"]["B"] == {"before": 1200, "after": 1180, "delta": -20}
+            assert v1["recorded_at"], v1
+
+            r2 = record_verdict("T-001", "A", "B", "b", regenerate_index=False)
+            assert r2["verdict"]["seq"] == 2 and r2["verdict"]["matchup"] == "T-001/002"
+
+            events = load_matchups()
+            assert len(events) == 2, events
+            assert not (tmp / "state.json").exists()
+            raw = (tmp / "journal.jsonl").read_text(encoding="utf-8")
+            assert len([ln for ln in raw.splitlines() if ln.strip()]) == 2
+
+            void = void_matchup("T-001/001", reason="ошибка записи")
+            assert void["matchup_id"] == "T-001/003", void
+            tombstones = [e for e in load_matchups() if e.get("void_of")]
+            assert len(tombstones) == 1 and tombstones[0]["void_of"] == "T-001/001"
+            assert tombstones[0]["seq"] == 3
+
+            try:
+                void_matchup("T-001/999")
+                raise AssertionError("должен быть ValueError для несуществующей цели")
+            except ValueError:
+                pass
+    print("record_verdict journal: OK")
+
+
+_CHILD_WRITER = (
+    "import sys, time\n"
+    "from pathlib import Path\n"
+    "sys.path.insert(0, sys.argv[2])\n"
+    "import elo\n"
+    "elo.JOURNAL_PATH = Path(sys.argv[1])\n"
+    "with elo.journal_lock() as f:\n"
+    "    seq = elo._next_seq(elo.load_matchups())\n"
+    "    time.sleep(0.2)\n"
+    "    elo.append_event(f, {'seq': seq, 'task': 'T-001',\n"
+    "                         'matchup': 'T-001/%03d' % seq,\n"
+    "                         'recorded_at': '2026-09-05T10:00:00+03:00'})\n"
+)
+
+
+def test_journal_parallel_writes():
+    """Два процесса пишут одновременно: обе строки целы, seq различны."""
+    import json
+    import subprocess
+    import tempfile
+
+    tools_dir = str(Path(__file__).resolve().parent)
+    with tempfile.TemporaryDirectory() as td:
+        journal = Path(td) / "journal.jsonl"
+        procs = [
+            subprocess.Popen([sys.executable, "-c", _CHILD_WRITER, str(journal), tools_dir])
+            for _ in range(2)
+        ]
+        codes = [p.wait(timeout=60) for p in procs]
+        assert codes == [0, 0], codes
+
+        lines = [ln for ln in journal.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        parsed = [json.loads(ln) for ln in lines]
+        assert len(parsed) == 2, parsed
+        assert sorted(e["seq"] for e in parsed) == [1, 2], parsed
+        assert sorted(e["matchup"] for e in parsed) == ["T-001/001", "T-001/002"]
+    print("journal parallel writes: OK")
+
+
 if __name__ == "__main__":
     test_expected_score()
     test_k_factor()
@@ -483,4 +741,10 @@ if __name__ == "__main__":
     test_format_model_roundtrip()
     test_index_stale_agent_provider()
     test_elo_dist_scale()
+    test_journal_roundtrip()
+    test_journal_torn_last_line()
+    test_journal_check_problems()
+    test_run_check_reports_journal_problems()
+    test_record_verdict_journal()
+    test_journal_parallel_writes()
     print("\nALL ELO TESTS PASSED")
