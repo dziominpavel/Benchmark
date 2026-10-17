@@ -194,7 +194,12 @@ def test_record_fields():
     stats = {("A", "B"): (2, 1, 1)}
     verdicts = {("A", "B"): {"T-001"}}
     recs_re = _run_case(models, settings, flags, stats, verdicts)
-    assert recs_re[0]["h2h_label"] == "личные встречи: 2 · счёт 1:1", recs_re[0]
+    assert recs_re[0]["h2h_label"] == "личные встречи: 2", recs_re[0]
+
+    # Ничьи выводятся отдельным уточнением: 3 встречи, счёт 1:1 → 1 ничья
+    stats_d = {("A", "B"): (3, 1, 1)}
+    recs_d = _run_case(models, settings, flags, stats_d, verdicts)
+    assert recs_d[0]["h2h_label"] == "личные встречи: 3 · ничьих 1", recs_d[0]
     print("record fields: OK")
 
 

@@ -19,6 +19,10 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     текущей страницы, троеточия в разрывах (разрыв в одну страницу
     склеивается номером), неактивные стрелки на краях; алгоритм
     pagination_items (страниц <= 10 — все номера подряд).
+  * Волна 1 (UI): контраст токенов подписей (AA ≥ 4.5:1), роли
+    сообщений, scope="col" у заголовков таблиц, варианты карточки
+    рекомендации («Другая пара»), счётчик рематчей, единая сводка,
+    компактная плашка прогресса при 100%, favicon и подтверждения.
 
 Запуск: python tools/test_data_cache.py
 """
@@ -27,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -360,6 +365,34 @@ def test_routes_smoke():
         resp = client.get("/model/nope")
         assert resp.status_code == 404, f"GET /model/nope → {resp.status_code}"
 
+        # Волна 1: favicon живой консоли и компактная плашка при 100%
+        home_html = client.get("/").get_data(as_text=True)
+        assert '<link rel="icon" href="/static/icon.svg">' in home_html, (
+            "нет favicon живой консоли"
+        )
+        assert "Прогресс прогона — 100% · все пары закрыты" in home_html, (
+            "плашка не свернулась в строку при 100%"
+        )
+        assert "scrollIntoView" in home_html, "«Прогнать» потеряла прокрутку к форме"
+
+        # Пустая очередь при полном покрытии объясняет рематч
+        settings_html = client.get("/settings").get_data(as_text=True)
+        assert "открытых: 0" in settings_html
+        assert "рематчей: 1" in settings_html
+        assert "Открытых пар нет. Ниже — матч для доп. точности (рематч)." in settings_html
+
+        # Подтверждение удаления значения справочника — на форме
+        assert 'onsubmit="return confirmDelete(this)"' in settings_html
+        assert 'data-value="Agent"' in settings_html
+        assert "function confirmDelete" in settings_html
+
+        # Подтверждение архивации модели — на форме редактирования
+        edit_html = client.get("/edit/alpha").get_data(as_text=True)
+        assert 'onsubmit="return confirmModelStatus(this)"' in edit_html
+        assert 'data-status="active"' in edit_html
+        assert 'data-name="Alpha"' in edit_html
+        assert "function confirmModelStatus" in edit_html
+
         # Запись вердикта через форму: событие T-001/002 в журнале
         resp = client.post("/verdict", data={
             "model_a": "alpha", "model_b": "beta",
@@ -369,6 +402,23 @@ def test_routes_smoke():
         events = elo.load_matchups()
         assert any(e.get("matchup") == "T-001/002" for e in events), (
             "событие T-001/002 не записано в журнал"
+        )
+
+        # Сообщение об успехе после редиректа озвучивается (role=status)
+        ok_html = client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta",
+            "winner": "a", "task": "T-001",
+        }, follow_redirects=True).get_data(as_text=True)
+        assert 'class="alert alert-success" role="status"' in ok_html, (
+            "у сообщения об успехе нет role=status"
+        )
+
+        # Ошибка формы — role=alert (состояние журнала не меняется)
+        err_html = client.post(
+            "/verdict", data={}, follow_redirects=True,
+        ).get_data(as_text=True)
+        assert 'class="alert alert-error" role="alert"' in err_html, (
+            "у сообщения об ошибке нет role=alert"
         )
 
         # После записи главная перерисовывается на новом состоянии
@@ -509,7 +559,9 @@ def test_settings_queue_pagination():
         resp = client.get("/settings")
         html = resp.get_data(as_text=True)
         assert resp.status_code == 200
-        assert "осталось 105" in html, "счётчик должен показывать все открытые ячейки"
+        assert "открытых: 105" in html, "счётчик должен показывать все открытые ячейки"
+        assert "Очередь рекомендаций (" not in html, "суффикс (N) остался в заголовке"
+        assert "Обоснование</th>" in html, "нет колонки «Обоснование» в очереди"
         assert "queue_page=2" in html, "нет перехода на следующую страницу"
         assert "queue_page=3" not in html, "лишняя третья страница"
         assert 'class="rank">100</td>' in html
@@ -547,7 +599,203 @@ def test_settings_queue_pagination():
             f'{first["name_b"]}</a>'
         )
         assert row in html, "первая строка очереди не совпадает с топ-1"
+        assert f'<td class="queue-reason">{server.format_reason(first)}</td>' in html, (
+            "обоснование первой строки очереди не совпадает с format_reason"
+        )
     print("2.6 settings queue pagination: OK")
+
+
+def _wcag_contrast(fg: tuple[float, float, float], bg: tuple[float, float, float]) -> float:
+    """Контраст WCAG 2.x между двумя RGB-цветами (компоненты 0..255)."""
+    def _lum(rgb: tuple[float, float, float]) -> float:
+        def chan(c: float) -> float:
+            c = c / 255.0
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        r, g, b = (chan(x) for x in rgb)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    l1, l2 = _lum(fg), _lum(bg)
+    if l1 < l2:
+        l1, l2 = l2, l1
+    return (l1 + 0.05) / (l2 + 0.05)
+
+
+def test_caption_contrast_tokens():
+    """Токены подписей моделей: контраст >= 4.5:1 в обеих темах (AA)."""
+    css_path = Path(__file__).resolve().parent / "static" / "css" / "console.css"
+    text = css_path.read_text(encoding="utf-8")
+    light_at = text.index('[data-theme="light"]')
+    parts = {"тёмная": text[:light_at], "светлая": text[light_at:]}
+
+    def token(part: str, name: str) -> str:
+        m = re.search(rf"{name}:\s*([^;]+);", part)
+        assert m, f"токен {name} не найден в теме"
+        return m.group(1).strip()
+
+    def rgb(value: str) -> tuple[int, int, int]:
+        assert re.fullmatch(r"#[0-9a-fA-F]{6}", value), f"не hex-цвет: {value}"
+        return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+
+    for theme, part in parts.items():
+        surface = rgb(token(part, "--surface"))
+        muted = rgb(token(part, "--muted"))
+        alpha = float(token(part, "--caption-opacity"))
+        blended = tuple(
+            m * alpha + s * (1 - alpha) for m, s in zip(muted, surface)
+        )
+        ratio = _wcag_contrast(blended, surface)
+        assert ratio >= 4.5, f"{theme} тема: контраст подписи {ratio:.2f}:1 < 4.5:1"
+        print(f"  контраст подписи ({theme}): {ratio:.2f}:1")
+    print("1.1 caption contrast tokens: OK")
+
+
+def test_tables_scope_col():
+    """Все заголовки таблиц консоли имеют scope="col"."""
+    with _temp_storage() as _paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        for url in ("/", "/settings"):
+            html = client.get(url).get_data(as_text=True)
+            ths = re.findall(r"<th\b[^>]*>", html)
+            assert ths, f"{url}: таблиц с th не найдено"
+            bad = [t for t in ths if 'scope="col"' not in t]
+            assert not bad, f"{url}: th без scope=\"col\": {bad[:3]}"
+    print("1.3 tables scope col: OK")
+
+
+def test_rec_alternatives():
+    """Карточка рекомендации: top-3 варианта, «Другая пара», ссылки имён."""
+    with _temp_storage() as paths:
+        ids = ["m01", "m02", "m03", "m04"]
+        models_yaml = ["models:"]
+        for mid in ids:
+            models_yaml += [
+                f"  - id: {mid}",
+                f"    name: Model {mid}",
+                "    agent: Agent",
+                "    provider: Prov",
+                "    added: 2026-01-01",
+                "    status: active",
+            ]
+        flags_yaml = ["answer_flags:", "  T-001:"]
+        flags_yaml += [f"    {mid}: true" for mid in ids]
+        _write(paths["models"], "\n".join(models_yaml) + "\n")
+        _write(paths["flags"], "\n".join(flags_yaml) + "\n")
+        _write(paths["journal"], "")
+        data_cache.clear()
+
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        html = client.get("/").get_data(as_text=True)
+
+        assert html.count('class="rec-item rec-variant"') == 3, "не три варианта карточки"
+        assert html.count('rec-variant" hidden') == 2, "альтернативы не скрыты"
+        assert "Другая пара" in html and 'onclick="cycleRecommendation()"' in html
+        assert "showRec" not in html and "nextRec" not in html, "протёк запрещённый ID"
+        assert '<a href="/model/m01" class="edit-link">' in html, "имена моделей — не ссылки"
+        css_path = Path(__file__).resolve().parent / "static" / "css" / "console.css"
+        css = css_path.read_text(encoding="utf-8")
+        assert ".rec-item[hidden]" in css, "нет CSS-правила скрытия вариантов"
+
+    # Одна рекомендация — кнопки «Другая пара» нет
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        html = client.get("/").get_data(as_text=True)
+        assert html.count('class="rec-item rec-variant"') == 1
+        assert "Другая пара" not in html, "кнопка при одной рекомендации не нужна"
+        assert 'onclick="cycleRecommendation()"' not in html
+    print("2.2 rec alternatives: OK")
+
+
+def test_rematch_count_unit():
+    """R = вердикты − уникальные пары (синтетический индекс)."""
+    with _temp_storage() as _paths:
+        saved = server.ensure_index
+        try:
+            server.ensure_index = lambda: {
+                "matchups_summary": {"total": 3},
+                "elo_history": [
+                    {"model_a_id": "a", "model_b_id": "b"},
+                    {"model_a_id": "a", "model_b_id": "b"},
+                    {"model_a_id": "a", "model_b_id": "c"},
+                ],
+            }
+            data_cache.clear()
+            assert server.memo_rematch_count() == 1, "повторная встреча не посчитана"
+
+            # Fallback без matchups_summary: счётчик — по matchups_index
+            server.ensure_index = lambda: {
+                "matchups_index": [{"n": 1}, {"n": 2}],
+                "elo_history": [
+                    {"model_a_id": "a", "model_b_id": "b"},
+                    {"model_a_id": "a", "model_b_id": "c"},
+                ],
+            }
+            data_cache.clear()
+            assert server.memo_rematch_count() == 0, "без повторов R должен быть 0"
+        finally:
+            server.ensure_index = saved
+    print("3.1 rematch count: OK")
+
+
+def test_summary_line():
+    """Единая сводка: состав, ссылки, счётчик рематчей."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        def segment(html: str) -> str:
+            marker = '<div class="stats stats-summary">'
+            assert marker in html, "нет блока сводки"
+            return html.split(marker)[1].split("</div>")[0]
+
+        html = client.get("/").get_data(as_text=True)
+        seg = segment(html)
+        assert 'Моделей: <a href="/settings#models">2</a> из 3' in seg, seg
+        assert 'Вердиктов: <a href="/history">1</a>' in seg, seg
+        assert "рематчей" not in seg, "рематчи при нуле не должны показываться"
+        assert 'Пары: <a href="/settings#recommendation-queue">1/1</a>' in seg, seg
+        assert 'Таски: <a href="/settings#tasks">1 из 1</a>' in seg, seg
+        assert "Обновлено:" in seg
+        assert "Прогресс" not in seg, "слово «Прогресс» в сводке запрещено"
+
+        settings_html = client.get("/settings").get_data(as_text=True)
+        settings_seg = segment(settings_html)
+        assert 'Моделей: <a href="#models">2 из 3</a>' in settings_seg, settings_seg
+        assert 'Вердиктов: <a href="/history">1</a>' in settings_seg
+        assert "рематчей" not in settings_seg
+        assert settings_html.index("settings-nav") < settings_html.index("stats stats-summary"), (
+            "сводка должна идти после анкор-навигации"
+        )
+
+        # 2 вердикта одной пары → 1 рематч; часть «(рематчей: 1)» появляется
+        _write(paths["journal"], _history_journal(2))
+        data_cache.clear()
+        html2 = client.get("/").get_data(as_text=True)
+        assert "(рематчей: 1)" in segment(html2), "рематч не показан на главной"
+        settings2 = client.get("/settings").get_data(as_text=True)
+        assert "(рематчей: 1)" in segment(settings2), "рематч не показан в настройках"
+    print("3.2 summary line: OK")
+
+
+def test_progress_card_states():
+    """Плашка прогресса: компактная строка при 100%, бар при частичном."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/").get_data(as_text=True)
+        assert "Прогресс прогона — 100% · все пары закрыты" in html
+        assert "progress-track" not in html, "при 100% бар не нужен"
+
+        _write(paths["journal"], "")
+        data_cache.clear()
+        html2 = client.get("/").get_data(as_text=True)
+        assert "progress-track" in html2, "при частичном покрытии нужен бар"
+        assert "осталось 1" in html2
+        assert "все пары закрыты" not in html2
+    print("3.3 progress card states: OK")
 
 
 if __name__ == "__main__":
@@ -557,7 +805,13 @@ if __name__ == "__main__":
     test_parallel_cached_single_build()
     test_requests_do_not_reread_journal()
     test_routes_smoke()
+    test_caption_contrast_tokens()
+    test_tables_scope_col()
     test_pagination_items_window()
-    test_settings_queue_pagination()
     test_history_pagination_widget()
+    test_settings_queue_pagination()
+    test_rec_alternatives()
+    test_rematch_count_unit()
+    test_summary_line()
+    test_progress_card_states()
     print("\nALL DATA CACHE TESTS PASSED")

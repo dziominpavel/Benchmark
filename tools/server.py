@@ -464,6 +464,32 @@ def memo_active_tasks() -> list[str]:
     )
 
 
+def matchups_count_of(index_data: dict) -> int:
+    """Число вердиктов журнала: агрегат matchups_summary с fallback."""
+    summary = index_data.get("matchups_summary", {})
+    if "total" in summary:
+        return summary["total"]
+    return len(index_data.get("matchups_index", []))
+
+
+def memo_rematch_count() -> int:
+    """Рематчи: вердикты сверх первых встреч пар (memo).
+
+    R = вердикты − число уникальных пар по elo_history
+    (model_a_id/model_b_id). Используется единой сводкой на главной
+    и в /settings; кэш инвалидируется по дайджесту журнала.
+    """
+    def _build() -> int:
+        index_data = ensure_index()
+        pairs = {
+            frozenset((e.get("model_a_id"), e.get("model_b_id")))
+            for e in index_data.get("elo_history", [])
+        }
+        return matchups_count_of(index_data) - len(pairs)
+
+    return data_cache.cached("rematch_count", _build)
+
+
 def find_task_dir(task_id: str) -> Path | None:
     """Находит директорию tasks/T-NNN-<slug> по id."""
     if not TASKS_DIR.exists():
@@ -722,14 +748,14 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
         else:
             tier = 2
 
-        # Строка личных встреч: число вердиктов пары и счёт по победам
-        # в порядке отображения карточки (model_a : model_b). Ничьи
-        # входят в pair_games, но в счёт не выделяются.
+        # Строка личных встреч: число вердиктов пары и — при наличии —
+        # ничьи. Счёт по победам печатается в строке-обосновании
+        # (format_reason), чтобы не дублироваться.
         if pair_games > 0:
-            h2h_label = (
-                f"личные встречи: {pair_games} · "
-                f"счёт {pair_wins_a}:{pair_wins_b}"
-            )
+            h2h_label = f"личные встречи: {pair_games}"
+            draws = pair_games - pair_wins_a - pair_wins_b
+            if draws > 0:
+                h2h_label += f" · ничьих {draws}"
         else:
             h2h_label = "личные встречи: не встречались"
 
@@ -846,7 +872,7 @@ def format_reason(rec: dict) -> str:
             text += " · новая модель"
         return text
     return (
-        f"счёт {rec.get('pair_wins_a', 0)}:{rec.get('pair_wins_b', 0)}"
+        f"счёт по победам {rec.get('pair_wins_a', 0)}:{rec.get('pair_wins_b', 0)}"
         f" · Δ={diff}"
     )
 
@@ -857,10 +883,13 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}ELO Benchmark{% endblock %}
 {% block content %}
-  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
   <div class="progress-card{% if coverage_pct is none %} progress-card--empty{% elif coverage_done %} progress-card--done{% endif %}">
+    {% if coverage_done %}
+    <div class="progress-done-line">Прогресс прогона — 100% · все пары закрыты</div>
+    {% else %}
     <div class="progress-head">
       <span class="progress-title">Прогресс прогона</span>
       <span class="progress-pct">{% if coverage_pct is none %}—{% else %}{{ coverage_pct }}%{% endif %}</span>
@@ -871,18 +900,17 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
     <div class="progress-meta">
       {% if coverage_pct is none %}
       <span>Нет данных о покрытии</span>
-      {% elif coverage_done %}
-      <span>Все пары закрыты</span>
       {% else %}
       <span>закрыто {{ coverage.filled }} из {{ coverage.total }}</span>
       <span>осталось {{ remaining }}</span>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 
   <div class="controls">
-    <div class="stats">
-      {% if filter_view == 'highlight' %}Моделей: {{ models_count }} · подсвечено {{ highlight_hits }}{% else %}Моделей: {{ filtered_count }} из {{ models_count }}{% endif %} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
+    <div class="stats stats-summary">
+      {% if filter_view == 'highlight' %}Моделей: <a href="/settings#models">{{ models_count }}</a> · подсвечено {{ highlight_hits }}{% else %}Моделей: <a href="/settings#models">{{ filtered_count }}</a> из {{ models_count }}{% endif %} · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="/settings#recommendation-queue">{{ coverage.filled }}/{{ coverage.total }}</a> · Таски: <a href="/settings#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a> · Обновлено: {{ updated }}
     </div>
     <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
     {% call filter_panel() %}
@@ -904,15 +932,15 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <table>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Модель</th>
-                <th>ELO</th>
-                <th>±</th>
-                <th>Побед</th>
-                <th>Поражений</th>
-                <th>Ничьих</th>
-                <th>Всего</th>
-                <th>Винрейт, %</th>
+                <th scope="col">#</th>
+                <th scope="col">Модель</th>
+                <th scope="col">ELO</th>
+                <th scope="col">±</th>
+                <th scope="col">Побед</th>
+                <th scope="col">Поражений</th>
+                <th scope="col">Ничьих</th>
+                <th scope="col">Всего</th>
+                <th scope="col">Винрейт, %</th>
               </tr>
             </thead>
             <tbody>
@@ -981,18 +1009,19 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
 
     <div class="sidebar">
       {% if recommendations %}
-      {% set rec = recommendations[0] %}
+      {% set rec_list = recommendations[:1] if read_only() else recommendations[:3] %}
       <div class="card">
         <div class="rec-header">
           <h2>Рекомендуемые модели к прогону</h2>
         </div>
-        <div class="rec-item">
+        {% for rec in rec_list %}
+        <div class="rec-item rec-variant"{% if not loop.first %} hidden{% endif %}>
           <div class="rec-info">
             <div class="rec-pair">
-              <span class="rec-model">{{ rec.name_a }}</span>
+              <a href="/model/{{ rec.model_a }}" class="edit-link">{{ rec.name_a }}</a>
               <span class="rec-elo">{{ rec.elo_a }}</span>
               <span class="rec-vs">vs</span>
-              <span class="rec-model">{{ rec.name_b }}</span>
+              <a href="/model/{{ rec.model_b }}" class="edit-link">{{ rec.name_b }}</a>
               <span class="rec-elo">{{ rec.elo_b }}</span>
             </div>
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
@@ -1006,6 +1035,12 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <button class="rec-btn" onclick="usePair('{{ rec.model_a }}', '{{ rec.model_b }}', '{{ rec.recommended_task }}')">Прогнать</button>
           {% endif %}
         </div>
+        {% endfor %}
+        {% if not read_only() and rec_list|length > 1 %}
+        <div class="rec-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cycleRecommendation()">Другая пара</button>
+        </div>
+        {% endif %}
       </div>
       {% endif %}
       <div class="card">
@@ -1073,6 +1108,17 @@ function usePair(a, b, task) {
   document.getElementById('modelB').value = b;
   document.getElementById('taskField').value = task;
   validate();
+  // Спека блока рекомендаций: кнопка подставляет пару и прокручивает к форме
+  document.getElementById('modelA').scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function cycleRecommendation() {
+  const items = document.querySelectorAll('.rec-variant');
+  if (items.length < 2) return;
+  let current = 0;
+  items.forEach((el, i) => { if (!el.hidden) current = i; });
+  items[current].hidden = true;
+  items[(current + 1) % items.length].hidden = false;
 }
 validate();
 </script>
@@ -1156,8 +1202,8 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     {% if read_only() %}<span class="btn btn-secondary" aria-disabled="true">Изменить</span>{% else %}<a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>{% endif %}
   </div>
 
-  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
   <div class="stats-grid">
     <div class="stat-card"><div class="stat-value">{{ detail.elo }}</div><div class="stat-label">ELO</div></div>
@@ -1179,7 +1225,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Соперник</th><th>Встреч</th><th>W</th><th>L</th><th>D</th><th>Винрейт</th></tr>
+          <tr><th scope="col">Соперник</th><th scope="col">Встреч</th><th scope="col">W</th><th scope="col">L</th><th scope="col">D</th><th scope="col">Винрейт</th></tr>
         </thead>
         <tbody>
           {% for r in detail.h2h %}
@@ -1206,7 +1252,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Соперник</th><th>Дата</th><th>Исход</th><th>ELO до</th><th>Δ</th><th>ELO после</th></tr>
+          <tr><th scope="col">Соперник</th><th scope="col">Дата</th><th scope="col">Исход</th><th scope="col">ELO до</th><th scope="col">Δ</th><th scope="col">ELO после</th></tr>
         </thead>
         <tbody>
           {% for h in detail.history %}
@@ -1270,8 +1316,8 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
   <h1>Добавить модель</h1>
 </div>
 
-{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
 <div class="card add-form">
   <form method="POST" action="/add_model">
@@ -1310,7 +1356,7 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
 <div class="card">
   <h2>Уже в списке ({{ models_list|length }})</h2>
   <table>
-    <thead><tr><th>Модель</th><th>Статус</th><th>ELO</th><th>Игр</th><th></th></tr></thead>
+    <thead><tr><th scope="col">Модель</th><th scope="col">Статус</th><th scope="col">ELO</th><th scope="col">Игр</th><th scope="col"></th></tr></thead>
     <tbody>
       {% for m in models_list %}
       <tr class="{{ 'archived' if m.status == 'archived' }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
@@ -1351,11 +1397,11 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
   <h1>Редактировать модель</h1>
 </div>
 
-{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
 <div class="card add-form">
-  <form method="POST" action="/edit/{{ model.id }}">
+  <form method="POST" action="/edit/{{ model.id }}" data-status="{{ model.status }}" data-name="{{ model.name }}" onsubmit="return confirmModelStatus(this)">
     <div class="form-group">
       <label>ID модели</label>
       <input type="text" value="{{ model.id }}" disabled>
@@ -1407,6 +1453,18 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
     </div>
   </form>
 </div>
+
+<script>
+// Подтверждение только для перехода «не архив → архив»: обычное
+// сохранение и разархивация диалога не вызывают.
+function confirmModelStatus(form) {
+  const sel = form.querySelector('select[name="status"]');
+  if (form.dataset.status !== 'archived' && sel && sel.value === 'archived') {
+    return confirm('Перевести модель «' + form.dataset.name + '» в архив (неактивна)?');
+  }
+  return true;
+}
+</script>
 {% endblock %}
 """
 
@@ -1420,8 +1478,8 @@ ADD_TASK_TEMPLATE = """{% extends "shell.html" %}
   <h1>Добавить таску</h1>
 </div>
 
-{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
 <div class="card add-form">
   <form method="POST" action="/add_task">
@@ -1461,8 +1519,8 @@ EDIT_TASK_TEMPLATE = """{% extends "shell.html" %}
   <h1>Редактировать таску {{ task.id }}</h1>
 </div>
 
-{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
 <div class="card add-form">
   <form method="POST" action="/edit_task/{{ task.id }}">
@@ -1511,8 +1569,8 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <h1>Настройки</h1>
   </div>
 
-  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-  {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
   <nav class="settings-nav" aria-label="Разделы настроек">
     <a href="#models">Модели</a>
@@ -1521,6 +1579,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <a href="#recommendation-queue">Очередь</a>
     <a href="#lookups">Справочники</a>
   </nav>
+
+  <div class="stats stats-summary">
+    Моделей: <a href="#models">{{ active_models_total }} из {{ models_total }}</a> · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="#recommendation-queue">{{ queue_filled }}/{{ queue_total }}</a> · Таски: <a href="#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a>
+  </div>
 
   <div class="settings-grid">
     <div class="card" id="models">
@@ -1600,7 +1662,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       <div class="table-wrap">
       <table class="tasks-table">
         <thead>
-          <tr><th class="id-col">ID</th><th class="title-col">Название</th><th class="actions-col">Действия</th></tr>
+          <tr><th scope="col" class="id-col">ID</th><th scope="col" class="title-col">Название</th><th scope="col" class="actions-col">Действия</th></tr>
         </thead>
         <tbody>
           {% for t in tasks_list %}
@@ -1664,15 +1726,15 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         <table class="flags-table">
           <thead>
             <tr>
-              <th>Модель</th>
+              <th scope="col">Модель</th>
               {% for t in answer_active_tasks %}
-              <th>{{ t }}<br>
+              <th scope="col">{{ t }}<br>
                 <button type="button" class="btn btn-secondary col-btn" onclick="colSet('{{ t }}', true)">все</button>
                 <button type="button" class="btn btn-secondary col-btn" onclick="colSet('{{ t }}', false)">сброс</button>
               </th>
               {% endfor %}
-              <th>Долг</th>
-              <th></th>
+              <th scope="col">Долг</th>
+              <th scope="col"></th>
             </tr>
           </thead>
           <tbody>
@@ -1723,9 +1785,9 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
   </div>
 
   <div class="card" id="recommendation-queue">
-    <h2>Очередь рекомендаций{% if queue_has_coverage %} ({{ queue_remaining }}){% endif %}</h2>
+    <h2>Очередь рекомендаций</h2>
     {% if queue_has_coverage %}
-    <div class="stats"{% if queue_breakdown_legend %} title="{{ queue_breakdown_legend }}"{% endif %}>осталось {{ queue_remaining }}{% if queue_breakdown_str %} ({{ queue_breakdown_str }}){% endif %} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
+    <div class="stats"{% if queue_breakdown_legend %} title="{{ queue_breakdown_legend }}"{% endif %}>открытых: {{ queue_remaining }}{% if queue_breakdown_str %} ({{ queue_breakdown_str }}){% endif %}{% if queue_rematch_count %} · рематчей: {{ queue_rematch_count }}{% endif %} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
     {% if queue_breakdown_legend %}
     <div class="hint">в скобках — остаток по таскам: {{ queue_breakdown_legend }}</div>
     {% endif %}
@@ -1739,7 +1801,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <div class="table-wrap queue-wrap">
       <table class="queue-table">
         <thead>
-          <tr><th>№</th><th>Пара</th><th>Таск</th></tr>
+          <tr><th scope="col">№</th><th scope="col">Пара</th><th scope="col">Таск</th><th scope="col">Обоснование</th></tr>
         </thead>
         <tbody>
           {% for q in queue %}
@@ -1747,6 +1809,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
             <td class="rank">{{ queue_page_start + loop.index }}</td>
             <td class="model-cell"><a href="/model/{{ q.model_a }}" class="edit-link">{{ q.name_a }}</a> vs <a href="/model/{{ q.model_b }}" class="edit-link">{{ q.name_b }}</a></td>
             <td>{{ q.recommended_task if q.recommended_task else "—" }}</td>
+            <td class="queue-reason">{{ q.reason }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -1756,7 +1819,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     {{ pagination(queue_page, queue_pages, queue_items, queue_page_url) }}
     {% endif %}
     {% else %}
-    <div class="empty-state">Очередь пуста — открытых пар нет.</div>
+    <div class="empty-state">{% if rematch %}Открытых пар нет. Ниже — матч для доп. точности (рематч).{% else %}Открытых пар нет.{% endif %}</div>
     {% if rematch %}
     {% set r = rematch[0] %}
     <div class="table-wrap">
@@ -1766,6 +1829,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
             <td class="rank">1</td>
             <td class="model-cell"><a href="/model/{{ r.model_a }}" class="edit-link">{{ r.name_a }}</a> vs <a href="/model/{{ r.model_b }}" class="edit-link">{{ r.name_b }}</a></td>
             <td>{{ r.recommended_task if r.recommended_task else "—" }} <span class="rec-rematch">рематч</span></td>
+            <td class="queue-reason">{{ r.reason }}</td>
           </tr>
         </tbody>
       </table>
@@ -1794,7 +1858,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       <div class="table-wrap">
         <table class="lookups-table">
           <thead>
-            <tr><th>Значение</th><th>Моделей</th><th class="actions-col">Действия</th></tr>
+            <tr><th scope="col">Значение</th><th scope="col">Моделей</th><th scope="col" class="actions-col">Действия</th></tr>
           </thead>
           <tbody>
             {% for row in section.rows %}
@@ -1818,7 +1882,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
                   <input type="text" name="new" value="{{ row.value }}" class="lookup-input" aria-label="Новое значение для «{{ row.value }}»">
                   <button type="submit" class="btn btn-secondary btn-sm">Переименовать</button>
                 {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
-                {% if read_only() %}<fieldset disabled class="form-inline ms-1">{% else %}<form method="POST" action="/lookups/delete" class="form-inline ms-1">{% endif %}
+                {% if read_only() %}<fieldset disabled class="form-inline ms-1">{% else %}<form method="POST" action="/lookups/delete" class="form-inline ms-1" data-value="{{ row.value }}" onsubmit="return confirmDelete(this)">{% endif %}
                   <input type="hidden" name="kind" value="{{ section.kind }}">
                   <input type="hidden" name="value" value="{{ row.value }}">
                   <button type="submit" class="btn btn-secondary btn-sm"{% if row.count %} disabled title="Значение используют {{ row.count }} моделей"{% endif %}>{% if row.count %}используется у {{ row.count }}{% else %}Удалить{% endif %}</button>
@@ -1845,6 +1909,10 @@ function colSet(task, val) {
   document.querySelectorAll('#flagsForm input[name="flag"][data-col="' + task + '"]').forEach((cb) => {
     cb.checked = val;
   });
+}
+// Значение передаётся через data-value, а не подстановкой в JS-строку.
+function confirmDelete(form) {
+  return confirm('Удалить значение «' + form.dataset.value + '» из справочника?');
 }
 </script>
 {% endblock %}
@@ -2189,9 +2257,11 @@ def leaderboard():
         pre_a, pre_b = "", ""
     if pre_task not in task_options:
         pre_task = ""
-    # Рекомендации пар (+ строка-обоснование для отображения)
+    # Рекомендации пар (+ строка-обоснование для отображения).
+    # top-3: карточка показывает первый вариант, «Другая пара» листает
+    # остальные без перезагрузки (карусель и URL-состояние запрещены).
     recommendations = data_cache.cached(
-        "recommendations:1", lambda: get_recommendations(index_data, top_n=1)
+        "recommendations:3", lambda: get_recommendations(index_data, top_n=3)
     )
     for rec in recommendations:
         rec["reason"] = format_reason(rec)
@@ -2244,12 +2314,9 @@ def leaderboard():
         coverage_pct = 100 if coverage_done else min(99, round(coverage["percent"]))
     remaining = coverage["total"] - coverage["filled"]
 
-    # Счётчик вердиктов: новый агрегат, fallback на старый список
-    summary = index_data.get("matchups_summary", {})
-    if "total" in summary:
-        matchups_count = summary["total"]
-    else:
-        matchups_count = len(index_data.get("matchups_index", []))
+    # Единая сводка: вердикты журнала и рематчи (memo по дайджесту)
+    matchups_count = matchups_count_of(index_data)
+    rematch_count = memo_rematch_count()
 
     return INDEX_TEMPLATE.render(
         models_sorted=models_sorted,
@@ -2259,6 +2326,9 @@ def leaderboard():
         highlight_hits=highlight_hits,
         show_medals=show_medals,
         matchups_count=matchups_count,
+        rematch_count=rematch_count,
+        active_tasks_count=len(task_options),
+        known_tasks_count=len(memo_known_tasks()),
         updated=index_data.get("updated", ""),
         models_list=models_list,
         recommendations=recommendations,
@@ -2561,6 +2631,10 @@ def settings_page():
         queue = full_recs[queue_page_start:queue_page_start + QUEUE_PAGE_SIZE]
         rematch = []
 
+    # Строка-обоснование — та же функция, что на главной (не дублируется)
+    for rec in queue + rematch:
+        rec["reason"] = format_reason(rec)
+
     def _queue_page_url(page: int) -> str:
         """Ссылка на страницу очереди с сохранением остальных параметров."""
         args = request.args.to_dict(flat=False)
@@ -2599,6 +2673,10 @@ def settings_page():
         queue_breakdown_str = "+".join(str(counts[t]) for t in ordered)
         queue_breakdown_legend = " + ".join(f"{t}: {counts[t]}" for t in ordered)
     queue_has_coverage = coverage.get("percent") is not None
+
+    # Единая сводка: вердикты журнала и рематчи (memo по дайджесту)
+    matchups_count = matchups_count_of(index_data)
+    rematch_count = memo_rematch_count()
 
     # Секция «Справочники»: значения справочника + счётчики моделей;
     # значения реестра вне справочника — отдельными строками в конце.
@@ -2652,6 +2730,12 @@ def settings_page():
         queue_breakdown_str=queue_breakdown_str,
         queue_breakdown_legend=queue_breakdown_legend,
         queue_has_coverage=queue_has_coverage,
+        queue_rematch_count=len(rematch),
+        matchups_count=matchups_count,
+        rematch_count=rematch_count,
+        active_models_total=n_active_models,
+        active_tasks_count=len(active_task_ids),
+        known_tasks_count=len(memo_known_tasks()),
         only_debts=only_debts,
         lookup_sections=lookup_sections,
         **filter_ctx,

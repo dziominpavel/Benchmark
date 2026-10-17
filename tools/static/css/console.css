@@ -22,8 +22,8 @@
   --text: #e9edf4;
   --muted: #9aa7b8;
 
-  /* подписи моделей «Компания · Агент» — единая приглушённость */
-  --caption-opacity: 0.45;
+  /* подписи моделей «Компания · Агент» — приглушённость по теме, AA ≥ 4.5:1 */
+  --caption-opacity: 0.75;
 
   /* акцент */
   --accent: #7aa5ff;
@@ -102,6 +102,9 @@
 
   --text: #171b22;
   --muted: #55606d;
+
+  /* подписи моделей «Компания · Агент»: светлому фону нужна большая непрозрачность */
+  --caption-opacity: 0.90;
 
   --accent: #1d4ed8;
   --grad-title: linear-gradient(120deg, #1d4ed8, #4338ca, #6d28d9);
@@ -673,6 +676,8 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 
 .queue-pager .hint { margin-top: 0; }
 
+.queue-reason { color: var(--muted); font-size: var(--fs-sm); }
+
 /* --- пилюли статусов ------------------------------------------------------ */
 
 .status-pill {
@@ -775,6 +780,15 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 .progress-card--done .progress-fill::after { display: none; }
 .progress-card--done .progress-pct { color: var(--pos-text); }
 
+/* компактный вид завершённого прогона: одна строка без бара */
+.progress-card--done { padding: 14px var(--sp-6); }
+
+.progress-card--done .progress-done-line {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--pos-text);
+}
+
 /* --- рекомендации --------------------------------------------------------- */
 
 .rec-card {
@@ -801,14 +815,15 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
   flex-wrap: wrap;
 }
 
+/* скрытый вариант: авторский display перебивает UA-правило [hidden] */
+.rec-item[hidden] { display: none; }
+
 .rec-pair {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
-
-.rec-model { font-weight: 600; color: var(--text); }
 
 .rec-elo {
   font-size: var(--fs-xs);
@@ -837,6 +852,8 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 }
 
 .rec-header h2 { margin-bottom: 0; }
+
+.rec-actions { margin-top: var(--sp-2); }
 
 /* --- формы ---------------------------------------------------------------- */
 
