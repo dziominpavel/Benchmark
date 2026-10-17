@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 496,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "opencode-beam-free-max",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "opencode-beam-free-max",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:42:21+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1026,
+      "after": 1013,
+      "delta": -13
+    },
+    "opencode-beam-free-max": {
+      "before": 1081,
+      "after": 1094,
+      "delta": 13
+    }
+  }
+}

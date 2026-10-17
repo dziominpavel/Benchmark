@@ -118,7 +118,10 @@ _На схеме ниже префикс `data/` опущен: `tasks/` = `data/
 ## Хранение
 
 **Source of truth (в git, всё под `data/`):**
-- `data/models.yaml` — реестр моделей (id, name, agent, provider, version, released, added, status, notes; agent — Codex | Cursor | Devin | OpenCode, provider — фирма-разработчик)
+- `data/models.yaml` — реестр моделей (id, name, agent, provider, version, released, added, status, notes; agent и provider — из справочника, значения вне справочника допустимы и помечаются «вне справочника»)
+- `data/lookups.yaml` — справочники агентов и компаний (agents, providers) —
+  допустимые значения полей agent/provider; CRUD — секция «Справочники»
+  страницы /settings, авто-дополнение — tools/register_model.py
 - `data/tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `data/tasks/_TEMPLATE.md`)
 - `data/answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
   `data/answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей

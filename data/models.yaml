@@ -3,18 +3,23 @@
 # Формат записи:
 #   - id: <slug>          # короткий стабильный идентификатор, используется в именах файлов ответов
 #     name: <полное имя>  # человекочитаемое имя
-#     agent: <agent>      # агент, под которым гонялась модель: Codex | Cursor | Devin | OpenCode
-#     provider: <фирма>   # фирма-разработчик (Anthropic, OpenAI, Z.ai, ...; Unknown — неизвестна)
+#     agent: <agent>      # агент из справочника data/lookups.yaml (agents)
+#     provider: <компания>   # компания из справочника data/lookups.yaml (providers); Unknown — неизвестна
 #     version: <строка>   # версия/релиз модели
 #     released: <YYYY-MM-DD>  # дата выхода модели (если известна)
 #     added: <YYYY-MM-DD>     # дата регистрации в реестре (ставится автоматически)
 #     status: active      # active | archived (archived = заморожена, не участвует в новых парах)
 #     notes: <строка>     # необязательные заметки
 #
+# Допустимые значения agent и provider — в справочнике data/lookups.yaml.
+# Значения вне справочника не теряются: консоль помечает их «вне справочника»
+# и позволяет внести одной кнопкой; --agent/--provider при регистрации
+# автоматически пополняют справочник.
+#
 # Добавляй модели через tools/register_model.py:
-#   python tools/register_model.py --id <slug> --name "<name>" --version <ver> [--agent <agent>] [--provider <фирма>] [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>]
+#   python tools/register_model.py --id <slug> --name "<name>" --version <ver> [--agent <agent>] [--provider <компания>] [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>]
 # Или через саморегистрацию (--auto, --version не обязателен):
-#   python tools/register_model.py --auto --id <slug> --name "<name>" [--agent <agent>] [--provider <фирма>]
+#   python tools/register_model.py --auto --id <slug> --name "<name>" [--agent <agent>] [--provider <компания>]
 #
 # Архивация через tools/archive_model.py:
 #   python tools/archive_model.py <slug>           # заархивировать

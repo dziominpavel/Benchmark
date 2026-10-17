@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 495,
+  "task": "T-001",
+  "model_a": "opencode-fledge-alpha-free",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "opencode-fledge-alpha-free",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "draw",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:42:21+03:00",
+  "elo": {
+    "opencode-fledge-alpha-free": {
+      "before": 1097,
+      "after": 1100,
+      "delta": 3
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1181,
+      "after": 1177,
+      "delta": -4
+    }
+  }
+}

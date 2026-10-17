@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 479,
+  "task": "T-001",
+  "model_a": "devin-swe-2-max",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "devin-swe-2-max",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "draw",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:00:41+03:00",
+  "elo": {
+    "devin-swe-2-max": {
+      "before": 1194,
+      "after": 1194,
+      "delta": 0
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1199,
+      "after": 1199,
+      "delta": 0
+    }
+  }
+}

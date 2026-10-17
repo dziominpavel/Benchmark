@@ -5,8 +5,8 @@ server.py — локальный веб-сервер для бенчмарка L
 Предоставляет:
   - Leaderboard (таблица ELO-рейтинга)
   - Форму записи вердикта (попарное сравнение: A vs B → победитель, таск)
-  - Страницу настроек /settings (добавление модели, активные таски)
-  - Отдельную страницу добавления модели (одно поле — название)
+  - Страницу настроек /settings (модели, таски, ответы, справочники агентов и компаний)
+  - Отдельную страницу добавления модели (название, агент и компания из справочника)
   - Историю изменений рейтинга
 
 Запуск:
@@ -52,6 +52,10 @@ from render_helpers import (
 )
 
 from register_model import parse_existing, format_model
+
+from lookups import (
+    load_lookups, save_lookups, has_value, find_value, add_value,
+)
 
 from flask import Flask, request, redirect, url_for, render_template_string
 
@@ -131,7 +135,7 @@ def valid_answer_filter(value: str | None) -> str:
     return v if v in ("active", "all", "inactive") else "active"
 
 
-# ─── Фильтр «Агент и фирма» ─────────────────────────────────────────
+# ─── Блок «Фильтр» ──────────────────────────────────────────────────
 
 TAG_NONE = "none"
 
@@ -150,9 +154,9 @@ def _tag_values(models: dict, key: str) -> tuple[list[str], bool]:
 
 
 def _parse_tag_tokens(raw: str | None, known: list[str]) -> set[str]:
-    """CSV из URL → выбранные теги.
+    """CSV токенов из запроса (собран `_tag_query_csv`) → выбранные теги.
 
-    Токен `none` = пустое значение («без агента»/«без фирмы»), неизвестные
+    Токен `none` = пустое значение («без агента»/«без компании»), неизвестные
     и пустые токены отбрасываются; пустой CSV = пустой набор (без сужения).
     """
     known_set = set(known)
@@ -172,8 +176,17 @@ def _tags_csv(selected: set[str]) -> str:
     return ",".join(sorted(items, key=str.lower))
 
 
+def _tag_query_csv(source, name: str) -> str:
+    """CSV тег-фильтра из запроса.
+
+    Поддерживает оба транспорта: повторяющиеся параметры (чипы-чекбоксы шлют
+    `agents=A&agents=B`) и одиночный CSV (ссылки и скрытые поля — `agents=A,B`).
+    """
+    return ",".join(value for value in source.getlist(name) if value)
+
+
 def model_passes_tags(info: dict, agent_sel: set[str], provider_sel: set[str]) -> bool:
-    """Проходит ли модель фильтр «Агент и фирма».
+    """Проходит ли модель фильтр «Агент и компания».
 
     ИЛИ внутри группы, И между группами; пустая группа не сужает.
     """
@@ -184,37 +197,54 @@ def model_passes_tags(info: dict, agent_sel: set[str], provider_sel: set[str]) -
     return True
 
 
-def tags_filter_context(models: dict, action: str, hidden_fields: list[dict],
-                        reset_url: str) -> dict:
-    """Контекст панели фильтра «Агент и фирма» + выборки из URL запроса."""
+def filter_panel_context(models: dict, action: str, reset_url: str,
+                         hidden_fields: list[dict] | None = None,
+                         reset_extra: bool = False) -> dict:
+    """Контекст блока «Фильтр» + выборки агента и компании из URL запроса.
+
+    hidden_fields — дополнительные параметры страницы для filter_hidden();
+    к ним добавляются непустые CSV текущего выбора agents/providers, чтобы
+    отдельные формы страницы не теряли фильтры.
+    reset_extra — применён ли на странице собственный фильтр («Показывать»,
+    модель, «только долги»): ссылка «Сбросить» показывается, только когда
+    отфильтровано хоть что-то.
+    """
     agents, agents_none = _tag_values(models, "agent")
     providers, providers_none = _tag_values(models, "provider")
-    agent_sel = _parse_tag_tokens(request.args.get("agents"), agents)
-    provider_sel = _parse_tag_tokens(request.args.get("providers"), providers)
+    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
+    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
+    agents_csv = _tags_csv(agent_sel)
+    providers_csv = _tags_csv(provider_sel)
+    hidden = list(hidden_fields or [])
+    if agents_csv:
+        hidden.append({"name": "agents", "value": agents_csv})
+    if providers_csv:
+        hidden.append({"name": "providers", "value": providers_csv})
     return {
-        "tag_action": action,
-        "tag_hidden_fields": hidden_fields,
-        "tag_reset_url": reset_url,
-        "tag_active": bool(agent_sel or provider_sel),
-        "tag_agents": [
+        "filter_action": action,
+        "filter_reset_url": reset_url,
+        "filter_hidden_fields": hidden,
+        "filter_active": bool(agent_sel or provider_sel),
+        "filter_reset_visible": bool(agent_sel or provider_sel) or bool(reset_extra),
+        "filter_agents": [
             {"value": v, "label": v, "checked": v in agent_sel} for v in agents
         ],
-        "tag_agents_has_none": agents_none,
-        "tag_agents_none_checked": "" in agent_sel,
-        "tag_providers": [
+        "filter_agents_has_none": agents_none,
+        "filter_agents_none_checked": "" in agent_sel,
+        "filter_providers": [
             {"value": v, "label": v, "checked": v in provider_sel} for v in providers
         ],
-        "tag_providers_has_none": providers_none,
-        "tag_providers_none_checked": "" in provider_sel,
-        "tag_agents_csv": _tags_csv(agent_sel),
-        "tag_providers_csv": _tags_csv(provider_sel),
-        "tag_agent_sel": agent_sel,
-        "tag_provider_sel": provider_sel,
+        "filter_providers_has_none": providers_none,
+        "filter_providers_none_checked": "" in provider_sel,
+        "filter_agents_csv": agents_csv,
+        "filter_providers_csv": providers_csv,
+        "filter_agent_sel": agent_sel,
+        "filter_provider_sel": provider_sel,
     }
 
 
 def format_model_caption(info: dict) -> str:
-    """Серая подпись «Фирма · Агент»; пустые части не выводятся."""
+    """Серая подпись «Компания · Агент»; пустые части не выводятся."""
     parts = []
     provider = str(info.get("provider") or "").strip()
     agent = str(info.get("agent") or "").strip()
@@ -590,7 +620,7 @@ def format_reason(rec: dict) -> str:
 # ─── HTML: Leaderboard page ─────────────────────────────────────────
 
 INDEX_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
+{% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}ELO Benchmark{% endblock %}
 {% block content %}
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
@@ -621,16 +651,14 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
       Моделей: {{ filtered_count }} из {{ models_count }} · Вердиктов: {{ matchups_count }} · Обновлено: {{ updated }}
     </div>
     <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
-    <form method="GET" action="/" class="filter-bar">
-      <label for="filter">Показывать</label>
-      <select name="filter" id="filter" onchange="this.form.submit()">
-        <option value="active" {% if filter == 'active' %}selected{% endif %}>Только активные</option>
-        <option value="all" {% if filter == 'all' %}selected{% endif %}>Все</option>
-        <option value="inactive" {% if filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
-      </select>
-      {{ tag_hidden() }}
-    </form>
-    {{ tag_panel() }}
+    {% call filter_panel() %}
+      <span class="filter-label">Показывать</span>
+      <div class="segmented" role="radiogroup" aria-label="Показывать">
+        <label><input type="radio" name="filter" value="active" {% if filter == 'active' %}checked{% endif %} onchange="this.form.submit()"><span>Активные</span></label>
+        <label><input type="radio" name="filter" value="all" {% if filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
+        <label><input type="radio" name="filter" value="inactive" {% if filter == 'inactive' %}checked{% endif %} onchange="this.form.submit()"><span>Неактивные</span></label>
+      </div>
+    {% endcall %}
   </div>
 
   <div class="content-grid">
@@ -679,7 +707,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         </div>
         {% elif models_sorted %}
         <div class="empty-state">
-          Под выбранный фильтр «Агент и фирма» не попала ни одна модель.
+          Под выбранный фильтр не попала ни одна модель.
           Сбросьте фильтр, чтобы увидеть список.
         </div>
         {% else %}
@@ -700,7 +728,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             {% for a in archived_list %}
             <li>
               <span class="archived-name">
-                <a href="{{ url_for('model_page', model_id=a.id, agents=tag_agents_csv or none, providers=tag_providers_csv or none) }}" class="edit-link">{{ a.name }}</a>
+                <a href="{{ url_for('model_page', model_id=a.id, agents=filter_agents_csv or none, providers=filter_providers_csv or none) }}" class="edit-link">{{ a.name }}</a>
                 {% if a.caption %}<span class="model-caption">{{ a.caption }}</span>{% endif %}
               </span>
               <span>{{ a.elo }}</span>
@@ -813,7 +841,7 @@ validate();
 # ─── HTML: History page ─────────────────────────────────────────────
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
+{% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}История — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -824,20 +852,18 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <div class="stats">
       Всего записей: {{ history_total }}{% if model %} · Фильтр: {{ model_name }}{% endif %}
     </div>
-    <form method="GET" action="/history" class="filter-bar">
-      <label for="model">Модель</label>
+    {% call filter_panel() %}
+      <span class="filter-label">Модель</span>
       <select name="model" id="model" onchange="this.form.submit()">
         {% for m in models_dropdown %}
         <option value="{{ m.id }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
         {% endfor %}
       </select>
-      <label class="check-label">
+      <label class="chip">
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
-        Включать неактивные
+        <span>Включать неактивные</span>
       </label>
-      {{ tag_hidden() }}
-    </form>
-    {{ tag_panel() }}
+    {% endcall %}
   </div>
 
   <div class="card">
@@ -861,7 +887,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <div class="pagination">
       {% for p in range(1, history_pages + 1) %}
       {% if p == history_page %}<span class="current">{{ p }}</span>
-      {% else %}<a href="?page={{ p }}{% if model %}&model={{ model }}{% endif %}{% if include_inactive %}&include_inactive=1{% endif %}{% if tag_agents_csv %}&agents={{ tag_agents_csv|urlencode }}{% endif %}{% if tag_providers_csv %}&providers={{ tag_providers_csv|urlencode }}{% endif %}">{{ p }}</a>{% endif %}
+      {% else %}<a href="{{ url_for('history_page', page=p, **history_params) }}">{{ p }}</a>{% endif %}
       {% endfor %}
     </div>
     {% endif %}
@@ -965,7 +991,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Stats page ─────────────────────────────────────────────
 
 STATS_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
+{% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}Аналитика — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -975,19 +1001,17 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
   <div class="card" id="elo-distribution">
     <h2>Распределение Elo</h2>
     <div class="stats">{{ summary }}</div>
-    <form method="GET" action="/stats" class="filter-bar">
-      <label for="filter">Показывать</label>
-      <select name="filter" id="filter" onchange="this.form.submit()">
-        <option value="active" {% if stats_filter == 'active' %}selected{% endif %}>Только активные</option>
-        <option value="all" {% if stats_filter == 'all' %}selected{% endif %}>Все</option>
-      </select>
-      {{ tag_hidden() }}
-    </form>
-    {{ tag_panel() }}
+    {% call filter_panel() %}
+      <span class="filter-label">Показывать</span>
+      <div class="segmented" role="radiogroup" aria-label="Показывать">
+        <label><input type="radio" name="filter" value="active" {% if stats_filter == 'active' %}checked{% endif %} onchange="this.form.submit()"><span>Активные</span></label>
+        <label><input type="radio" name="filter" value="all" {% if stats_filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
+      </div>
+    {% endcall %}
     {% if pool_count %}
     {{ chart_svg|safe }}
     {% else %}
-    <div class="empty-state">Под выбранный фильтр «Агент и фирма» не попала ни одна модель.</div>
+    <div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>
     {% endif %}
   </div>
 {% endblock %}
@@ -997,7 +1021,7 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Add model page ───────────────────────────────────────────
 
 ADD_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
+{% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}Добавить модель — ELO Benchmark{% endblock %}
 {% block content %}
 <div class="header">
@@ -1015,17 +1039,21 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
     </div>
     <div class="form-group">
       <label>Агент</label>
-      <input type="text" name="agent" list="agentOptions" placeholder="Например: Cursor">
-      <datalist id="agentOptions">
-        {% for a in agent_options %}<option value="{{ a }}"></option>{% endfor %}
-      </datalist>
+      <select name="agent">
+        <option value="">— не указано —</option>
+        {% for a in agent_options %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+      </select>
     </div>
     <div class="form-group">
-      <label>Фирма</label>
-      <input type="text" name="provider" list="providerOptions" placeholder="Например: Anthropic">
-      <datalist id="providerOptions">
-        {% for p in provider_options %}<option value="{{ p }}"></option>{% endfor %}
-      </datalist>
+      <label>Компания</label>
+      <select name="provider">
+        <option value="">— не указано —</option>
+        {% for p in provider_options %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="hint">
+      Значения — из справочника; новое значение можно добавить в разделе
+      <a href="/settings#lookups" target="_blank" rel="noopener">Справочники</a> (откроется в новой вкладке).
     </div>
     <div class="hint">Стартовый ELO: {{ default_elo }}</div>
     <div class="form-actions">
@@ -1034,7 +1062,7 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
   </form>
 </div>
 
-{{ tag_panel() }}
+{% call filter_panel() %}{% endcall %}
 
 {% if models_list %}
 <div class="card">
@@ -1060,9 +1088,9 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
     </tbody>
   </table>
 </div>
-{% elif tag_active %}
+{% elif filter_active %}
 <div class="card">
-  <div class="empty-state">Под выбранный фильтр «Агент и фирма» не попала ни одна модель.</div>
+  <div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>
 </div>
 {% endif %}
 {% endblock %}
@@ -1094,17 +1122,32 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
     </div>
     <div class="form-group">
       <label>Агент</label>
-      <input type="text" name="agent" value="{{ model.agent }}" list="agentOptions" placeholder="Например: Cursor">
-      <datalist id="agentOptions">
-        {% for a in agent_options %}<option value="{{ a }}"></option>{% endfor %}
-      </datalist>
+      <select name="agent">
+        <option value="">— не указано —</option>
+        {% for a in agent_options %}
+        <option value="{{ a }}" {% if model.agent == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+        {% if model.agent and model.agent not in agent_options %}
+        <option value="{{ model.agent }}" selected>{{ model.agent }} (вне справочника)</option>
+        {% endif %}
+      </select>
     </div>
     <div class="form-group">
-      <label>Фирма</label>
-      <input type="text" name="provider" value="{{ model.provider }}" list="providerOptions" placeholder="Например: Anthropic">
-      <datalist id="providerOptions">
-        {% for p in provider_options %}<option value="{{ p }}"></option>{% endfor %}
-      </datalist>
+      <label>Компания</label>
+      <select name="provider">
+        <option value="">— не указано —</option>
+        {% for p in provider_options %}
+        <option value="{{ p }}" {% if model.provider == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+        {% if model.provider and model.provider not in provider_options %}
+        <option value="{{ model.provider }}" selected>{{ model.provider }} (вне справочника)</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="hint">
+      Значения — из справочника; добавить новые можно в разделе
+      <a href="/settings#lookups" target="_blank" rel="noopener">Справочники</a> (откроется в новой вкладке).
+      Текущее значение вне справочника сохраняется как есть.
     </div>
     <div class="form-group">
       <label>Статус активности</label>
@@ -1215,7 +1258,7 @@ EDIT_TASK_TEMPLATE = """{% extends "shell.html" %}
 # ─── HTML: Settings page ────────────────────────────────────────────
 
 SETTINGS_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import tag_panel, tag_hidden with context %}
+{% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
 {% block title %}Настройки — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
@@ -1230,12 +1273,26 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <a href="#tasks">Таски</a>
     <a href="#answer-coverage">Ответы</a>
     <a href="#recommendation-queue">Очередь</a>
+    <a href="#lookups">Справочники</a>
   </nav>
 
   <div class="settings-grid">
     <div class="card" id="models">
       <h2>Модели</h2>
-      {{ tag_panel() }}
+      {% call filter_panel() %}
+        {% if answer_active_tasks %}
+        <span class="filter-label">Показывать</span>
+        <div class="segmented" role="radiogroup" aria-label="Показывать">
+          <label><input type="radio" name="answer_filter" value="active" {% if answer_filter == 'active' %}checked{% endif %} onchange="this.form.submit()"><span>Активные</span></label>
+          <label><input type="radio" name="answer_filter" value="all" {% if answer_filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
+          <label><input type="radio" name="answer_filter" value="inactive" {% if answer_filter == 'inactive' %}checked{% endif %} onchange="this.form.submit()"><span>Неактивные</span></label>
+        </div>
+        <label class="chip">
+          <input type="checkbox" name="only_debts" value="1" {% if only_debts %}checked{% endif %} onchange="this.form.submit()">
+          <span>Только долги</span>
+        </label>
+        {% endif %}
+      {% endcall %}
       <div class="model-groups">
         <div class="model-row">
           <span>Всего в реестре</span>
@@ -1281,9 +1338,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         </details>
       </div>
       <div class="hint">
-        Модель добавляется одним полем — названием; id генерируется
-        автоматически. Изменить или архивировать — по ссылке «Изменить»
-        в списке моделей.
+        Название обязательно; id генерируется автоматически. Агент и компания
+        выбираются из справочника (ссылка «Справочники» внизу страницы или
+        на странице добавления). Изменить или архивировать — по ссылке
+        «Изменить» в списке моделей.
       </div>
       <div class="card-actions">
         <a href="/add" class="btn btn-primary">+ Добавить модель</a>
@@ -1310,11 +1368,11 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
             </td>
             <td class="actions-col">
               <form method="POST" action="/task/{{ t.id }}/current" class="form-inline">
-                <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
+                {{ filter_hidden() }}
                 <button type="submit" class="btn btn-secondary btn-sm" {% if not t.active or t.current %}disabled{% endif %}>Текущая</button>
               </form>
               <form method="POST" action="/task/{{ t.id }}/toggle" class="form-inline ms-1">
-                <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
+                {{ filter_hidden() }}
                 <button type="submit" class="btn btn-secondary btn-sm">
                   {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
                 </button>
@@ -1353,23 +1411,9 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       Флаги моделей вне фильтра и неактивных тасков сохраняются без изменений.
     </div>
     {% if answer_active_tasks %}
-    <form method="GET" action="/settings" class="filter-bar">
-      <label for="answer_filter">Показывать</label>
-      <select name="answer_filter" id="answer_filter" onchange="this.form.submit()">
-        <option value="active" {% if answer_filter == 'active' %}selected{% endif %}>Только активные</option>
-        <option value="all" {% if answer_filter == 'all' %}selected{% endif %}>Все</option>
-        <option value="inactive" {% if answer_filter == 'inactive' %}selected{% endif %}>Только неактивные</option>
-      </select>
-      {{ tag_hidden() }}
-    </form>
     {% if answer_rows %}
-    <form method="POST" action="/answer_flags?answer_filter={{ answer_filter }}" id="flagsForm">
-      <input type="hidden" name="answer_filter" value="{{ answer_filter }}">
-      {{ tag_hidden() }}
-      <div class="flags-bar">
-        <label><input type="checkbox" id="onlyDebts"> только долги</label>
-        <span id="flagsCounter"></span>
-      </div>
+    <form method="POST" action="/answer_flags" id="flagsForm">
+      {{ filter_hidden() }}
       <div class="table-wrap">
         <table class="flags-table">
           <thead>
@@ -1387,7 +1431,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           </thead>
           <tbody>
             {% for r in answer_rows %}
-            <tr data-debt="{{ r.debt }}" class="{{ 'archived' if r.status == 'archived' }}">
+            <tr class="{{ 'archived' if r.status == 'archived' }}">
               <td class="model-cell">
                 <div>{{ r.name }}{% if r.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}</div>
                 {% if r.caption %}<div class="model-caption">{{ r.caption }}</div>{% endif %}
@@ -1411,8 +1455,10 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     </form>
     {% else %}
     <div class="empty-state">
-      {% if tag_active %}
-      Под выбранный фильтр «Агент и фирма» не попала ни одна модель.
+      {% if filter_active %}
+      Под выбранный фильтр не попала ни одна модель.
+      {% elif only_debts %}
+      Долгов нет.
       {% elif answer_filter == 'inactive' %}
       Нет неактивных моделей для учёта.
       {% elif answer_filter == 'all' %}
@@ -1476,25 +1522,68 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     {% endif %}
   </div>
 
+  <div class="card" id="lookups">
+    <h2>Справочники</h2>
+    <div class="hint">
+      Допустимые значения полей «Агент» и «Компания» модели — порядок как в
+      data/lookups.yaml. Переименование обновляет все модели реестра и
+      пересчитывает index; удалить можно только значение, не используемое
+      ни одной моделью. Значения реестра вне справочника помечены
+      «вне справочника» — их можно внести одной кнопкой.
+    </div>
+    {% for section in lookup_sections %}
+    <div class="lookup-section">
+      <h3>{{ section.title }}</h3>
+      <form method="POST" action="/lookups/add" class="lookups-add">
+        <input type="hidden" name="kind" value="{{ section.kind }}">
+        <input type="text" name="value" class="lookup-input" placeholder="Новое значение" aria-label="Новое значение — {{ section.title|lower }}">
+        <button type="submit" class="btn btn-primary btn-sm">Добавить</button>
+      </form>
+      <div class="table-wrap">
+        <table class="lookups-table">
+          <thead>
+            <tr><th>Значение</th><th>Моделей</th><th class="actions-col">Действия</th></tr>
+          </thead>
+          <tbody>
+            {% for row in section.rows %}
+            <tr>
+              <td>
+                {{ row.value }}
+                {% if row.external %}<span class="status-pill status-archived">вне справочника</span>{% endif %}
+              </td>
+              <td>{{ row.count }}</td>
+              <td class="actions-col">
+                {% if row.external %}
+                <form method="POST" action="/lookups/promote" class="form-inline">
+                  <input type="hidden" name="kind" value="{{ section.kind }}">
+                  <input type="hidden" name="value" value="{{ row.value }}">
+                  <button type="submit" class="btn btn-secondary btn-sm">внести в справочник</button>
+                </form>
+                {% else %}
+                <form method="POST" action="/lookups/rename" class="form-inline">
+                  <input type="hidden" name="kind" value="{{ section.kind }}">
+                  <input type="hidden" name="old" value="{{ row.value }}">
+                  <input type="text" name="new" value="{{ row.value }}" class="lookup-input" aria-label="Новое значение для «{{ row.value }}»">
+                  <button type="submit" class="btn btn-secondary btn-sm">Переименовать</button>
+                </form>
+                <form method="POST" action="/lookups/delete" class="form-inline ms-1">
+                  <input type="hidden" name="kind" value="{{ section.kind }}">
+                  <input type="hidden" name="value" value="{{ row.value }}">
+                  <button type="submit" class="btn btn-secondary btn-sm"{% if row.count %} disabled title="Значение используют {{ row.count }} моделей"{% endif %}>{% if row.count %}используется у {{ row.count }}{% else %}Удалить{% endif %}</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
 <script>
-// Матрица наличия ответов: фильтр «только долги», счётчик, bulk по строке/столбцу.
-function flagsVisibleRows() {
-  return Array.from(document.querySelectorAll('#flagsForm tbody tr'));
-}
-function updateFlagsCounter() {
-  const rows = flagsVisibleRows();
-  const shown = rows.filter((tr) => tr.style.display !== 'none').length;
-  const el = document.getElementById('flagsCounter');
-  if (el) el.textContent = 'показано ' + shown + ' из ' + rows.length + ' моделей';
-}
-function applyDebtsFilter() {
-  const only = document.getElementById('onlyDebts');
-  const hide = only && only.checked;
-  flagsVisibleRows().forEach((tr) => {
-    tr.style.display = (hide && tr.dataset.debt === '0') ? 'none' : '';
-  });
-  updateFlagsCounter();
-}
+// Матрица наличия ответов: bulk по строке («строка») и столбцу («все»/«сброс»).
 function rowToggle(btn) {
   const boxes = btn.closest('tr').querySelectorAll('input[name="flag"]');
   const target = Array.from(boxes).some((cb) => !cb.checked);
@@ -1502,31 +1591,9 @@ function rowToggle(btn) {
 }
 function colSet(task, val) {
   document.querySelectorAll('#flagsForm input[name="flag"][data-col="' + task + '"]').forEach((cb) => {
-    const tr = cb.closest('tr');
-    if (tr && tr.style.display === 'none') return;
     cb.checked = val;
   });
 }
-(function initFlags() {
-  const only = document.getElementById('onlyDebts');
-  if (only) only.addEventListener('change', applyDebtsFilter);
-  updateFlagsCounter();
-})();
-</script>
-
-<script>
-// Снятие «активна» отключает и сбрасывает радио «текущая» у этой таски.
-document.querySelectorAll('input[name="active"]').forEach((cb) => {
-  cb.addEventListener('change', () => {
-    const radio = document.querySelector(
-      'input[name="current_task"][value="' + cb.value + '"]'
-    );
-    if (radio) {
-      radio.disabled = !cb.checked;
-      if (!cb.checked && radio.checked) radio.checked = false;
-    }
-  });
-});
 </script>
 {% endblock %}
 """
@@ -1547,23 +1614,23 @@ def history_page():
     model_id = request.args.get("model", "").strip()
     include_inactive = request.args.get("include_inactive", "") == "1"
 
-    tag_ctx = tags_filter_context(
+    filter_ctx = filter_panel_context(
         models,
         action="/history",
-        hidden_fields=[
-            *([{"name": "model", "value": model_id}] if model_id else []),
-            *([{"name": "include_inactive", "value": "1"}] if include_inactive else []),
-        ],
-        reset_url=url_for(
-            "history_page",
-            model=model_id or None,
-            include_inactive="1" if include_inactive else None,
-        ),
+        reset_url=url_for("history_page"),
+        reset_extra=bool(model_id) or include_inactive,
     )
-    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    # Параметры для ссылок пагинации: все фильтры страницы как были
+    history_params = {
+        "model": model_id or None,
+        "include_inactive": "1" if include_inactive else None,
+        "agents": filter_ctx["filter_agents_csv"] or None,
+        "providers": filter_ctx["filter_providers_csv"] or None,
+    }
 
     # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
-    # состав дополнительно сужается фильтром «Агент и фирма».
+    # состав дополнительно сужается блоком «Фильтр».
     all_models = sorted(models.values(), key=lambda m: m.get("name", "").lower())
     dropdown = [{"id": "", "name": "Все", "archived": False, "selected": not model_id}]
     for m in all_models:
@@ -1624,7 +1691,8 @@ def history_page():
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
-        **tag_ctx,
+        history_params=history_params,
+        **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
             {"label": "История"},
@@ -1677,13 +1745,13 @@ def stats_page():
     else:
         pool = list(models.values())
 
-    tag_ctx = tags_filter_context(
+    filter_ctx = filter_panel_context(
         models,
         action="/stats",
-        hidden_fields=[{"name": "filter", "value": stats_filter}],
-        reset_url=url_for("stats_page", filter=stats_filter),
+        reset_url=url_for("stats_page"),
+        reset_extra=stats_filter != "active",
     )
-    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
     pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
 
     entries = [
@@ -1715,7 +1783,7 @@ def stats_page():
         stats_filter=stats_filter,
         pool_count=len(entries),
         chart_svg=build_elo_distribution_svg(entries),
-        **tag_ctx,
+        **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
             {"label": "Аналитика"},
@@ -1737,13 +1805,13 @@ def leaderboard():
     if filter_mode not in ("active", "all", "inactive"):
         filter_mode = "active"
 
-    tag_ctx = tags_filter_context(
+    filter_ctx = filter_panel_context(
         models,
         action="/",
-        hidden_fields=[{"name": "filter", "value": filter_mode}],
-        reset_url=url_for("leaderboard", filter=filter_mode),
+        reset_url=url_for("leaderboard"),
+        reset_extra=filter_mode != "active",
     )
-    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
 
     if filter_mode == "active":
         models_sorted = [
@@ -1760,8 +1828,8 @@ def leaderboard():
 
     models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
 
-    # Места/медали/d5 считаются по полному (статусному) пулу: фильтр
-    # «Агент и фирма» только скрывает строки, номера мест не пересчитываются.
+    # Места/медали/d5 считаются по полному (статусному) пулу: блок «Фильтр»
+    # только скрывает строки, номера мест не пересчитываются.
     for rank, m in enumerate(models_sorted, start=1):
         m["rank"] = rank
         m["caption"] = format_model_caption(m)
@@ -1875,7 +1943,7 @@ def leaderboard():
         coverage_done=coverage_done,
         remaining=remaining,
         filter=filter_mode,
-        **tag_ctx,
+        **filter_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         format_winrate=format_winrate,
@@ -1903,25 +1971,24 @@ def add_page():
         })
     models_list.sort(key=lambda m: m["name"].lower())
 
-    tag_ctx = tags_filter_context(
+    filter_ctx = filter_panel_context(
         models_data,
         action="/add",
-        hidden_fields=[],
         reset_url=url_for("add_page"),
     )
-    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
     models_list = [m for m in models_list if model_passes_tags(m, agent_sel, provider_sel)]
 
-    agent_options, _ = _tag_values(models_data, "agent")
-    provider_options, _ = _tag_values(models_data, "provider")
+    # Агент и компания — выпадающие списки только из справочника
+    lookup_data = load_lookups()
 
     return render_template_string(
         ADD_TEMPLATE,
         models_list=models_list,
-        agent_options=agent_options,
-        provider_options=provider_options,
+        agent_options=lookup_data["agents"],
+        provider_options=lookup_data["providers"],
         default_elo=DEFAULT_ELO,
-        **tag_ctx,
+        **filter_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -1944,6 +2011,18 @@ def add_model():
     models_path = MODELS_PATH
     if not models_path.exists():
         return redirect(url_for("add_page", error="models.yaml не найден"))
+
+    # Агент и компания — только пустое значение или значение из справочника
+    if agent and not has_value("agent", agent):
+        return redirect(url_for(
+            "add_page",
+            error=f"Агент «{agent}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+        ))
+    if provider and not has_value("provider", provider):
+        return redirect(url_for(
+            "add_page",
+            error=f"Компания «{provider}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+        ))
 
     text = models_path.read_text(encoding="utf-8")
     models, preamble = parse_existing(text)
@@ -2039,15 +2118,21 @@ def settings_page():
     index_data = ensure_index()
     models = index_data.get("models", {})
 
-    # Фильтр строк матрицы: active / all / inactive (по умолчанию active)
+    # Фильтр строк матрицы: active / all / inactive (по умолчанию active);
+    # only_debts — «только долги» (URL-параметр блока «Фильтр»).
     answer_filter = valid_answer_filter(request.args.get("answer_filter"))
-    tag_ctx = tags_filter_context(
+    only_debts = request.args.get("only_debts", "").strip() == "1"
+    hidden_fields = [{"name": "answer_filter", "value": answer_filter}]
+    if only_debts:
+        hidden_fields.append({"name": "only_debts", "value": "1"})
+    filter_ctx = filter_panel_context(
         models,
         action="/settings",
-        hidden_fields=[{"name": "answer_filter", "value": answer_filter}],
-        reset_url=url_for("settings_page", answer_filter=answer_filter),
+        reset_url=url_for("settings_page"),
+        hidden_fields=hidden_fields,
+        reset_extra=answer_filter != "active" or only_debts,
     )
-    agent_sel, provider_sel = tag_ctx["tag_agent_sel"], tag_ctx["tag_provider_sel"]
+    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
 
     models_active_list, models_archived_list = [], []
     for mid, info in models.items():
@@ -2079,6 +2164,8 @@ def settings_page():
         r for r in answer_rows
         if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
     ]
+    if only_debts:
+        answer_rows = [r for r in answer_rows if r.get("debt", 0) > 0]
     for r in answer_rows:
         r["caption"] = format_model_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
@@ -2111,6 +2198,29 @@ def settings_page():
         queue_breakdown_str = "+".join(str(counts[t]) for t in ordered)
         queue_breakdown_legend = " + ".join(f"{t}: {counts[t]}" for t in ordered)
     queue_has_coverage = coverage.get("percent") is not None
+
+    # Секция «Справочники»: значения справочника + счётчики моделей;
+    # значения реестра вне справочника — отдельными строками в конце.
+    lookup_data = load_lookups()
+    lookup_sections = []
+    for kind, title in (("agent", "Агенты"), ("provider", "Компании")):
+        values = lookup_data["agents" if kind == "agent" else "providers"]
+        counts: dict[str, int] = {}
+        for info in models.values():
+            val = str(info.get(kind) or "").strip()
+            if val:
+                counts[val] = counts.get(val, 0) + 1
+        rows = [
+            {"value": v, "count": counts.get(v, 0), "external": False}
+            for v in values
+        ]
+        known = set(values)
+        rows += [
+            {"value": v, "count": counts[v], "external": True}
+            for v in sorted((c for c in counts if c not in known), key=str.lower)
+        ]
+        lookup_sections.append({"kind": kind, "title": title, "rows": rows})
+
     return render_template_string(
         SETTINGS_TEMPLATE,
         tasks_list=tasks_list,
@@ -2136,7 +2246,9 @@ def settings_page():
         queue_breakdown_str=queue_breakdown_str,
         queue_breakdown_legend=queue_breakdown_legend,
         queue_has_coverage=queue_has_coverage,
-        **tag_ctx,
+        only_debts=only_debts,
+        lookup_sections=lookup_sections,
+        **filter_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -2150,6 +2262,159 @@ def settings_page():
 def settings_save():
     # Управление тасками теперь через отдельные POST-роуты /task/<id>/toggle и /current.
     return redirect(url_for("settings_page"))
+
+
+# ─── Справочники: CRUD (секция #lookups страницы /settings) ─────────
+
+# kind → название списка для сообщений пользователю
+LOOKUP_KIND_TITLES = {"agent": "агентов", "provider": "компаний"}
+
+
+def _settings_redirect(error: str = "", success: str = ""):
+    """Redirect на /settings с одним сообщением (error или success)."""
+    params: dict = {}
+    if error:
+        params["error"] = error
+    elif success:
+        params["success"] = success
+    return redirect(url_for("settings_page", **params))
+
+
+def _settings_filter_params(models: dict) -> dict:
+    """Параметры блока «Фильтр» /settings из формы/query — для redirect.
+
+    Возвращает answer_filter и непустые agents/providers/only_debts, чтобы
+    POST-действия страницы не теряли состояние фильтров.
+    """
+    params: dict = {
+        "answer_filter": valid_answer_filter(request.values.get("answer_filter")),
+    }
+    agents_csv = _tags_csv(_parse_tag_tokens(
+        _tag_query_csv(request.values, "agents"), _tag_values(models, "agent")[0],
+    ))
+    providers_csv = _tags_csv(_parse_tag_tokens(
+        _tag_query_csv(request.values, "providers"), _tag_values(models, "provider")[0],
+    ))
+    if agents_csv:
+        params["agents"] = agents_csv
+    if providers_csv:
+        params["providers"] = providers_csv
+    if (request.values.get("only_debts") or "").strip() == "1":
+        params["only_debts"] = "1"
+    return params
+
+
+@app.route("/lookups/add", methods=["POST"])
+def lookup_add():
+    kind = request.form.get("kind", "").strip()
+    value = request.form.get("value", "").strip()
+    if kind not in LOOKUP_KIND_TITLES:
+        return _settings_redirect(error="Неизвестный справочник")
+    if not value:
+        return _settings_redirect(error="Введите значение")
+    existing = find_value(kind, value)
+    if existing:
+        return _settings_redirect(error=f"Значение уже есть в справочнике: {existing}")
+    if not add_value(kind, value):
+        return _settings_redirect(error=f"Не удалось добавить значение: {value}")
+    return _settings_redirect(
+        success=f"В справочник {LOOKUP_KIND_TITLES[kind]} добавлено значение: {value}",
+    )
+
+
+@app.route("/lookups/promote", methods=["POST"])
+def lookup_promote():
+    kind = request.form.get("kind", "").strip()
+    value = request.form.get("value", "").strip()
+    if kind not in LOOKUP_KIND_TITLES:
+        return _settings_redirect(error="Неизвестный справочник")
+    if not value:
+        return _settings_redirect(error="Введите значение")
+    existing = find_value(kind, value)
+    if existing:
+        return _settings_redirect(error=f"Значение уже есть в справочнике: {existing}")
+    if not add_value(kind, value):
+        return _settings_redirect(error=f"Не удалось внести значение: {value}")
+    return _settings_redirect(
+        success=f"Значение «{value}» внесено в справочник {LOOKUP_KIND_TITLES[kind]}",
+    )
+
+
+@app.route("/lookups/rename", methods=["POST"])
+def lookup_rename():
+    kind = request.form.get("kind", "").strip()
+    old = request.form.get("old", "").strip()
+    new = request.form.get("new", "").strip()
+    if kind not in LOOKUP_KIND_TITLES:
+        return _settings_redirect(error="Неизвестный справочник")
+    if not new:
+        return _settings_redirect(error="Введите новое значение")
+    if new == old:
+        return _settings_redirect(error="Новое значение совпадает с текущим")
+    existing = find_value(kind, new)
+    if existing and existing != old:
+        return _settings_redirect(error=f"Значение уже есть в справочнике: {existing}")
+
+    lookup_data = load_lookups()
+    values = lookup_data["agents" if kind == "agent" else "providers"]
+    if old not in values:
+        return _settings_redirect(error=f"Значение «{old}» не найдено в справочнике")
+
+    models_path = MODELS_PATH
+    if not models_path.exists():
+        return _settings_redirect(error="data/models.yaml не найден")
+    text = models_path.read_text(encoding="utf-8")
+    models, preamble = parse_existing(text)
+
+    # Справочник: переименование с сохранением позиции в списке
+    values[values.index(old)] = new
+    save_lookups(lookup_data)
+
+    # Реестр: каскад по всем моделям со старым значением
+    updated = 0
+    for m in models:
+        if str(m.get(kind) or "").strip() == old:
+            m[kind] = new
+            updated += 1
+    models.sort(key=lambda m: m["id"])
+    out = preamble.rstrip() + "\n\nmodels:\n"
+    for m in models:
+        out += format_model(m) + "\n"
+    models_path.write_text(out, encoding="utf-8")
+
+    index_data = generate_index()
+    save_index(index_data)
+    return _settings_redirect(
+        success=f"Значение «{old}» переименовано в «{new}»: обновлено моделей — {updated}.",
+    )
+
+
+@app.route("/lookups/delete", methods=["POST"])
+def lookup_delete():
+    kind = request.form.get("kind", "").strip()
+    value = request.form.get("value", "").strip()
+    if kind not in LOOKUP_KIND_TITLES:
+        return _settings_redirect(error="Неизвестный справочник")
+    if not value:
+        return _settings_redirect(error="Введите значение")
+
+    lookup_data = load_lookups()
+    values = lookup_data["agents" if kind == "agent" else "providers"]
+    if value not in values:
+        return _settings_redirect(error=f"Значение «{value}» не найдено в справочнике")
+
+    index_data = ensure_index()
+    count = sum(
+        1 for info in index_data.get("models", {}).values()
+        if str(info.get(kind) or "").strip() == value
+    )
+    if count:
+        return _settings_redirect(
+            error=f"Значение «{value}» используется у {count} моделей — удаление запрещено",
+        )
+    values.remove(value)
+    save_lookups(lookup_data)
+    return _settings_redirect(success=f"Значение «{value}» удалено из справочника")
 
 
 @app.route("/answer_flags", methods=["POST"])
@@ -2167,12 +2432,15 @@ def save_answer_flags_route():
     answer_filter = valid_answer_filter(
         request.args.get("answer_filter") or request.form.get("answer_filter")
     )
+    only_debts = (
+        request.args.get("only_debts") or request.form.get("only_debts") or ""
+    ).strip() == "1"
     agent_sel = _parse_tag_tokens(
-        request.args.get("agents") or request.form.get("agents"),
+        _tag_query_csv(request.args, "agents") or _tag_query_csv(request.form, "agents"),
         _tag_values(models, "agent")[0],
     )
     provider_sel = _parse_tag_tokens(
-        request.args.get("providers") or request.form.get("providers"),
+        _tag_query_csv(request.args, "providers") or _tag_query_csv(request.form, "providers"),
         _tag_values(models, "provider")[0],
     )
     visible = set()
@@ -2185,6 +2453,13 @@ def save_answer_flags_route():
         if not model_passes_tags(info, agent_sel, provider_sel):
             continue
         visible.add(mid)
+    if only_debts:
+        # Строки без долгов скрыты фильтром — тоже сохраняем как было.
+        debt_by_id = {
+            r["id"]: r.get("debt", 0)
+            for r in get_answer_matrix(settings)["rows"]
+        }
+        visible = {mid for mid in visible if debt_by_id.get(mid, 0) > 0}
 
     submitted = set(request.form.getlist("flag"))
     existing = load_answer_flags()
@@ -2202,6 +2477,8 @@ def save_answer_flags_route():
 
     matrix = get_answer_matrix(settings)
     redirect_params = {"answer_filter": answer_filter}
+    if only_debts:
+        redirect_params["only_debts"] = "1"
     agents_csv = _tags_csv(agent_sel)
     providers_csv = _tags_csv(provider_sel)
     if agents_csv:
@@ -2222,9 +2499,8 @@ def edit_page(model_id: str):
     if not info:
         return redirect(url_for("leaderboard", error="Модель не найдена"))
 
-    all_models = index_data.get("models", {})
-    agent_options, _ = _tag_values(all_models, "agent")
-    provider_options, _ = _tag_values(all_models, "provider")
+    # Агент и компания — выпадающие списки только из справочника
+    lookup_data = load_lookups()
 
     return render_template_string(
         EDIT_TEMPLATE,
@@ -2232,11 +2508,11 @@ def edit_page(model_id: str):
             "id": model_id,
             "name": info.get("name", ""),
             "status": info.get("status", "active"),
-            "agent": info.get("agent", ""),
-            "provider": info.get("provider", ""),
+            "agent": str(info.get("agent") or "").strip(),
+            "provider": str(info.get("provider") or "").strip(),
         },
-        agent_options=agent_options,
-        provider_options=provider_options,
+        agent_options=lookup_data["agents"],
+        provider_options=lookup_data["providers"],
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -2259,6 +2535,23 @@ def edit_model(model_id: str):
 
     if status not in ("active", "archived"):
         return redirect(url_for("edit_page", model_id=model_id, error="Неверный статус"))
+
+    # Агент и компания: пустое значение, значение из справочника или текущее
+    # значение модели без изменений (ручные значения «вне справочника»).
+    index_data = ensure_index()
+    current = index_data.get("models", {}).get(model_id, {})
+    current_agent = str(current.get("agent") or "").strip()
+    current_provider = str(current.get("provider") or "").strip()
+    if agent and agent != current_agent and not has_value("agent", agent):
+        return redirect(url_for(
+            "edit_page", model_id=model_id,
+            error=f"Агент «{agent}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+        ))
+    if provider and provider != current_provider and not has_value("provider", provider):
+        return redirect(url_for(
+            "edit_page", model_id=model_id,
+            error=f"Компания «{provider}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+        ))
 
     if not update_model(model_id, name, status, agent, provider):
         return redirect(url_for("leaderboard", error="Не удалось обновить модель"))
@@ -2340,20 +2633,22 @@ def edit_task(task_id: str):
 
 @app.route("/task/<task_id>/toggle", methods=["POST"])
 def toggle_task(task_id: str):
-    answer_filter = valid_answer_filter(request.form.get("answer_filter"))
+    index_data = ensure_index()
+    params = _settings_filter_params(index_data.get("models", {}))
     if not toggle_task_status(task_id):
-        return redirect(url_for("settings_page", answer_filter=answer_filter, error="Не удалось переключить статус"))
+        return redirect(url_for("settings_page", error="Не удалось переключить статус", **params))
     index_data = generate_index()
     save_index(index_data)
-    return redirect(url_for("settings_page", answer_filter=answer_filter, success=f"Статус {task_id} изменён"))
+    return redirect(url_for("settings_page", success=f"Статус {task_id} изменён", **params))
 
 
 @app.route("/task/<task_id>/current", methods=["POST"])
 def set_current_task_route(task_id: str):
-    answer_filter = valid_answer_filter(request.form.get("answer_filter"))
+    index_data = ensure_index()
+    params = _settings_filter_params(index_data.get("models", {}))
     if not set_current_task(task_id):
-        return redirect(url_for("settings_page", answer_filter=answer_filter, error="Таска должна быть активной"))
-    return redirect(url_for("settings_page", answer_filter=answer_filter, success=f"Текущая таска: {task_id}"))
+        return redirect(url_for("settings_page", error="Таска должна быть активной", **params))
+    return redirect(url_for("settings_page", success=f"Текущая таска: {task_id}", **params))
 
 
 # ─── Port handling ──────────────────────────────────────────────────

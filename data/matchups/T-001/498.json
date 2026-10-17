@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 498,
+  "task": "T-001",
+  "model_a": "devin-glm-5-2-high",
+  "model_b": "opencode-beam-free-max",
+  "model_a_id": "devin-glm-5-2-high",
+  "model_b_id": "opencode-beam-free-max",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:42:21+03:00",
+  "elo": {
+    "devin-glm-5-2-high": {
+      "before": 1003,
+      "after": 994,
+      "delta": -9
+    },
+    "opencode-beam-free-max": {
+      "before": 1094,
+      "after": 1106,
+      "delta": 12
+    }
+  }
+}

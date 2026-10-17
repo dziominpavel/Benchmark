@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 473,
+  "task": "T-001",
+  "model_a": "opencode-beam-free-max",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "opencode-beam-free-max",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:00:40+03:00",
+  "elo": {
+    "opencode-beam-free-max": {
+      "before": 1200,
+      "after": 1180,
+      "delta": -20
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1200,
+      "after": 1220,
+      "delta": 20
+    }
+  }
+}

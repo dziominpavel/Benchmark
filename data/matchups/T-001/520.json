@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 520,
+  "task": "T-001",
+  "model_a": "devin-gpt-6-astra-max-2",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "devin-gpt-6-astra-max-2",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "a",
+  "date": "2026-10-17",
+  "recorded_at": "2026-10-17T00:01:30+03:00",
+  "elo": {
+    "devin-gpt-6-astra-max-2": {
+      "before": 1376,
+      "after": 1384,
+      "delta": 8
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1185,
+      "after": 1177,
+      "delta": -8
+    }
+  }
+}

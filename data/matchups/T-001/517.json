@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 517,
+  "task": "T-001",
+  "model_a": "opencode-glm-5-3-flash-free",
+  "model_b": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "model_a_id": "opencode-glm-5-3-flash-free",
+  "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+  "winner": "a",
+  "date": "2026-10-17",
+  "recorded_at": "2026-10-17T00:01:30+03:00",
+  "elo": {
+    "opencode-glm-5-3-flash-free": {
+      "before": 1171,
+      "after": 1178,
+      "delta": 7
+    },
+    "opencode-nemotron-3-5-super-vl-free-xhigh": {
+      "before": 956,
+      "after": 951,
+      "delta": -5
+    }
+  }
+}

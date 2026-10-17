@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 512,
+  "task": "T-001",
+  "model_a": "cursor-composer-2-5",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "cursor-composer-2-5",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "b",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:50:36+03:00",
+  "elo": {
+    "cursor-composer-2-5": {
+      "before": 1013,
+      "after": 1005,
+      "delta": -8
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1144,
+      "after": 1154,
+      "delta": 10
+    }
+  }
+}

@@ -159,7 +159,7 @@ def format_elo_history(history: list[dict], name_map: dict,
                        caption_map: dict | None = None) -> list[dict]:
     """Преобразует match-centric elo_history в форму для рендеринга.
 
-    caption_map: id → подпись «Фирма · Агент» (опционально).
+    caption_map: id → подпись «Компания · Агент» (опционально).
     Возвращает список словарей с полями:
       model_a_name, model_b_name, model_a_caption, model_b_caption,
       elo_a_before, elo_a_after, elo_a_delta, elo_a_delta_str, elo_a_delta_class,

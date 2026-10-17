@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "seq": 477,
+  "task": "T-001",
+  "model_a": "cursor-grok-4-6-low",
+  "model_b": "opencode-glm-5-3-flash-free",
+  "model_a_id": "cursor-grok-4-6-low",
+  "model_b_id": "opencode-glm-5-3-flash-free",
+  "winner": "a",
+  "date": "2026-10-16",
+  "recorded_at": "2026-10-16T23:00:41+03:00",
+  "elo": {
+    "cursor-grok-4-6-low": {
+      "before": 1205,
+      "after": 1218,
+      "delta": 13
+    },
+    "opencode-glm-5-3-flash-free": {
+      "before": 1220,
+      "after": 1199,
+      "delta": -21
+    }
+  }
+}

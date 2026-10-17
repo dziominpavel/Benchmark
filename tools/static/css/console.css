@@ -364,43 +364,6 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
   margin-top: 10px;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
-  flex-wrap: wrap;
-}
-
-.filter-bar label {
-  font-size: var(--fs-sm);
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.filter-bar select {
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font-size: var(--fs-base);
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.check-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.check-label input { accent-color: var(--accent); cursor: pointer; }
-
 /* --- сетка контента ------------------------------------------------------- */
 
 .content-grid {
@@ -1212,7 +1175,7 @@ tr.archived td { opacity: 0.6; }
 .dist-value { fill: var(--muted); font-size: 12px; }
 .dist-caption { fill: var(--muted); font-size: 10px; }
 
-/* --- фильтр «Агент и фирма» и подписи моделей ----------------------------- */
+/* --- блок «Фильтр» и подписи моделей -------------------------------------- */
 
 .model-caption {
   display: block;
@@ -1223,48 +1186,206 @@ tr.archived td { opacity: 0.6; }
   margin-top: 2px;
 }
 
-.tag-filter-form { margin: 0 0 var(--sp-4); }
-.tag-filter { font-size: var(--fs-sm); }
-
-.tag-filter summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-weight: 600;
-  font-size: var(--fs-sm);
-  user-select: none;
+.filter-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-5);
 }
 
-.tag-filter summary:hover { color: var(--text); }
-.tag-filter[open] summary { color: var(--text); }
+.controls .filter-card { margin-bottom: 0; }
+.card .filter-card { margin-bottom: var(--sp-4); }
 
-.tag-groups {
+.filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.filter-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.filter-reset {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.filter-reset:hover {
+  color: var(--text);
+  border-bottom-color: var(--border-strong);
+}
+
+.filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-6);
-  margin-top: var(--sp-3);
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
 }
 
-.tag-group {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
-  margin: 0;
-  min-width: 170px;
-}
-
-.tag-group legend {
+.filter-label {
+  flex: 0 0 auto;
+  min-width: 92px;
   color: var(--muted);
-  font-size: var(--fs-xs);
-  padding: 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 
-.tag-group .check-label { display: flex; padding: 2px 0; }
+.filter-row select {
+  padding: 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  cursor: pointer;
+}
 
-.tag-actions {
+/* чипы-переключатели (мультивыбор «Агент» и «Компания») */
+.filter-chips {
   display: flex;
-  gap: var(--sp-2);
-  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+  gap: 6px;
 }
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.chip > input,
+.segmented input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip > span {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  transition: background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.chip:hover > span {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+
+.chip > input:checked + span {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  font-weight: 600;
+}
+
+.chip > input:focus-visible + span,
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* сегментированный переключатель «Показывать» */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+
+.segmented label {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.segmented span {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  transition: background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.segmented label:hover span { color: var(--text); }
+
+.segmented input:checked + span {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* --- секция «Справочники» (настройки) ------------------------------------- */
+
+.lookup-section { margin-bottom: var(--sp-5); }
+.lookup-section:last-child { margin-bottom: 0; }
+
+.lookup-section h3 {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  margin-bottom: var(--sp-3);
+}
+
+.lookups-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.lookup-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  min-width: 160px;
+  max-width: 240px;
+}
+
+.lookups-table td { vertical-align: middle; }
+.lookups-table td:first-child { width: 99%; }
+
+.lookups-table .actions-col {
+  text-align: right;
+  white-space: nowrap;
+  padding-left: var(--sp-3);
+}
+
+.lookups-table .actions-col .form-inline { display: inline-flex; align-items: center; gap: 6px; }
 
 .history-model {
   display: flex;

@@ -20,9 +20,11 @@ answer_flags:
     devin-kimi-k3-max: true
     devin-swe-1-7-max: true
     devin-swe-2-max: true
+    opencode-beam-free-max: true
     opencode-deepseek-v4-1-flash-free-max: true
     opencode-fledge-alpha-free: true
     opencode-gemini-4-argon-high: true
+    opencode-glm-5-3-flash-free: true
     opencode-grok-4-7-xhigh: true
     opencode-ling-3-0-flash-fin-free: true
     opencode-ling-3-1-flash-free: true

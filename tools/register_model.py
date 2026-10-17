@@ -4,11 +4,15 @@ register_model.py — регистрация новой LLM-модели в mode
 
 Использование:
     python tools/register_model.py --id <slug> --name "<полное имя>" \
-        --version <строка> [--agent <agent>] [--provider <фирма>] \
+        --version <строка> [--agent <agent>] [--provider <компания>] \
         [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>] [--notes "<текст>"]
 
 Проверяет уникальность id. Если модель с таким id уже есть — отказывается
 (используй --force для перезаписи, но осторожно — история прогонов смешается).
+
+Справочник: непустые --agent/--provider, которых нет в data/lookups.yaml,
+автоматически добавляются в него (в конец списка) с сообщением в выводе —
+регистрация не падает из-за нового значения.
 
 Зависимости: только stdlib.
 """
@@ -28,6 +32,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elo import MODELS_PATH
+from lookups import add_value, find_value
 
 
 def parse_existing(text: str) -> tuple[list[dict], str]:
@@ -101,8 +106,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Регистрация модели в models.yaml")
     parser.add_argument("--id", required=True, help="Уникальный slug модели")
     parser.add_argument("--name", required=True, help="Полное имя модели")
-    parser.add_argument("--agent", default="", help="Агент (Codex, Cursor, Devin, OpenCode). Опционально.")
-    parser.add_argument("--provider", default="", help="Фирма-разработчик (Anthropic, OpenAI, ...). Опционально.")
+    parser.add_argument("--agent", default="", help="Агент (Codex, Cursor, Devin, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
+    parser.add_argument("--provider", default="", help="Компания-разработчик (Anthropic, OpenAI, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
     parser.add_argument("--version", default="", help="Версия/релиз. Опционально при --auto.")
     parser.add_argument("--released", default="", help="Дата выхода YYYY-MM-DD")
     parser.add_argument("--added", default="",
@@ -140,6 +145,16 @@ def main() -> int:
         # Удаляем старую запись
         models = [m for m in models if m["id"] != args.id]
         print(f"Перезаписываю существующую запись '{args.id}'.")
+
+    # Справочник: новые значения --agent/--provider добавляются автоматически
+    # (в конец списка), чтобы авто-прогоны не падали, а значение сразу
+    # появлялось в выпадающих списках консоли.
+    for kind, label, value in (
+        ("agent", "агентов", args.agent.strip()),
+        ("provider", "компаний", args.provider.strip()),
+    ):
+        if value and find_value(kind, value) is None and add_value(kind, value):
+            print(f"В справочник {label} добавлено значение: {value}")
 
     new_model = {
         "id": args.id,
