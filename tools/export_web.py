@@ -3,9 +3,9 @@
 export_web.py — статический read-only слепок консоли Benchmark для витрины.
 
 Собирает полный слепок консоли (Рейтинг, История, Аналитика, Настройки,
-страницы моделей, очередь рекомендаций) в каталог `--out`. Слепок автономен:
-все ссылки относительные, ресурсы — только файлы слепка; данные репозитория
-не изменяются (консоль рендерится в режиме «только просмотр»).
+страницы моделей и задач, очередь рекомендаций) в каталог `--out`. Слепок
+автономен: все ссылки относительные, ресурсы — только файлы слепка; данные
+репозитория не изменяются (консоль рендерится в режиме «только просмотр»).
 
 Запуск:
     python tools/export_web.py --out <каталог> [--catalog-depth N]
@@ -82,11 +82,13 @@ class ExportError(Exception):
 # ─── Карта вывода ───────────────────────────────────────────────────
 
 
-def build_url_map(model_ids: list[str], queue_pages: int) -> dict:
+def build_url_map(model_ids: list[str], queue_pages: int,
+                  task_ids: list[str] | None = None) -> dict:
     """Карта «URL консоли → файл вывода».
 
     pages — обычные страницы (точный путь URL → файл; query сохраняется
     как есть), queue_files — страницы очереди по номеру queue_page.
+    task_ids — страницы задач (ключи раздела tasks из index.json).
     """
     pages = {
         "/": "index.html",
@@ -96,6 +98,8 @@ def build_url_map(model_ids: list[str], queue_pages: int) -> dict:
     }
     for mid in model_ids:
         pages[f"/model/{mid}"] = f"model/{mid}/index.html"
+    for tid in task_ids or ():
+        pages[f"/task/{tid}"] = f"task/{tid}/index.html"
     queue_files = {1: "settings/index.html"}
     for k in range(2, queue_pages + 1):
         queue_files[k] = f"settings/queue-{k:03d}/index.html"
@@ -527,10 +531,11 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
 
     index_data = server.ensure_index()
     model_ids = sorted(index_data.get("models", {}))
+    task_ids = sorted(index_data.get("tasks", {}))
     coverage = server.memo_coverage()
     queue_open = coverage.get("total", 0) - coverage.get("filled", 0)
     queue_pages = max(1, math.ceil(queue_open / server.QUEUE_PAGE_SIZE))
-    urls = build_url_map(model_ids, queue_pages)
+    urls = build_url_map(model_ids, queue_pages, task_ids)
 
     shutil.copytree(TOOLS_DIR / "static", out_root / "static")
     shutil.copyfile(TOOLS_DIR / "static" / "icon.svg", out_root / "icon.svg")
@@ -568,6 +573,8 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
                island=mirror.models_island, fragment=settings_fragment)
     for mid in model_ids:
         _write(f"model/{mid}/index.html", _fetch(client, f"/model/{mid}"))
+    for tid in task_ids:
+        _write(f"task/{tid}/index.html", _fetch(client, f"/task/{tid}"))
 
     errors = check_output(out_root, args.catalog_depth)
     if errors:

@@ -1916,3 +1916,229 @@ a.matchup-chip:hover {
   .verdict-actions .btn { flex-basis: 100%; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* --- аналитика волны 4: A1 «Интервалы рейтинга», A2 «Динамика ELO» ------- */
+
+.interval-group-band {
+  fill: var(--surface-2);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.interval-group-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.interval-rank { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.interval-rank-grouped { fill: var(--accent); opacity: 0.75; }
+a.interval-name { fill: var(--text); font-size: 12px; text-decoration: none; }
+a.interval-name:hover { fill: var(--accent); }
+.interval-elo { fill: var(--text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.interval-gap { fill: var(--muted); font-size: 12px; }
+
+.interval-bar { stroke: var(--chart-line); stroke-width: 6; stroke-linecap: round; opacity: 0.55; }
+.interval-bar-grouped { stroke: var(--accent); opacity: 0.45; }
+.interval-dot-grouped { opacity: 0.7; }
+
+.lines-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0;
+}
+
+.lines-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  align-items: flex-start;
+}
+
+.lines-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  max-height: 132px;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.lines-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.lines-check input { accent-color: var(--accent); }
+.lines-presets { margin-left: auto; font-size: var(--fs-sm); color: var(--muted); }
+
+.chart-line-multi { stroke-width: 2; opacity: 0.9; }
+
+.line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.line-legend-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.line-swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.line-legend-name { color: var(--text); text-decoration: none; }
+.line-legend-name:hover { color: var(--accent); }
+.line-legend-elo { font-variant-numeric: tabular-nums; }
+.line-legend-empty { opacity: 0.65; }
+.line-legend-note { font-style: italic; }
+
+@media (max-width: 799px) {
+  .lines-presets { margin-left: 0; }
+}
+
+/* --- аналитика волны 4: A3 «Активность по дням», A4 «Матрица пар», A5 ------ */
+
+.activity-bar { fill: var(--chart-line); opacity: 0.85; }
+.activity-bar-zero { fill: var(--muted); opacity: 0.25; }
+
+.matrix-wrap { overflow-x: auto; margin-top: var(--sp-3); }
+.chart-matrix { min-width: 680px; }
+
+.pair-row-label { fill: var(--text); font-size: 11px; }
+.pair-col-label { fill: var(--muted); font-size: 10px; }
+.pair-cells-bg { fill: var(--surface-2); }
+.pair-grid-lines { stroke: var(--border); stroke-width: 1; shape-rendering: crispEdges; }
+.pair-cell { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+.pair-cell-set { fill: var(--accent); }
+.pair-cell-diagonal { fill: var(--surface); stroke: none; }
+.pair-cell-count { fill: var(--text); font-size: 10px; font-weight: 600; pointer-events: none; }
+.pair-rematch-dot { fill: var(--pos); }
+a:hover .pair-cell-set { stroke: var(--accent); stroke-width: 1.5; }
+
+.card-subtitle {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+
+/* --- аналитика волны 4: A6 «Взлёты и падения», A7, A8 ----------------------- */
+
+.delta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+}
+.delta-col { min-width: 0; }
+.delta-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: var(--sp-3) 0 var(--sp-2);
+}
+.delta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.delta-list li { display: flex; align-items: baseline; gap: var(--sp-2); }
+.delta-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.delta-sum { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.delta-up { color: var(--pos); }
+.delta-down { color: var(--neg); }
+.delta-games { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.delta-empty { color: var(--muted); font-size: var(--fs-sm); }
+.delta-stale { margin-top: var(--sp-2); }
+
+.outcome-rows { display: flex; flex-direction: column; gap: 8px; margin-top: var(--sp-3); }
+.outcome-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 48px 48px;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.outcome-label { font-size: var(--fs-sm); }
+.outcome-bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.outcome-fill { display: block; height: 100%; }
+.outcome-key-a { background: var(--accent); }
+.outcome-key-b { background: var(--chart-line); }
+.outcome-key-draw { background: var(--muted); }
+.outcome-n, .outcome-pct {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.outcome-tasks {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.outcome-tasks li { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-sm); }
+.outcome-task-id { font-weight: 600; }
+.outcome-task-total, .outcome-task-row { color: var(--muted); }
+
+@media (max-width: 900px) {
+  .delta-grid { grid-template-columns: 1fr; }
+  .outcome-row { grid-template-columns: 90px minmax(0, 1fr) 40px 44px; }
+}
+
+/* --- волна 4: профиль модели ------------------------------------------------ */
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+.profile-rank-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.profile-rank { font-size: var(--fs-lg); font-weight: 700; }
+.last-match-row { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.last-match-date, .last-match-outcome { color: var(--muted); font-size: var(--fs-sm); }
+.h2h-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.h2h-input {
+  min-width: 220px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+.coverage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.coverage-list li { font-size: var(--fs-sm); }
+.meta-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.meta-row { display: flex; gap: var(--sp-3); font-size: var(--fs-sm); }
+.meta-row dt { min-width: 110px; color: var(--muted); }
+.meta-row dd { margin: 0; }
+@media (max-width: 900px) {
+  .profile-grid { grid-template-columns: 1fr; }
+}

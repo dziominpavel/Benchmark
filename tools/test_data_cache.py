@@ -36,6 +36,12 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     №» и «в конец» с сохранением фильтров, поиск и сортировка рейтинга
     (aria-sort, стабильные места), экспорт выборки CSV/JSON, деградация
     слепка (нет поиска, сортировки, комбобокса и экспорта).
+  * Волна 4 (глубина): страница задачи /task/<id> (шапка, прогресс,
+    список вердиктов 20/стр с пагинацией, 404, task.md) и переходы на
+    неё из настроек, истории, очереди и карточки рекомендации; аналитика
+    /stats A1–A8 (интервалы, динамика, активность, матрица, группы, ΔELO,
+    оппозиция, исходы) и профиль модели (место/тренд, последний матч,
+    покрытие по таскам, метаданные, поиск и сортировка «Личных встреч»).
 
 Запуск: python tools/test_data_cache.py
 """
@@ -767,13 +773,16 @@ def test_pagination_items_window():
     print("2.7 pagination items window: OK")
 
 
-def _history_journal(events: int) -> str:
-    """Журнал alpha vs beta с ELO-снэпшотами, посчитанными тем же реплеем."""
+def _history_journal(events: int, winners: str | None = None) -> str:
+    """Журнал alpha vs beta с ELO-снэпшотами, посчитанными тем же реплеем.
+
+    winners — строка исходов 'a'/'b' по событию (по умолчанию чередование).
+    """
     elo_a = elo_b = elo.DEFAULT_ELO
     games_a = games_b = 0
     lines: list[str] = []
     for seq in range(1, events + 1):
-        winner = "a" if seq % 2 else "b"
+        winner = winners[seq - 1] if winners else ("a" if seq % 2 else "b")
         s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0)
         before_a, before_b = elo_a, elo_b
         e_a = elo.expected_score(before_a, before_b)
@@ -1278,7 +1287,7 @@ def test_wave3_history_row_anchor():
         assert len(rows) == 3
         applied = [r for r in rows if 'id="v-3"' in r][0]
         assert 'class="badge-task"' in applied
-        assert 'href="/history?task=T-002"' in applied
+        assert 'href="/task/T-002"' in applied
         assert 'href="/model/alpha"' in applied and 'href="/model/beta"' in applied
         assert "history-divider" in applied
         assert 'class="outcome outcome-draw"' in applied
@@ -1533,6 +1542,502 @@ def test_wave3_read_only_degrade():
     print("wave3 read-only degrade: OK")
 
 
+def test_wave4_task_page():
+    """Волна 4: страница задачи — шапка, прогресс, 404 и task.md."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/task/T-001").get_data(as_text=True)
+        assert "Smoke" in html and "Benchmark" in html
+        assert "активна" in html and "текущая" in html
+        assert 'href="/?task=T-001"' in html, "нет действия «Записать вердикт»"
+        assert 'href="/history?task=T-001"' in html, "нет действия «История таска»"
+        assert 'href="/task/T-001/md"' in html, "нет ссылки task.md"
+        assert "baseline:" not in html, "пустой baseline не рендерится"
+
+        # Прогресс: 1 вердикт, 1 из 1 пара, 2 модели, 0 аннулированных
+        assert '<div class="stat-value">1</div><div class="stat-label">Вердиктов</div>' in html
+        assert '<div class="stat-value">1 из 1</div><div class="stat-label">Пар закрыто</div>' in html
+        assert '<div class="stat-value">2</div><div class="stat-label">Моделей</div>' in html
+        assert '<div class="stat-value">0</div><div class="stat-label">Аннулировано</div>' in html
+
+        # Строка вердикта: без бейджа таска, чип matchup, live-форма аннулирования
+        assert "T-001/001" in html and "Alpha" in html and "Beta" in html
+        assert 'class="badge-task"' not in html, "на странице задачи бейдж не нужен"
+        assert "void-form-open" in html
+
+        # Неизвестная таска — 404 (страница и task.md)
+        assert client.get("/task/T-999").status_code == 404
+        assert client.get("/task/T-999/md").status_code == 404
+
+        # task.md — text/plain с телом задачи
+        md = client.get("/task/T-001/md")
+        assert md.status_code == 200
+        assert md.headers["Content-Type"].startswith("text/plain")
+        assert "Тело smoke-задачи." in md.get_data(as_text=True)
+
+        # Неактивная таска: плашка «неактивна», без «текущая»
+        _write(paths["settings"], "current_task: ''\ntasks:\n  T-001: inactive\n")
+        data_cache.clear()
+        html2 = client.get("/task/T-001").get_data(as_text=True)
+        assert "неактивна" in html2 and "текущая" not in html2
+    print("wave4 task page: OK")
+
+
+def test_wave4_task_verdicts_pagination():
+    """Волна 4: список вердиктов таска — порядок, пустое состояние, пагинация."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _history_journal(540))
+        data_cache.clear()
+
+        html = client.get("/task/T-001").get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 20, "страница списка — 20 записей"
+        assert 'id="v-540"' in rows[0], "порядок по seq по убыванию"
+        assert 'id="v-521"' in rows[-1]
+        assert 'href="/task/T-001?page=2"' in html, "нет ссылки на страницу 2"
+        assert 'href="/task/T-001?page=27"' in html, "нет ссылки на последнюю страницу"
+        assert 'class="page-jump"' in html, "нет поля «Страница»"
+
+        html14 = client.get("/task/T-001?page=14").get_data(as_text=True)
+        assert '<span class="current" aria-current="page">14</span>' in html14
+        assert 'href="/task/T-001?page=13" rel="prev"' in html14
+
+        last = client.get("/task/T-001?page=27").get_data(as_text=True)
+        assert len(_history_rows(last)) == 20
+        assert 'id="v-1"' in last
+
+        # Номер вне диапазона приводится к границам
+        assert 'id="v-1"' in client.get("/task/T-001?page=99").get_data(as_text=True)
+        assert 'id="v-540"' in client.get("/task/T-001?page=abc").get_data(as_text=True)
+
+        # Аннулированные — перечёркнуты с причиной; формы возврата на страницу таска
+        _write(paths["journal"], _wave3_journal())
+        _write(paths["flags"], FLAGS_YAML + "  T-002:\n    alpha: true\n    beta: true\n")
+        data_cache.clear()
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-002/001", "reason": "дубль матча",
+            "next": "/task/T-002",
+        })
+        assert resp.status_code == 302
+        assert resp.headers["Location"].startswith("/task/T-002"), "возврат на страницу таска"
+        html2 = client.get("/task/T-002").get_data(as_text=True)
+        rows2 = _history_rows(html2)
+        assert len(rows2) == 2
+        voided = [r for r in rows2 if "history-item-voided" in r][0]
+        assert "дубль матча" in voided and "void-form-open" not in voided
+        assert '<div class="stat-value">1</div><div class="stat-label">Вердиктов</div>' in html2
+        assert '<div class="stat-value">1 из 1</div><div class="stat-label">Пар закрыто</div>' in html2
+        assert '<div class="stat-value">1</div><div class="stat-label">Аннулировано</div>' in html2
+
+        # Пустое состояние: таск известен, вердиктов нет
+        _write(paths["journal"], "")
+        data_cache.clear()
+        html3 = client.get("/task/T-001").get_data(as_text=True)
+        assert "У таска пока нет вердиктов" in html3
+        assert '<div class="stat-value">0 из 1</div><div class="stat-label">Пар закрыто</div>' in html3
+        assert "history-pagination" not in html3, "виджет пагинации при пустом списке"
+    print("wave4 task verdicts pagination: OK")
+
+
+def test_wave4_task_links():
+    """Волна 4: переходы на страницу задачи из настроек, истории, очереди, карточки."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # С вердиктом: бейдж строки истории и ID в списке тасков
+        settings = client.get("/settings").get_data(as_text=True)
+        assert '<a href="/task/T-001" class="edit-link">T-001</a>' in settings
+        history = client.get("/history").get_data(as_text=True)
+        assert '<a class="badge-task" href="/task/T-001" title=' in history
+
+        # Без вердиктов: открытые ячейки → очередь и карточка рекомендации
+        _write(paths["journal"], "")
+        data_cache.clear()
+        settings2 = client.get("/settings").get_data(as_text=True)
+        assert '<td><a href="/task/T-001" class="edit-link">T-001</a></td>' in settings2, (
+            "ячейка таска в очереди рекомендаций не ссылается на страницу"
+        )
+        main = client.get("/").get_data(as_text=True)
+        assert 'class="rec-task">таск: <a href="/task/T-001"' in main, (
+            "таск в карточке рекомендации не ссылается на страницу"
+        )
+    print("wave4 task links: OK")
+
+
+def test_wave4_stats_a1_a2():
+    """Волна 4: /stats — карточки A1/A2, выбор линий, период, лимит, пусто."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        # Порядок карточек: A1 → «Распределение Elo» → A2
+        i1 = html.index("Интервалы рейтинга")
+        i2 = html.index("Распределение Elo")
+        i3 = html.index("Динамика ELO")
+        assert i1 < i2 < i3, "порядок карточек аналитики"
+
+        # A1: активный пул, интервалы, группа, ссылки на профили
+        assert 'aria-label="Интервалы рейтинга: 2 моделей' in html
+        assert 'href="/model/alpha"' in html and 'href="/model/beta"' in html
+        assert 'href="/model/gamma"' not in html, "архивная модель попала в A1"
+        assert "место не определено" in html
+        assert "interval-gap" not in html, "прочерк без игр"
+
+        # A1 не зависит от фильтров страницы: распределение меняется, A1 — нет
+        html_all = client.get("/stats?filter=all").get_data(as_text=True)
+        assert "моделей: 2" in html and "моделей: 3" in html_all
+        assert 'aria-label="Интервалы рейтинга: 2 моделей' in html_all
+
+        # A2 по умолчанию: топ-5 активных, период 90, пресеты
+        assert 'name="period" value="90" checked' in html
+        assert html.count('class="lines-check"') == 2, "чекбоксы активных моделей"
+        assert 'name="lines" value="alpha" checked' in html
+        assert 'name="lines" value="beta" checked' in html
+        assert "lines-presets" in html and "/stats?lines=" in html
+        assert 'aria-label="Динамика ELO: линий 2, матчей 1"' in html
+
+        # A2: выбор одной линии из URL
+        one = client.get("/stats?lines=beta").get_data(as_text=True)
+        assert 'aria-label="Динамика ELO: линий 1, матчей 1"' in one
+        legend_one = one.split('class="line-legend"', 1)[1].split("</div>", 1)[0]
+        assert legend_one.count('class="line-legend-item') == 1
+        assert "Beta" in legend_one and "Alpha" not in legend_one
+
+        # Период из URL: 30/90/all; невалидное значение → 90
+        for value in ("30", "all"):
+            page = client.get(f"/stats?period={value}").get_data(as_text=True)
+            assert f'name="period" value="{value}" checked' in page
+        bad = client.get("/stats?period=zzz").get_data(as_text=True)
+        assert 'name="period" value="90" checked' in bad
+
+        # Дефолт и лимит линий: 12 активных моделей, журнал пуст
+        ids = [f"m{i:02d}" for i in range(12)]
+        models_yaml = ["models:"]
+        for mid in ids:
+            models_yaml += [
+                f"  - id: {mid}",
+                f"    name: Model {mid}",
+                "    agent: Agent",
+                "    provider: Prov",
+                "    added: 2026-01-01",
+                "    status: active",
+            ]
+        _write(paths["models"], "\n".join(models_yaml) + "\n")
+        _write(paths["journal"], "")
+        data_cache.clear()
+
+        twelve = client.get("/stats").get_data(as_text=True)
+        assert twelve.count('class="line-legend-item') == 5, "дефолт — топ-5"
+        all12 = client.get("/stats?lines=" + ",".join(ids)).get_data(as_text=True)
+        assert all12.count('class="line-legend-item') == 10, "кап 10 линий"
+        assert "Нет матчей выбранных моделей в периоде" in all12
+
+        # Пусто: все модели архивные — оба блока показывают заглушки
+        _write(paths["models"], (
+            "models:\n  - id: gamma\n    name: Gamma\n    agent: Agent\n"
+            "    provider: Prov\n    added: 2026-01-01\n    status: archived\n"
+        ))
+        data_cache.clear()
+        empty = client.get("/stats").get_data(as_text=True)
+        assert "Нет активных моделей" in empty
+        assert "Нет матчей выбранных моделей в периоде" in empty
+        assert "line-legend" not in empty, "легенда без выбранных линий"
+    print("wave4 stats A1/A2: OK")
+
+
+def test_wave4_stats_a3_a5():
+    """Волна 4: /stats — A3 активность, A4 матрица (ссылки, рематч), A5 сводки."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        # A3: сводка и столбик единственного дня
+        assert "дней: 1 · вердиктов: 1 · максимум: 1" in html
+        assert "activity-bar" in html and "02.01.2026: 1" in html
+        # A4: матрица активного пула, ссылка на историю пары
+        assert 'aria-label="Матрица пар: 2 моделей, встреч 1"' in html
+        assert 'href="/history?pair=alpha:beta"' in html
+        assert "pair-cell-diagonal" in html
+        assert "pair-cell-rematch" not in html, "одна встреча — не рематч"
+        # A5: сводки по активному пулу (архивная gamma не участвует)
+        assert '<h3 class="card-subtitle">Агенты</h3>' in html
+        assert "<td>Agent</td><td>2</td><td>1200</td><td>1200</td><td>2</td><td>50%</td>" in html
+        assert "<td>Prov</td><td>2</td><td>1200</td><td>1200</td><td>2</td><td>50%</td>" in html
+        assert "без агента" not in html
+
+        # Рематч: две встречи — метка рематча и подсказка
+        _write(paths["journal"], _history_journal(2))
+        data_cache.clear()
+        html2 = client.get("/stats").get_data(as_text=True)
+        assert "pair-cell-rematch" in html2 and "pair-rematch-dot" in html2
+        assert "Alpha vs Beta: 2 · рематч" in html2
+        assert "дней: 1 · вердиктов: 2 · максимум: 2" in html2
+
+        # Пустые журнал и матрица — заглушки A3/A4
+        _write(paths["journal"], "")
+        data_cache.clear()
+        html3 = client.get("/stats").get_data(as_text=True)
+        assert "Нет применённых встреч" in html3
+        assert "В истории нет вердиктов" in html3
+        assert "matrix-wrap" not in html3
+        assert "activity-bar" not in html3
+    print("wave4 stats A3/A5: OK")
+
+
+def test_wave4_stats_a6_a8():
+    """Волна 4: /stats — A6 окна и остывшие, A7 оппозиция, A8 доли и таски."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        # A6: единственный матч — рост alpha и падение beta
+        assert "Взлёты и падения" in html
+        assert 'class="delta-sum delta-up">+20' in html
+        assert 'class="delta-sum delta-down">-20' in html
+        assert "Остывшие" not in html, "обе активные модели играли"
+
+        # A7: пул в порядке рейтинга, прочерков нет — обе играли
+        opp = html.split('id="opposition"', 1)[1].split('id="outcomes"', 1)[0]
+        assert '<a href="/model/alpha">Alpha</a>' in opp
+        assert "<td>1220</td>" in opp and "<td>1180</td>" in opp
+        assert "<td>1200</td>" in opp, "средний ELO соперников"
+        assert "<td>0</td>" in opp, "у beta нет побед над топ-10"
+        assert "—" not in opp
+
+        # A8: одна активная задача — общие доли без разбивки
+        assert "всего применённых вердиктов: 1" in html
+        assert 'class="outcome-pct">100%' in html
+        assert "По активным задачам" not in html
+
+        # Две активные задачи: разбивка с ссылками на страницы задач
+        lines = _history_journal(2).strip().splitlines()
+        second = json.loads(lines[1])
+        second["task"] = "T-002"
+        second["matchup"] = "T-002/001"
+        lines[1] = json.dumps(second, ensure_ascii=False)
+        _write(paths["journal"], "\n".join(lines) + "\n")
+        data_cache.clear()
+
+        two = client.get("/stats").get_data(as_text=True)
+        assert "По активным задачам" in two
+        assert 'href="/task/T-001"' in two and 'href="/task/T-002"' in two
+        assert "всего применённых вердиктов: 2" in two
+        assert two.count('class="outcome-pct">50%</span>') == 2
+        assert 'class="outcome-pct">0%</span>' in two
+        assert "победила A · 100% (1)" in two, "разбивка T-001"
+        assert "победила B · 100% (1)" in two, "разбивка T-002"
+
+        # Пустой журнал: A4/A8 — заглушки, A6 — пустые окна и все активные остыли
+        _write(paths["journal"], "")
+        data_cache.clear()
+        empty = client.get("/stats").get_data(as_text=True)
+        assert "Нет применённых встреч." in empty
+        assert "Нет применённых вердиктов." in empty
+        assert "Остывшие" in empty
+        assert empty.count('class="delta-empty">Нет роста</div>') == 2
+        assert "delta-sum" not in empty, "роста и падения нет"
+        assert empty.count('class="delta-name"') == 2, "остыли обе модели"
+        opp_empty = empty.split('id="opposition"', 1)[1].split('id="outcomes"', 1)[0]
+        assert opp_empty.count("—") == 4, "модели без игр — прочерки"
+    print("wave4 stats A6/A8: OK")
+
+
+def _profile_journal() -> str:
+    """Три матча alpha>beta, gamma>alpha, beta>gamma со снэпшотами реплея."""
+    elo_map = {
+        "alpha": elo.DEFAULT_ELO, "beta": elo.DEFAULT_ELO,
+        "gamma": elo.DEFAULT_ELO,
+    }
+    games = {"alpha": 0, "beta": 0, "gamma": 0}
+    plan = [
+        (("alpha", "beta"), "a"),
+        (("alpha", "gamma"), "b"),
+        (("beta", "gamma"), "a"),
+    ]
+    lines: list[str] = []
+    for seq, ((a, b), winner) in enumerate(plan, start=1):
+        before_a, before_b = elo_map[a], elo_map[b]
+        s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0)
+        e_a = elo.expected_score(before_a, before_b)
+        new_a, new_b = elo.update_elo(
+            before_a, elo.k_factor(games[a]), s_a, e_a,
+            before_b, elo.k_factor(games[b]), s_b, 1.0 - e_a,
+        )
+        elo_map[a], elo_map[b] = new_a, new_b
+        games[a] += 1
+        games[b] += 1
+        lines.append(json.dumps({
+            "version": elo.VERDICT_VERSION,
+            "seq": seq,
+            "task": "T-001",
+            "matchup": f"T-001/{seq:03d}",
+            "model_a": a,
+            "model_b": b,
+            "model_a_id": a,
+            "model_b_id": b,
+            "winner": winner,
+            "date": "2026-01-02",
+            "recorded_at": f"2026-01-02T10:{seq:02d}:00+03:00",
+            "elo": {
+                a: {"before": before_a, "after": new_a, "delta": new_a - before_a},
+                b: {"before": before_b, "after": new_b, "delta": new_b - before_b},
+            },
+        }, ensure_ascii=False))
+    return "\n".join(lines) + "\n"
+
+
+def test_wave4_profile():
+    """Волна 4: профиль — место/тренд, последний матч, покрытие, метаданные, H2H."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # 5.1: место в активном пуле, тренд, «Последний матч»
+        html = client.get("/model/alpha").get_data(as_text=True)
+        assert 'class="profile-rank">Место 1 из 2</span>' in html
+        assert 'class="trend-arrow"' not in html, "1 игра — стрелки нет"
+        assert "мало игр для тренда" in html, "пояснение вместо стрелки"
+        assert 'id="profile-last-match"' in html
+        assert '<a href="/model/beta" class="edit-link">Beta</a>' in html
+        assert "Победа" in html
+        assert 'class="history-delta-up">+20</span>' in html
+        assert 'href="/history?v=1#v-1"' in html
+        assert "Матчей нет" not in html
+
+        # 5.3: дата истории — постоянная ссылка, кнопка «Показать в истории»
+        assert 'title="Постоянная ссылка на вердикт №1"' in html
+        assert "2026-01-02 10:00:00" in html
+        assert 'href="/history?model=alpha"' in html
+        assert "Показать в истории" in html
+
+        # 5.3: по умолчанию H2H — по числу встреч по убыванию, aria-sort и ссылки
+        assert 'aria-sort="descending"' in html
+        assert 'href="/model/alpha?h2h_sort=winrate&amp;h2h_dir=desc"' in html
+
+        # Архивная модель: места нет, матчей и встреч нет
+        gamma = client.get("/model/gamma").get_data(as_text=True)
+        assert "Вне активного рейтинга" in gamma
+        assert 'class="profile-rank"' not in gamma
+        assert "Матчей нет" in gamma
+        assert "Пока нет встреч" in gamma
+
+        # 5.2: покрытие — активный T-001 с одним матчем и ссылкой
+        assert 'href="/task/T-001" class="edit-link">T-001</a> — 1' in html
+        # 5.2: метаданные частичные — добавлена и статус, без версии и релиза
+        assert 'id="model-meta"' in html
+        assert "<dt>Добавлена</dt><dd>2026-01-01</dd>" in html
+        assert "<dt>Статус</dt><dd>активна</dd>" in html
+        assert "<dt>Версия</dt>" not in html and "<dt>Релиз</dt>" not in html
+
+        # 5.2: второй активный таск без матчей — прочерк
+        _write(
+            paths["settings"],
+            "current_task: T-001\ntasks:\n  T-001: active\n  T-002: active\n",
+        )
+        data_cache.clear()
+        two = client.get("/model/alpha").get_data(as_text=True)
+        assert 'href="/task/T-002" class="edit-link">T-002</a> — —' in two
+
+        # 5.2: нет активных тасков — блок скрыт
+        _write(
+            paths["settings"],
+            "current_task: T-002\ntasks:\n  T-001: inactive\n  T-002: inactive\n",
+        )
+        data_cache.clear()
+        hidden = client.get("/model/alpha").get_data(as_text=True)
+        assert 'id="task-coverage"' not in hidden
+
+        # 5.1: 6 игр (проигрыш, затем пять побед) — стрелка «↑1»
+        _write(paths["journal"], _history_journal(6, "baaaaa"))
+        data_cache.clear()
+        arrow = client.get("/model/alpha").get_data(as_text=True)
+        assert "Место 1 из 2" in arrow
+        assert '<span class="trend-arrow">↑</span>' in arrow
+        assert '<span class="trend-num">1</span>' in arrow
+        assert 'href="/history?v=6#v-6"' in arrow, "последний матч — seq 6"
+
+        # 5.3: поиск и сортировка «Личных встреч»
+        _write(paths["journal"], _profile_journal())
+        data_cache.clear()
+
+        def h2h_of(page_html: str) -> str:
+            return page_html.split('id="h2h"', 1)[1].split('id="history"', 1)[0]
+
+        base = client.get("/model/alpha").get_data(as_text=True)
+        base_h2h = h2h_of(base)
+        assert 'aria-sort="descending"' in base_h2h
+        assert base_h2h.index(">Beta</a>") < base_h2h.index(">Gamma</a>"), "имя при равенстве"
+
+        asc = client.get("/model/alpha?h2h_sort=winrate&h2h_dir=asc").get_data(as_text=True)
+        asc_h2h = h2h_of(asc)
+        assert 'aria-sort="ascending"' in asc_h2h
+        assert 'aria-sort="descending"' not in asc_h2h
+        assert asc_h2h.index(">Gamma</a>") < asc_h2h.index(">Beta</a>"), "0.0% выше 100.0%"
+
+        desc = client.get("/model/alpha?h2h_sort=winrate").get_data(as_text=True)
+        desc_h2h = h2h_of(desc)
+        assert 'aria-sort="descending"' in desc_h2h
+        assert 'href="/model/alpha?h2h_sort=winrate&amp;h2h_dir=asc"' in desc_h2h
+        assert desc_h2h.index(">Beta</a>") < desc_h2h.index(">Gamma</a>")
+
+        found = client.get("/model/alpha?h2h_q=BETA").get_data(as_text=True)
+        found_h2h = h2h_of(found)
+        assert ">Beta</a>" in found_h2h and ">Gamma</a>" not in found_h2h
+        assert 'value="BETA"' in found, "строка поиска сохраняется"
+        assert 'name="h2h_sort" value="games"' in found, "сортировка сохраняется"
+
+        none = client.get("/model/alpha?h2h_q=zzz").get_data(as_text=True)
+        assert "Никого не найдено" in none
+        assert ">Beta</a>" not in h2h_of(none)
+
+        dirty = client.get("/model/alpha?h2h_sort=bogus&h2h_dir=up").get_data(as_text=True)
+        assert 'aria-sort="descending"' in h2h_of(dirty), "мусорные параметры → дефолт"
+
+        # 5.2: полные метаданные — все пять полей
+        _write(paths["models"], (
+            "models:\n"
+            "  - id: alpha\n"
+            "    name: Alpha\n"
+            "    version: \"1.2\"\n"
+            "    released: 2025-12-01\n"
+            "    added: 2026-01-01\n"
+            "    status: active\n"
+            "    notes: \"Тестовая заметка\"\n"
+        ))
+        data_cache.clear()
+        full = client.get("/model/alpha").get_data(as_text=True)
+        assert "<dt>Версия</dt><dd>1.2</dd>" in full
+        assert "<dt>Релиз</dt><dd>2025-12-01</dd>" in full
+        assert "<dt>Добавлена</dt><dd>2026-01-01</dd>" in full
+        assert "<dt>Статус</dt><dd>активна</dd>" in full
+        assert "<dt>Заметки</dt><dd>Тестовая заметка</dd>" in full
+
+        # 5.2: пустые метаданные — блока нет
+        _write(paths["models"], (
+            "models:\n"
+            "  - id: alpha\n"
+            "    name: Alpha\n"
+            "    version: \n"
+            "    released: \n"
+            "    added: \n"
+            "    status: \n"
+            "    notes: \n"
+        ))
+        data_cache.clear()
+        bare = client.get("/model/alpha").get_data(as_text=True)
+        assert 'id="model-meta"' not in bare
+        assert "Место" in bare, "страница рендерится"
+    print("wave4 profile: OK")
+
+
 if __name__ == "__main__":
     test_key_changes_per_file()
     test_builder_runs_once()
@@ -1561,4 +2066,11 @@ if __name__ == "__main__":
     test_wave3_rating_search_sort()
     test_wave3_export_routes()
     test_wave3_read_only_degrade()
+    test_wave4_task_page()
+    test_wave4_task_verdicts_pagination()
+    test_wave4_task_links()
+    test_wave4_stats_a1_a2()
+    test_wave4_stats_a3_a5()
+    test_wave4_stats_a6_a8()
+    test_wave4_profile()
     print("\nALL DATA CACHE TESTS PASSED")

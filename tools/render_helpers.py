@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import math
+from datetime import date, timedelta
 
 DEFAULT_ELO = 1200
 
@@ -67,17 +68,25 @@ def pagination_items(page: int, pages: int) -> list[int | None]:
     return items
 
 
-def get_model_detail(index_data: dict, model_id: str) -> dict | None:
+def get_model_detail(index_data: dict, model_id: str,
+                     registry: dict | None = None) -> dict | None:
     """Агрегирует данные страницы модели из кэша index.json.
 
+    `registry` — сырые записи models.yaml ({id: запись}): из них берутся
+    поля метаданных (версия, релиз, заметки), которых нет в index.
     Возвращает None для неизвестного id. Иначе словарь:
-      id, name, agent, provider, elo, games, wins, losses, draws, winrate,
+      id, name, agent, provider, status, elo, games, wins, losses, draws,
+      winrate, last_match (последний по seq матч: {opp_id, opp_name,
+      date_str, outcome, delta_str, delta_class, seq, url} или None),
+      meta (непустые поля реестра: [{label, value}] — версия, релиз,
+      добавлена, статус, заметки),
       points (1200 + after своих матчей по seq),
       h2h (список {id, name, games, w, l, d, winrate}, сортировка:
         встреч по убыванию, затем имя),
       history (список {opp_id, opp_name, date_str, outcome
         (Победа/Поражение/Ничья), before, delta, delta_str,
-        delta_class, after} в ОБРАТНОМ порядке seq — новые матчи сверху),
+        delta_class, after, seq, matchup, url} в ОБРАТНОМ порядке seq —
+        новые матчи сверху; url — постоянная ссылка вердикта),
       points (список after-значений в ХРОНОЛОГИЧЕСКОМ порядке seq, включая
         стартовое DEFAULT_ELO — для графика).
     """
@@ -122,6 +131,7 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
             outcome = "Поражение"
 
         delta_str, delta_class = format_delta(delta)
+        seq = e.get("seq", 0)
         history.append({
             "opp_id": opp_id,
             "opp_name": name_map.get(opp_id, opp_id),
@@ -134,6 +144,9 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
             "delta_str": delta_str,
             "delta_class": delta_class,
             "after": after,
+            "seq": seq,
+            "matchup": str(e.get("matchup") or ""),
+            "url": f"/history?v={seq}#v-{seq}",
         })
 
     h2h_list = [
@@ -149,6 +162,38 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
         for oid, st in h2h.items()
     ]
     h2h_list.sort(key=lambda r: (-r["games"], r["name"].lower()))
+
+    # Последний матч (хронологически) — до разворота таблицы.
+    last_match = None
+    if history:
+        last = history[-1]
+        last_match = {
+            "opp_id": last["opp_id"],
+            "opp_name": last["opp_name"],
+            "date_str": last["date_str"],
+            "outcome": last["outcome"],
+            "delta_str": last["delta_str"],
+            "delta_class": last["delta_class"],
+            "seq": last["seq"],
+            "url": last["url"],
+        }
+
+    # Метаданные реестра: только непустые поля, в порядке показа. Сырые
+    # записи models.yaml содержат version/released/notes, которых нет в index.
+    registry_entry = (registry or {}).get(model_id) or info
+    status_labels = {"active": "активна", "archived": "неактивна"}
+    meta: list[dict] = []
+    for label, key in (("Версия", "version"), ("Релиз", "released"),
+                       ("Добавлена", "added")):
+        value = str(registry_entry.get(key) or "").strip()
+        if value:
+            meta.append({"label": label, "value": value})
+    status = str(registry_entry.get("status") or "").strip()
+    if status:
+        meta.append({"label": "Статус", "value": status_labels.get(status, status)})
+    notes = str(registry_entry.get("notes") or "").strip()
+    if notes:
+        meta.append({"label": "Заметки", "value": notes})
 
     # Инвертируем ТОЛЬКО список таблицы «История матчей»: новые матчи сверху.
     # `mine` и `points` должны остаться в хронологическом порядке seq —
@@ -180,6 +225,8 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
         ),
         "h2h": h2h_list,
         "history": history,
+        "last_match": last_match,
+        "meta": meta,
     }
 
 
@@ -830,3 +877,878 @@ def compute_rank_trends(
             "has_baseline": True,
         }
     return trends
+
+
+# ─── Аналитика: интервалы рейтинга (A1) ─────────────────────────────
+
+
+def interval_groups(rows: list[dict]) -> dict:
+    """Группы неразличимых мест: цепочки перекрывающихся интервалов (A1).
+
+    rows — записи пула [{id, elo, games, name, caption, ...}]; порядок
+    результата — ELO по убыванию, затем id. Половина интервала —
+    confidence_half_width(games); у модели без игр интервала нет.
+    Соседние строки перекрываются, если нижняя граница верхней ≤ верхней
+    границе нижней; группа — максимальная цепочка (транзитивно по
+    соседям). Возвращает {"rows", "groups"}: строки дополнены
+    half/has_interval/lo/hi и group (номер группы с 1; 0 — место
+    различимо), groups — [{"start", "end"}] индексы строк.
+    """
+    ordered = [dict(r) for r in rows]
+    ordered.sort(
+        key=lambda r: (-int(r.get("elo", DEFAULT_ELO)), str(r.get("id", "")))
+    )
+    for r in ordered:
+        elo = int(r.get("elo", DEFAULT_ELO))
+        half = confidence_half_width(int(r.get("games", 0)))
+        r["half"] = half
+        r["has_interval"] = half is not None
+        r["lo"] = elo - half if half is not None else elo
+        r["hi"] = elo + half if half is not None else elo
+        r["group"] = 0
+
+    groups: list[dict] = []
+    i = 0
+    n = len(ordered)
+    while i < n:
+        j = i
+        while (
+            j + 1 < n
+            and ordered[j]["has_interval"]
+            and ordered[j + 1]["has_interval"]
+            and ordered[j]["lo"] <= ordered[j + 1]["hi"]
+        ):
+            j += 1
+        if j > i:
+            groups.append({"start": i, "end": j})
+        i = j + 1
+    for number, group in enumerate(groups, start=1):
+        for k in range(group["start"], group["end"] + 1):
+            ordered[k]["group"] = number
+    return {"rows": ordered, "groups": groups}
+
+
+def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
+    """SVG блока A1: место, имя (ссылка), ELO и интервал ±400/√игр.
+
+    rows — строки interval_groups()["rows"]. Полоса — интервал модели
+    (у модели без игр только точка и прочерк), группы «место не
+    определено» выделены фоном и правой меткой. Пустой список → "".
+    """
+    if not rows:
+        return ""
+
+    row_h, top, bottom = 26, 44, 14
+    elo_x = 296
+    plot_x0, plot_x1 = 310, width - 132
+    label_x = width - 10
+    height = top + row_h * len(rows) + bottom
+
+    values: list[int] = []
+    for r in rows:
+        values.append(int(r.get("elo", DEFAULT_ELO)))
+        if r.get("has_interval"):
+            values += [int(r["lo"]), int(r["hi"])]
+    lo, hi = min(values), max(values)
+    if lo == hi:
+        lo, hi = lo - 10, hi + 10
+    pad = (hi - lo) * 0.08 or 10
+    lo, hi = lo - pad, hi + pad
+
+    def x(value: float) -> float:
+        return plot_x0 + (plot_x1 - plot_x0) * (value - lo) / (hi - lo)
+
+    groups: list[list[int]] = []
+    for i, r in enumerate(rows):
+        number = int(r.get("group") or 0)
+        if not number:
+            continue
+        if groups and groups[-1][0] == number:
+            groups[-1][2] = i
+        else:
+            groups.append([number, i, i])
+
+    parts: list[str] = []
+    for _, start, end in groups:
+        band_y = top + start * row_h + 2
+        band_h = row_h * (end - start + 1) - 4
+        parts.append(
+            f'<rect x="4" y="{band_y}" width="{width - 8}" height="{band_h}" '
+            f'rx="6" class="interval-group-band"/>'
+        )
+        center_y = top + (start + end) / 2 * row_h + 13 + 4
+        parts.append(
+            f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
+            f'class="interval-group-label">место не определено</text>'
+        )
+
+    step = 50 if hi - lo <= 400 else 100
+    tick = math.ceil(lo / step) * step
+    while tick <= hi:
+        gx = x(tick)
+        parts.append(
+            f'<line x1="{gx:.1f}" y1="{top - 14}" x2="{gx:.1f}" '
+            f'y2="{height - bottom}" class="chart-grid"/>'
+        )
+        parts.append(
+            f'<text x="{gx:.1f}" y="20" text-anchor="middle" '
+            f'class="chart-tick">{tick}</text>'
+        )
+        tick += step
+
+    for i, r in enumerate(rows):
+        cy = top + i * row_h + 13
+        elo = int(r.get("elo", DEFAULT_ELO))
+        mid = str(r.get("id", ""))
+        name = html.escape(str(r.get("name", mid)))
+        caption = str(r.get("caption", ""))
+        grouped = bool(r.get("group"))
+        if r.get("has_interval"):
+            bx1, bx2 = x(int(r["lo"])), x(int(r["hi"]))
+            interval_note = f"{int(r['lo'])}–{int(r['hi'])}"
+            parts.append(
+                f'<line x1="{bx1:.1f}" y1="{cy:.1f}" x2="{bx2:.1f}" '
+                f'y2="{cy:.1f}" class="interval-bar'
+                f'{" interval-bar-grouped" if grouped else ""}">'
+                f"<title>{html.escape(name)}: интервал {interval_note}</title>"
+                f"</line>"
+            )
+        tooltip = f"{name} — Elo {elo}"
+        if caption:
+            tooltip += f" ({html.escape(caption)})"
+        if not r.get("has_interval"):
+            tooltip += " · игр нет, интервал не определён"
+        parts.append(
+            f'<text x="8" y="{cy + 4}" class="interval-rank'
+            f'{" interval-rank-grouped" if grouped else ""}">'
+            f'{"≈" if grouped else ""}{i + 1}</text>'
+        )
+        parts.append(
+            f'<a href="/model/{html.escape(mid)}" class="interval-name">'
+            f"{name}<title>{tooltip}</title></a>"
+        )
+        parts.append(
+            f'<text x="{elo_x}" y="{cy + 4}" text-anchor="end" '
+            f'class="interval-elo">{elo}</text>'
+        )
+        parts.append(
+            f'<a href="/model/{html.escape(mid)}">'
+            f'<circle cx="{x(elo):.1f}" cy="{cy:.1f}" r="4" class="chart-dot'
+            f'{" interval-dot-grouped" if grouped else ""}">'
+            f"<title>{tooltip}</title></circle></a>"
+        )
+        if not r.get("has_interval"):
+            parts.append(
+                f'<text x="{elo_x + 8}" y="{cy + 4}" class="interval-gap">—</text>'
+            )
+
+    return (
+        f'<svg viewBox="0 0 {width} {height}" class="chart chart-intervals" '
+        f'role="img" aria-label="Интервалы рейтинга: {len(rows)} моделей, '
+        f'групп «место не определено»: {len(groups)}">'
+        + "".join(parts)
+        + "</svg>"
+    )
+
+
+# ─── Аналитика: динамика ELO (A2) ───────────────────────────────────
+
+ELO_LINES_LIMIT = 10
+ELO_LINES_DEFAULT = 5
+ELO_PERIOD_DEFAULT = 90
+ELO_LINE_COLORS = (
+    "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7",
+    "#ec4899", "#14b8a6", "#f97316", "#8b949e", "#84cc16",
+)
+
+
+def parse_lines_param(raw: str | None, models: dict) -> list[str]:
+    """Разбор `lines` блока A2: CSV id моделей реестра.
+
+    Пустые токены, дубликаты и неизвестные id отбрасываются; при более
+    чем ELO_LINES_LIMIT моделях остаются наибольшие по текущему ELO.
+    Пустой результат — вызывающий подставляет топ по умолчанию.
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+    for token in str(raw or "").split(","):
+        mid = token.strip()
+        if not mid or mid in seen or mid not in models:
+            continue
+        seen.add(mid)
+        ids.append(mid)
+    if len(ids) > ELO_LINES_LIMIT:
+        ids.sort(key=lambda mid: (
+            -int(models[mid].get("elo", DEFAULT_ELO)), mid,
+        ))
+        ids = ids[:ELO_LINES_LIMIT]
+    return ids
+
+
+def parse_period_param(raw: str | None) -> int | None:
+    """Разбор `period` блока A2: 30/90/all (по умолчанию 90).
+
+    None — «всё» (без фильтра дат).
+    """
+    value = str(raw or "").strip().lower()
+    if value == "all":
+        return None
+    if value in ("30", "90"):
+        return int(value)
+    return ELO_PERIOD_DEFAULT
+
+
+def default_line_ids(models: dict, limit: int = ELO_LINES_DEFAULT) -> list[str]:
+    """Топ активных моделей по ELO — выбор A2 по умолчанию."""
+    active = [
+        (mid, info) for mid, info in models.items()
+        if info.get("status", "active") != "archived"
+    ]
+    active.sort(key=lambda pair: (
+        -int(pair[1].get("elo", DEFAULT_ELO)), pair[0],
+    ))
+    return [mid for mid, _ in active[:limit]]
+
+
+def day_of(item: dict) -> str:
+    """Календарный день записи: `date`, при отсутствии — `recorded_at`."""
+    value = str(item.get("date") or "").strip()
+    if value:
+        return value[:10]
+    return str(item.get("recorded_at") or "").strip()[:10]
+
+
+def build_elo_series(elo_history: list[dict], selected: list[str],
+                     days: int | None) -> dict:
+    """Линии A2: точки (позиция матча, ELO после) по выбранным моделям.
+
+    Шкала X — общий упорядоченный список матчей выбранных моделей
+    (по `seq`). Окно периода `days` отсчитывается от последней даты
+    истории (включительно); `days=None` — вся история. Возвращает
+    {"x_count", "dates", "series": {mid: [(x, elo)]}}, "dates" — дни
+    первого и последнего матча выборки.
+    """
+    ordered = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
+    cutoff = ""
+    if days is not None and ordered:
+        last_day = next(
+            (day_of(e) for e in reversed(ordered) if day_of(e)), "",
+        )
+        if last_day:
+            try:
+                cutoff = (
+                    date.fromisoformat(last_day) - timedelta(days=days - 1)
+                ).isoformat()
+            except ValueError:
+                cutoff = ""
+
+    series: dict[str, list[tuple[int, int]]] = {mid: [] for mid in selected}
+    dates: list[str] = []
+    x_count = 0
+    for e in ordered:
+        a_id = str(e.get("model_a_id") or "")
+        b_id = str(e.get("model_b_id") or "")
+        if a_id not in series and b_id not in series:
+            continue
+        day = day_of(e)
+        if days is not None:
+            if not cutoff or not day or day < cutoff:
+                continue
+        for side, elo_key in (("model_a_id", "elo_a"), ("model_b_id", "elo_b")):
+            mid = str(e.get(side) or "")
+            if mid not in series:
+                continue
+            after = (e.get(elo_key) or {}).get("after")
+            if after is None:
+                continue
+            series[mid].append((x_count, int(after)))
+        dates.append(day)
+        x_count += 1
+
+    visible_days = [d for d in dates if d]
+    span = (visible_days[0], visible_days[-1]) if visible_days else ()
+    return {"x_count": x_count, "dates": span, "series": series}
+
+
+def build_elo_multiline_svg(series: list[dict], x_count: int,
+                            dates: tuple[str, str] | None = None,
+                            colors: tuple[str, ...] = ELO_LINE_COLORS,
+                            width: int = 860, height: int = 260) -> str:
+    """SVG блока A2: ломаные выбранных моделей на общей шкале матчей.
+
+    series — [{"id", "name", "points": [(x, elo)]}] в порядке легенды;
+    цвета берутся по индексу серии (палитра ELO_LINE_COLORS). Ось Y
+    включает опорную линию 1200; подписи дат — первая и последняя.
+    Нет матчей у всех серий → "" (шаблон показывает пустое состояние).
+    """
+    drawn = [s for s in series if s.get("points")]
+    if x_count <= 0 or not drawn:
+        return ""
+
+    left, right, top, bottom = 52, 16, 18, 30
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+
+    values = [v for s in drawn for _, v in s["points"]]
+    lo, hi = min(values), max(values)
+    lo, hi = min(lo, DEFAULT_ELO), max(hi, DEFAULT_ELO)
+    if lo == hi:
+        lo, hi = lo - 10, hi + 10
+    pad = (hi - lo) * 0.1 or 10
+    lo, hi = lo - pad, hi + pad
+
+    def x(i: int) -> float:
+        if x_count <= 1:
+            return left + plot_w / 2
+        return left + plot_w * i / (x_count - 1)
+
+    def y(value: float) -> float:
+        return top + plot_h * (1 - (value - lo) / (hi - lo))
+
+    grid = ""
+    for frac, label in ((0.0, hi), (0.5, (hi + lo) / 2), (1.0, lo)):
+        gy = top + plot_h * frac
+        grid += (
+            f'<line x1="{left}" y1="{gy:.1f}" x2="{width - right}" '
+            f'y2="{gy:.1f}" class="chart-grid"/>'
+            f'<text x="{left - 8}" y="{gy + 4:.1f}" text-anchor="end" '
+            f'class="chart-tick">{label:.0f}</text>'
+        )
+
+    baseline_y = y(DEFAULT_ELO)
+    baseline = (
+        f'<line x1="{left}" y1="{baseline_y:.1f}" x2="{width - right}" '
+        f'y2="{baseline_y:.1f}" class="chart-baseline">'
+        f"<title>старт: {DEFAULT_ELO}</title></line>"
+    )
+
+    axis = ""
+    if dates:
+        d_first = _fmt_axis_date(dates[0])
+        d_last = _fmt_axis_date(dates[1])
+        if d_first:
+            axis += (
+                f'<text x="{left}" y="{height - 8}" text-anchor="start" '
+                f'class="chart-tick">{html.escape(d_first)}</text>'
+            )
+        if d_last:
+            axis += (
+                f'<text x="{width - right}" y="{height - 8}" text-anchor="end" '
+                f'class="chart-tick">{html.escape(d_last)}</text>'
+            )
+
+    lines = ""
+    for index, item in enumerate(drawn):
+        color = colors[index % len(colors)]
+        points = item["points"]
+        name = html.escape(str(item.get("name", item.get("id", ""))))
+        poly = " ".join(f"{x(px):.1f},{y(pv):.1f}" for px, pv in points)
+        end_x, end_y = x(points[-1][0]), y(points[-1][1])
+        lines += (
+            f'<polyline points="{poly}" class="chart-line-multi" fill="none" '
+            f'stroke="{color}">'
+            f"<title>{name}: {len(points)} матчей, Elo {points[-1][1]}</title>"
+            f"</polyline>"
+            f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="3.5" '
+            f'fill="{color}"><title>{name}: текущий Elo {points[-1][1]}</title>'
+            f"</circle>"
+        )
+
+    return (
+        f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
+        f'aria-label="Динамика ELO: линий {len(drawn)}, матчей {x_count}">'
+        f"{grid}{baseline}{lines}{axis}</svg>"
+    )
+
+
+# ─── Аналитика: активность по дням (A3) ─────────────────────────────
+
+
+def activity_by_day(elo_history: list[dict]) -> list[dict]:
+    """Число применённых вердиктов по календарным дням (A3).
+
+    День — `date[:10]`, fallback `recorded_at[:10]`; дни без вердиктов
+    между первым и последним заполняются нулями. Возвращает
+    [{"day": "YYYY-MM-DD", "count": N}]; пустая история → [].
+    """
+    counts: dict[str, int] = {}
+    for item in elo_history or []:
+        day = day_of(item)
+        if not day:
+            continue
+        try:
+            date.fromisoformat(day)
+        except ValueError:
+            continue
+        counts[day] = counts.get(day, 0) + 1
+    if not counts:
+        return []
+    cursor = date.fromisoformat(min(counts))
+    last = date.fromisoformat(max(counts))
+    days: list[dict] = []
+    while cursor <= last:
+        key = cursor.isoformat()
+        days.append({"day": key, "count": counts.get(key, 0)})
+        cursor += timedelta(days=1)
+    return days
+
+
+def build_activity_bars_svg(days: list[dict], width: int = 860,
+                            height: int = 170) -> str:
+    """SVG столбиков A3: число вердиктов на день, подсказка — дата и N."""
+    if not days:
+        return ""
+    left, right, top, bottom = 44, 12, 16, 26
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    n = len(days)
+    peak = max(d["count"] for d in days)
+    top_value = max(peak, 1)
+    bar_span = plot_w / n
+    bar_w = max(bar_span * 0.7, 1.6)
+
+    bars = ""
+    for index, item in enumerate(days):
+        count = item["count"]
+        bar_h = plot_h * count / top_value
+        bx = left + index * bar_span + (bar_span - bar_w) / 2
+        by = top + plot_h - bar_h
+        cls = "activity-bar" + ("" if count else " activity-bar-zero")
+        bars += (
+            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
+            f'height="{bar_h:.1f}" class="{cls}">'
+            f'<title>{_fmt_axis_date(item["day"])}: {count}</title></rect>'
+        )
+
+    grid = (
+        f'<line x1="{left}" y1="{top}" x2="{width - right}" y2="{top}" '
+        f'class="chart-grid"/>'
+        f'<line x1="{left}" y1="{top + plot_h}" x2="{width - right}" '
+        f'y2="{top + plot_h}" class="chart-grid"/>'
+        f'<text x="{left - 8}" y="{top + 4}" text-anchor="end" '
+        f'class="chart-tick">{top_value}</text>'
+        f'<text x="{left - 8}" y="{top + plot_h + 4}" text-anchor="end" '
+        f'class="chart-tick">0</text>'
+    )
+    axis = (
+        f'<text x="{left}" y="{height - 6}" text-anchor="start" '
+        f'class="chart-tick">{_fmt_axis_date(days[0]["day"])}</text>'
+        f'<text x="{width - right}" y="{height - 6}" text-anchor="end" '
+        f'class="chart-tick">{_fmt_axis_date(days[-1]["day"])}</text>'
+    )
+    total = sum(d["count"] for d in days)
+    return (
+        f'<svg viewBox="0 0 {width} {height}" class="chart chart-activity" '
+        f'role="img" aria-label="Активность по дням: дней {n}, вердиктов '
+        f'{total}, максимум {peak}">{grid}{bars}{axis}</svg>'
+    )
+
+
+# ─── Аналитика: матрица пар (A4) ────────────────────────────────────
+
+
+def _short_name(text: str, limit: int = 16) -> str:
+    """Обрезка подписи матрицы: длинное имя укорачивается многоточием."""
+    text = (text or "").strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def pair_matrix(ids: list[str], pair_stats: dict) -> dict:
+    """Матрица применённых встреч активного пула (A4).
+
+    ids — порядок строк/столбцов (ELO по убыванию); pair_stats —
+    {frozenset({a, b}): число игр}; принимается и словарь get_pair_stats
+    с ключом "games". Возвращает {"ids", "rows", "meets"}: rows[i][j] —
+    None на диагонали и в ячейках без встреч, иначе {"count": N,
+    "rematch": N > 1}. Заполняются только ячейки со встречами: пул в
+    сотни моделей остаётся разреженным (без миллионов объектов).
+    """
+    ordered = list(ids)
+    n = len(ordered)
+    rows: list[list[dict | None]] = [[None] * n for _ in range(n)]
+
+    def _games(value) -> int:
+        if isinstance(value, dict):
+            return int(value.get("games", 0))
+        return int(value or 0)
+
+    pos = {mid: i for i, mid in enumerate(ordered)}
+    meets = 0
+    for key, value in (pair_stats or {}).items():
+        pair = tuple(key)
+        if len(pair) != 2:
+            continue
+        i = pos.get(pair[0])
+        j = pos.get(pair[1])
+        if i is None or j is None or i == j:
+            continue
+        count = _games(value)
+        if count <= 0:
+            continue
+        info = {"count": count, "rematch": count > 1}
+        rows[i][j] = info
+        rows[j][i] = info
+        meets += count
+    return {"ids": ordered, "rows": rows, "meets": meets}
+
+
+def build_pair_matrix_svg(matrix: dict, names: dict | None = None,
+                          links: bool = True, width: int = 860) -> str:
+    """SVG тепловой матрицы A4: заливка по числу игр, метка рематча.
+
+    names — {id: имя} для подписей; links=True — ячейки встреч ведут на
+    историю пары (`/history?pair=a:b`), links=False — без ссылок
+    (слепок). Нет моделей или нет ни одной встречи → "" (пустое
+    состояние рендерит шаблон). Отрисовка разреженная: фон и сетка —
+    O(n) элементов, прямоугольники и подписи — только у ячеек встреч
+    (плотная n²-сетка на пуле в сотни моделей давала бы сотни мегабайт).
+    """
+    ids = list(matrix.get("ids") or [])
+    n = len(ids)
+    if n == 0 or not matrix.get("meets"):
+        return ""
+    names = names or {}
+
+    label_len = max(len(str(names.get(mid, mid))) for mid in ids)
+    label_w = int(min(max(label_len * 6.6 + 14, 90), 200))
+    cell = max(12.0, min((width - label_w - 12) / n, 28.0))
+    header_h = 78
+    left = label_w
+    top = header_h
+    area = cell * n
+    height = header_h + area + 10
+
+    counters: list[tuple[int, int, dict]] = []
+    max_count = 0
+    for i, row in enumerate(matrix["rows"]):
+        for j, info in enumerate(row):
+            if info is None:
+                continue
+            counters.append((i, j, info))
+            if info["count"] > max_count:
+                max_count = info["count"]
+
+    labels_parts: list[str] = []
+    for j, mid in enumerate(ids):
+        cx = left + (j + 0.5) * cell
+        full = str(names.get(mid, mid))
+        labels_parts.append(
+            f'<text x="{cx:.1f}" y="{top - 10}" text-anchor="start" '
+            f'transform="rotate(-45 {cx:.1f} {top - 10})" '
+            f'class="pair-col-label">{html.escape(_short_name(full, 14))}'
+            f"<title>{html.escape(full)}</title></text>"
+        )
+    labels = "".join(labels_parts)
+
+    row_parts: list[str] = []
+    for i, mid in enumerate(ids):
+        cy = top + i * cell
+        full = str(names.get(mid, mid))
+        row_parts.append(
+            f'<text x="{left - 8}" y="{cy + cell / 2 + 4:.1f}" '
+            f'text-anchor="end" class="pair-row-label">'
+            f"{html.escape(_short_name(full, 22))}"
+            f"<title>{html.escape(full)}</title></text>"
+        )
+    row_labels = "".join(row_parts)
+
+    grid_d = []
+    for k in range(n + 1):
+        x = left + k * cell
+        grid_d.append(f"M{x:.1f} {top:.1f}V{top + area:.1f}")
+        y = top + k * cell
+        grid_d.append(f"M{left:.1f} {y:.1f}H{left + area:.1f}")
+    background = (
+        f'<rect x="{left:.1f}" y="{top:.1f}" width="{area:.1f}" '
+        f'height="{area:.1f}" class="pair-cells-bg"/>'
+        f'<path d="{" ".join(grid_d)}" class="pair-grid-lines"/>'
+    )
+
+    diag_parts: list[str] = []
+    for k in range(n):
+        x = left + k * cell
+        y = top + k * cell
+        diag_parts.append(
+            f'<rect x="{x + 0.5:.1f}" y="{y + 0.5:.1f}" '
+            f'width="{cell - 1:.1f}" height="{cell - 1:.1f}" '
+            f'class="pair-cell pair-cell-diagonal"/>'
+        )
+    diagonal = "".join(diag_parts)
+
+    body_parts: list[str] = []
+    for i, j, info in counters:
+        a, b = ids[i], ids[j]
+        cx = left + j * cell
+        cy = top + i * cell
+        count = info["count"]
+        full_a = str(names.get(a, a))
+        full_b = str(names.get(b, b))
+        cls = "pair-cell pair-cell-set"
+        style = f' style="fill-opacity: {0.18 + 0.62 * count / max_count:.2f}"'
+        title = f"{full_a} vs {full_b}: {count}"
+        if info["rematch"]:
+            cls += " pair-cell-rematch"
+            title += " · рематч"
+        cell_svg = (
+            f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cell:.1f}" '
+            f'height="{cell:.1f}" class="{cls}"{style}>'
+            f"<title>{html.escape(title)}</title></rect>"
+        )
+        if cell >= 19:
+            cell_svg += (
+                f'<text x="{cx + cell / 2:.1f}" y="{cy + cell / 2 + 3.5:.1f}" '
+                f'text-anchor="middle" class="pair-cell-count">{count}</text>'
+            )
+        if info["rematch"]:
+            cell_svg += (
+                f'<circle cx="{cx + cell - 4:.1f}" cy="{cy + 4:.1f}" '
+                f'r="2.2" class="pair-rematch-dot"/>'
+            )
+        if links:
+            pair = html.escape(":".join(sorted((a, b))))
+            body_parts.append(f'<a href="/history?pair={pair}">{cell_svg}</a>')
+        else:
+            body_parts.append(cell_svg)
+    body = "".join(body_parts)
+
+    return (
+        f'<svg viewBox="0 0 {label_w + area + 12:.0f} {height:.0f}" '
+        f'class="chart chart-matrix" role="img" aria-label="Матрица пар: '
+        f'{n} моделей, встреч {matrix.get("meets", 0)}">'
+        f"{labels}{row_labels}{background}{diagonal}{body}</svg>"
+    )
+
+
+# ─── Аналитика: агенты и компании (A5) ──────────────────────────────
+
+
+def group_summary(models: dict, key: str) -> list[dict]:
+    """Сводка активного пула по агентам или компаниям (A5).
+
+    key — "agent"/"provider"; пустые значения собираются в «без
+    агента»/«без компании». Строка: моделей, медиана и среднее ELO,
+    суммарные игры и победы, винрейт (доля побед от игр). Порядок —
+    медиана по убыванию, при равенстве — по названию.
+    """
+    empty_labels = {"agent": "без агента", "provider": "без компании"}
+    groups: dict[str, dict] = {}
+    for mid, info in models.items():
+        name = str(info.get(key) or "").strip()
+        row = groups.setdefault(name, {
+            "name": name, "models": 0, "elos": [], "games": 0, "wins": 0,
+        })
+        row["models"] += 1
+        row["elos"].append(int(info.get("elo", DEFAULT_ELO)))
+        row["games"] += int(info.get("games", 0))
+        row["wins"] += int(info.get("wins", 0))
+
+    rows: list[dict] = []
+    for row in groups.values():
+        elos = sorted(row["elos"])
+        n = len(elos)
+        median = elos[n // 2] if n % 2 else (elos[n // 2 - 1] + elos[n // 2]) / 2
+        rows.append({
+            "name": row["name"] or empty_labels.get(key, "—"),
+            "models": row["models"],
+            "median": int(round(median)),
+            "mean": int(round(sum(elos) / n)),
+            "games": row["games"],
+            "wins": row["wins"],
+            "winrate": (
+                f"{round(row['wins'] / row['games'] * 100)}%"
+                if row["games"] else "—"
+            ),
+        })
+    rows.sort(key=lambda r: (-r["median"], r["name"]))
+    return rows
+
+
+# ─── Аналитика: взлёты и падения (A6) ───────────────────────────────
+
+DELTA_WINDOWS = (7, 30)
+DELTA_TOP = 5
+
+
+def delta_leaders(elo_history: list[dict], models: dict, days: int,
+                  top: int = DELTA_TOP) -> dict:
+    """Топ роста и падения по сумме ΔELO личных матчей за окно `days` (A6).
+
+    Окно — последние `days` календарных дней от последней даты истории
+    включительно (опорная дата — для детерминизма слепка и тестов).
+    Учитываются модели из `models` (активный пул). Модель попадает в
+    топ роста/падения только при ненулевой сумме; модели без матчей в
+    окне не показываются. Возвращает {"days", "date", "growth", "fall"};
+    строки — {id, name, sum, games}.
+    """
+    events = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
+    last_day = ""
+    for item in events:
+        day = day_of(item)
+        if day and day > last_day:
+            last_day = day
+
+    window_start = ""
+    if last_day:
+        try:
+            start = date.fromisoformat(last_day) - timedelta(days=days - 1)
+            window_start = start.isoformat()
+        except ValueError:
+            window_start = ""
+
+    totals: dict[str, dict] = {}
+    for item in events:
+        day = day_of(item)
+        if not day or not window_start or day < window_start or day > last_day:
+            continue
+        for side, elo_key in (("model_a_id", "elo_a"), ("model_b_id", "elo_b")):
+            mid = str(item.get(side) or "")
+            if not mid or mid not in models:
+                continue
+            info = item.get(elo_key) or {}
+            before, after = info.get("before"), info.get("after")
+            if before is None or after is None:
+                continue
+            row = totals.setdefault(mid, {"sum": 0, "games": 0})
+            row["sum"] += int(after) - int(before)
+            row["games"] += 1
+
+    rows: list[dict] = []
+    for mid, row in totals.items():
+        if row["sum"] == 0:
+            continue
+        rows.append({
+            "id": mid,
+            "name": models.get(mid, {}).get("name", mid),
+            "sum": row["sum"],
+            "games": row["games"],
+        })
+    growth = sorted(
+        (r for r in rows if r["sum"] > 0), key=lambda r: (-r["sum"], r["id"]),
+    )[:top]
+    fall = sorted(
+        (r for r in rows if r["sum"] < 0), key=lambda r: (r["sum"], r["id"]),
+    )[:top]
+    return {"days": days, "date": last_day, "growth": growth, "fall": fall}
+
+
+def stale_models(elo_history: list[dict], models: dict,
+                 gap: int = STALE_GLOBAL_GAP) -> list[dict]:
+    """Активные модели без личных матчей в последних `gap` вердиктах (A6).
+
+    Возвращает строки {id, name, games} (игры — по реестру); порядок —
+    игры по убыванию, при равенстве — по id.
+    """
+    ordered = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
+    played: set[str] = set()
+    for item in ordered[-gap:]:
+        played.add(str(item.get("model_a_id") or ""))
+        played.add(str(item.get("model_b_id") or ""))
+    rows = [
+        {"id": mid, "name": info.get("name", mid),
+         "games": int(info.get("games", 0) or 0)}
+        for mid, info in (models or {}).items() if mid not in played
+    ]
+    rows.sort(key=lambda r: (-r["games"], r["id"]))
+    return rows
+
+
+# ─── Аналитика: сила оппозиции (A7) ─────────────────────────────────
+
+
+def opposition_strength(elo_history: list[dict], pool_ids: list[str],
+                        models: dict, top_ids: set[str] | None = None,
+                        top: int = 10) -> list[dict]:
+    """Сила оппозиции активного пула (A7).
+
+    Строки — в порядке pool_ids (рейтинг, ELO вниз). Средний ELO
+    соперников — по ELO соперника ДО каждого матча модели; «апсеты» —
+    победы над моделями текущего топ-`top` (top_ids по умолчанию —
+    первые `top` из pool_ids); игры — применённые матчи. Модели без игр
+    получают None в opp_avg/upsets (в шаблоне — прочерк).
+    """
+    ids = list(pool_ids)
+    if top_ids is None:
+        top_ids = set(ids[:top])
+    stats = {mid: {"opp_sum": 0, "games": 0, "upsets": 0} for mid in ids}
+    for item in elo_history or []:
+        a_id = str(item.get("model_a_id") or "")
+        b_id = str(item.get("model_b_id") or "")
+        winner = str(item.get("winner") or "")
+        pre = {
+            "a": (item.get("elo_a") or {}).get("before"),
+            "b": (item.get("elo_b") or {}).get("before"),
+        }
+        for side, mid, opp, opp_side in (
+            ("a", a_id, b_id, "b"), ("b", b_id, a_id, "a"),
+        ):
+            row = stats.get(mid)
+            if row is None:
+                continue
+            opp_elo = pre[opp_side]
+            row["games"] += 1
+            row["opp_sum"] += int(opp_elo) if opp_elo is not None else DEFAULT_ELO
+            if winner == side and opp in top_ids:
+                row["upsets"] += 1
+    rows: list[dict] = []
+    for mid in ids:
+        row = stats[mid]
+        info = models.get(mid, {})
+        rows.append({
+            "id": mid,
+            "name": info.get("name", mid),
+            "elo": int(info.get("elo", DEFAULT_ELO)),
+            "opp_avg": (
+                int(round(row["opp_sum"] / row["games"])) if row["games"] else None
+            ),
+            "upsets": row["upsets"] if row["games"] else None,
+            "games": row["games"],
+        })
+    return rows
+
+
+# ─── Аналитика: исходы (A8) ─────────────────────────────────────────
+
+
+def _winner_rows(events: list[dict]) -> dict:
+    """Числа и проценты исходов набора событий (a/b/draw)."""
+    counts = {"a": 0, "b": 0, "draw": 0}
+    total = 0
+    for item in events or []:
+        winner = str(item.get("winner") or "")
+        if winner not in counts:
+            continue
+        counts[winner] += 1
+        total += 1
+    rows = [
+        {
+            "key": key,
+            "label": WINNER_LABELS[key],
+            "n": counts[key],
+            "pct": round(counts[key] * 100 / total) if total else 0,
+        }
+        for key in ("a", "b", "draw")
+    ]
+    return {"total": total, "rows": rows}
+
+
+def winner_shares(elo_history: list[dict],
+                  task_ids: list[str] | None = None) -> dict:
+    """Доли исходов применённых вердиктов (A8).
+
+    Без `task_ids` — только общие числа и проценты; с непустым списком
+    добавляет разбивку `by_task` в порядке task_ids (таск записи —
+    префикс matchup). Проценты округляются до целого.
+    """
+    result = _winner_rows(elo_history)
+    if task_ids:
+        by_task = []
+        for tid in task_ids:
+            events = [
+                item for item in (elo_history or [])
+                if history_task_id(item) == tid
+            ]
+            row = _winner_rows(events)
+            if row["total"]:
+                by_task.append({"task": tid, **row})
+        result["by_task"] = by_task
+    return result

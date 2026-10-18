@@ -16,6 +16,12 @@ test_export.py — статический слепок витрины: read-only
   * Волна 2: аннулированные строки истории в слепке (пометка, причина,
     участники), контролы аннулирования недоступны, фильтр «Показывать
     аннулированные» сохраняется, mirror.js знает про оба маркера.
+  * Волна 4: страницы задач в слепке (`task/<id>/index.html`), бейдж таска
+    и ID настроек ведут на статическую страницу задачи, слепок без записи
+    (нет кнопки, task.md, форм аннулирования); аналитика A1–A8 в слепке без
+    live-контролов (линии/период, ссылки ячеек матрицы, разбивка по таскам
+    только при 2+ активных); профиль — место/последний матч/покрытие, ссылки
+    вердиктов, поиск и сортировка «Личных встреч» вырезаны вместе с aria-sort.
 
 Запуск: python tools/test_export.py
 """
@@ -316,7 +322,8 @@ def test_export_output_and_determinism():
             for expected in (
                 "index.html", "history/index.html", "stats/index.html",
                 "settings/index.html", "model/alpha/index.html",
-                "model/gamma/index.html", "static/css/console.css",
+                "model/gamma/index.html", "task/T-001/index.html",
+                "static/css/console.css",
                 "static/js/theme.js", "static/js/mirror.js", "icon.svg",
             ):
                 assert expected in files_a, f"нет файла вывода: {expected}"
@@ -347,7 +354,7 @@ def test_export_links_and_markers():
                            "page-jump", 'name="task"', 'name="from"',
                            'name="outcome"', 'name="pair"', 'name="only_voided"'):
                 assert marker not in history, f"слепок истории: live-only {marker}"
-            assert '<span class="badge-task">T-001</span>' in history
+            assert 'class="badge-task" href="../task/T-001/"' in history
             assert "matchup-chip" in history and "/history?v=" not in history
     print("2.2 links and markers: OK")
 
@@ -386,6 +393,9 @@ def test_export_queue_pages():
             assert "page-arrow" in page2, "на второй странице нет виджета пагинации"
             assert 'class="rank">101</td>' in page2, "вторая страница без строк 101+"
             assert 'id="mirror-models"' in page2, "страница очереди без острова реестра"
+            assert 'href="../task/T-001/"' in page1, "ячейка таска очереди без ссылки"
+            index = (root / "index.html").read_text(encoding="utf-8")
+            assert 'href="task/T-001/"' in index, "таск карточки рекомендации без ссылки"
     print("2.2 queue pages: OK")
 
 
@@ -535,6 +545,69 @@ def test_export_history_voided():
     print("wave2 export history voided: OK")
 
 
+def test_export_task_pages():
+    """Волна 4: страницы задач в слепке — без записи, ссылки разрешаются."""
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_task_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            root = Path(out)
+            task_file = root / "task" / "T-001" / "index.html"
+            assert task_file.is_file(), "нет страницы задачи в слепке"
+            task = task_file.read_text(encoding="utf-8")
+
+            # Шапка и прогресс на месте, действий записи нет
+            assert "Smoke" in task and "Benchmark" in task
+            assert 'aria-disabled="true">Записать вердикт по таску' in task
+            assert 'href="/?task=' not in task and 'href="/task' not in task
+            assert "task/T-001/md" not in task, "ссылка task.md просочилась в слепок"
+            assert "void-form-open" not in task and "Аннулировать" not in task
+            assert "page-jump" not in task and "history-pagination" not in task
+            assert '<div class="stat-value">1 из 1</div>' in task
+            assert "T-001/001" in task and 'class="badge-task"' not in task
+
+            # Переходы: ID таски в настройках — на статическую страницу задачи
+            settings = (root / "settings" / "index.html").read_text(encoding="utf-8")
+            assert 'href="../task/T-001/"' in settings, "ID таски настроек без ссылки"
+    print("wave4 export task pages: OK")
+
+
+def test_export_stats_analytics():
+    """Волна 4: слепок аналитики — A1/A2 рендерятся, live-контролы вырезаны."""
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_stats_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            stats = (Path(out) / "stats" / "index.html").read_text(encoding="utf-8")
+
+            # Карточки A1/A2 и SVG-ссылки на профили (разрешаются в файлы)
+            assert "Интервалы рейтинга" in stats and "Динамика ELO" in stats
+            assert 'aria-label="Интервалы рейтинга: 2 моделей' in stats
+            assert 'href="../model/alpha/"' in stats
+            assert "line-legend" in stats and "нет матчей в периоде" not in stats
+
+            # Live-контролы выбора линий и периода в слепке не рендерятся
+            assert "lines-form" not in stats
+            assert 'name="lines"' not in stats and 'name="period"' not in stats
+            assert "lines-presets" not in stats
+
+            # A1 статичен: фильтры страницы в слепке не меняют SVG
+            assert 'aria-label="Распределение Elo: 2 моделей"' in stats
+
+            # A3/A5 рендерятся, A4 — без ссылок в ячейках
+            assert "Активность по дням" in stats and "activity-bar" in stats
+            assert "Агенты и компании" in stats and "card-subtitle" in stats
+            assert "Матрица пар" in stats and "pair-cell" in stats
+            assert "/history?pair=" not in stats, "ячейки матрицы слепка — ссылки"
+            assert "Клик по ячейке" not in stats, "подсказка live-перехода в слепке"
+
+            # A6–A8 рендерятся (разбивка A8 по таскам — только при 2+ активных)
+            assert "Взлёты и падения" in stats and "delta-list" in stats
+            assert "Сила оппозиции" in stats
+            assert "Исходы" in stats and "outcome-rows" in stats
+    print("wave4 export stats analytics: OK")
+
+
 def test_check_output_violations():
     with tempfile.TemporaryDirectory(prefix="bench_mirror_bad_") as out:
         root = Path(out)
@@ -579,6 +652,36 @@ def test_export_history_threshold_warning():
     print("2.3 history threshold warning: OK")
 
 
+def test_export_profile():
+    """Волна 4: слепок профиля — место, последний матч, покрытие, без H2H-контролов."""
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_profile_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            page = (Path(out) / "model" / "alpha" / "index.html").read_text(
+                encoding="utf-8")
+
+            # 5.1: место/тренд и «Последний матч» со ссылкой на вердикт
+            assert 'class="profile-rank">Место 1 из 2</span>' in page
+            assert "мало игр для тренда" in page
+            assert 'id="profile-last-match"' in page
+            assert 'href="../../history/?v=1#v-1"' in page
+
+            # 5.3: кнопка «Показать в истории» ведёт на экспортированную историю
+            assert 'href="../../history/?model=alpha"' in page
+            assert "Показать в истории" in page
+
+            # 5.2: покрытие по таскам ведёт на экспортированные страницы задач
+            assert 'href="../../task/T-001/"' in page
+
+            # 5.3: поиск и сортировка H2H в слепке не рендерятся,
+            # таблица — в порядке по умолчанию
+            assert "h2h-controls" not in page
+            assert "sort-link" not in page
+            assert "aria-sort" not in page
+    print("wave4 export profile: OK")
+
+
 if __name__ == "__main__":
     test_read_only_two_modes()
     test_read_only_inert_controls()
@@ -588,6 +691,9 @@ if __name__ == "__main__":
     test_export_queue_pages()
     test_export_mirror_layer()
     test_export_history_voided()
+    test_export_task_pages()
+    test_export_stats_analytics()
+    test_export_profile()
     test_check_output_violations()
     test_export_history_threshold_warning()
     print("\nALL EXPORT TESTS PASSED")

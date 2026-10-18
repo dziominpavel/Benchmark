@@ -56,6 +56,12 @@ from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
     build_elo_distribution_svg, compute_rank_trends, pagination_items,
     merge_history_feed, history_task_id,
+    interval_groups, build_rating_intervals_svg,
+    parse_lines_param, parse_period_param, default_line_ids,
+    build_elo_series, build_elo_multiline_svg, ELO_LINE_COLORS,
+    activity_by_day, build_activity_bars_svg,
+    pair_matrix, build_pair_matrix_svg, group_summary,
+    delta_leaders, stale_models, opposition_strength, winner_shares,
 )
 
 from register_model import parse_existing, format_model
@@ -64,7 +70,7 @@ from lookups import (
     load_lookups, save_lookups, has_value, find_value, add_value,
 )
 
-from flask import Flask, request, redirect, url_for, Response
+from flask import Flask, request, redirect, url_for, Response, abort
 
 app = Flask(__name__)
 
@@ -522,6 +528,80 @@ def memo_active_tasks() -> list[str]:
         "active_tasks",
         lambda: active_tasks(journal=get_journal_events()),
     )
+
+
+def memo_task_model_games() -> dict[str, dict[str, int]]:
+    """Применённые матчи по таскам и моделям (memo): {task: {model: games}}."""
+    return data_cache.cached("task_model_games", _build_task_model_games)
+
+
+def _build_task_model_games() -> dict[str, dict[str, int]]:
+    """Один проход по elo_history: число матчей модели в каждом таске."""
+    result: dict[str, dict[str, int]] = {}
+    for item in ensure_index().get("elo_history", []):
+        task = history_task_id(item)
+        if not task:
+            continue
+        row = result.setdefault(task, {})
+        for side in ("model_a_id", "model_b_id"):
+            mid = str(item.get(side) or "")
+            if mid:
+                row[mid] = row.get(mid, 0) + 1
+    return result
+
+
+def get_task_progress(task_id: str) -> dict:
+    """Прогресс задачи: вердикты, покрытие пар, модели, аннулированные (memo)."""
+    return data_cache.cached(
+        f"task_progress:{task_id}",
+        lambda: _build_task_progress(task_id),
+    )
+
+
+def _build_task_progress(task_id: str) -> dict:
+    """Считает прогресс задачи по index.json, флагам ответов и memo-парам.
+
+    Пары — как в покрытии прогона: T — видимые пары активных моделей с
+    флагами ответа на таск (C(k,2) без перечисления пар), F — из них пары
+    с неаннулированным вердиктом по таску (карта pair_scan).
+    """
+    index_data = ensure_index()
+    applied = [
+        h for h in index_data.get("elo_history", [])
+        if history_task_id(h) == task_id
+    ]
+    voided = [
+        h for h in index_data.get("voided_history", [])
+        if history_task_id(h) == task_id
+    ]
+
+    active_ids = {m.get("id", "") for m in memo_models() if is_model_active(m)}
+    flags = data_cache.cached("answer_flags", load_answer_flags)
+    task_flags = flags.get(task_id) or {}
+    flagged = {mid for mid in active_ids if task_flags.get(mid)}
+    k = len(flagged)
+
+    filled = 0
+    for pair, pair_tasks in get_pair_task_verdicts().items():
+        if task_id not in pair_tasks:
+            continue
+        a, b = tuple(pair)
+        if a in flagged and b in flagged:
+            filled += 1
+
+    participants = set()
+    for h in applied:
+        participants.add(h.get("model_a_id") or "")
+        participants.add(h.get("model_b_id") or "")
+    participants.discard("")
+
+    return {
+        "verdicts": len(applied),
+        "filled": filled,
+        "total": k * (k - 1) // 2,
+        "models": len(participants),
+        "voided": len(voided),
+    }
 
 
 def matchups_count_of(index_data: dict) -> int:
@@ -1492,7 +1572,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             <div class="rec-h2h">{{ rec.h2h_label }}</div>
             <div class="rec-reason">{{ rec.reason }}</div>
             {% if rec.is_rematch %}<div class="rec-rematch">доп. точность: рематч</div>{% endif %}
-            <div class="rec-task">таск: {{ rec.recommended_task }}</div>
+            <div class="rec-task">таск: <a href="{{ url_for('task_page', task_id=rec.recommended_task) }}" class="edit-link">{{ rec.recommended_task }}</a></div>
           </div>
           {% if read_only() %}
           <button class="rec-btn" type="button" disabled>Прогнать</button>
@@ -1669,6 +1749,7 @@ if (modelAEl) {
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
+{% from "_verdict_row.html" import verdict_row with context %}
 {% from "_pagination.html" import pagination %}
 {% block title %}История — ELO Benchmark{% endblock %}
 {% block content %}
@@ -1744,40 +1825,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
-    <div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %}>
-      {% if item.task %}
-      {% if read_only() %}<span class="badge-task">{{ item.task }}</span>
-      {% else %}<a class="badge-task" href="{{ url_for('history_page', task=item.task) }}" title="Показать записи таска {{ item.task }}">{{ item.task }}</a>{% endif %}
-      {% endif %}
-      <span class="history-model">
-        <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_a_id) }}">{{ item.model_a_name }}</a>{% if item.model_a_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
-        <span class="history-vs">vs</span>
-        <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_b_id) }}">{{ item.model_b_name }}</a>{% if item.model_b_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
-      </span>
-      {% if item.winner_label %}<span class="outcome outcome-{{ item.winner }}" aria-label="{{ item.winner_aria }}">{{ item.winner_label }}</span>{% endif %}
-      <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span>
-      <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
-      <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
-      <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
-      <span class="history-date">{{ item.date_str }}</span>
-      {% if item.matchup %}
-      {% if read_only() %}<span class="matchup-chip">{{ item.matchup }}</span>
-      {% else %}<a class="matchup-chip" href="{{ url_for('history_page', v=item.seq) }}#v-{{ item.seq }}" title="Постоянная ссылка на вердикт">{{ item.matchup }}</a>{% endif %}
-      {% endif %}
-      {% if item.voided %}
-      <span class="history-void-note">{{ item.void_str }}</span>
-      {% elif not read_only() and item.matchup %}
-      <details class="void-form">
-        <summary class="void-form-open">Аннулировать</summary>
-        <form method="POST" action="/verdict/void" class="void-form-body">
-          <input type="hidden" name="matchup_id" value="{{ item.matchup }}">
-          <input type="hidden" name="next" value="{{ void_next }}">
-          <input type="text" name="reason" class="void-reason" placeholder="Причина аннулирования" required>
-          <button type="submit" class="btn btn-danger btn-sm">Аннулировать</button>
-        </form>
-      </details>
-      {% endif %}
-    </div>
+    {{ verdict_row(item, True, ('filter-hit' if item.hit else 'filter-miss') if (filter_view == 'highlight' and history_hits) else '', void_next) }}
     {% endfor %}
     {% if filter_view == 'highlight' and not history_hits %}
     <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
@@ -1838,21 +1886,67 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     <div class="stat-card"><div class="stat-value">{{ detail.winrate }}</div><div class="stat-label">Винрейт</div></div>
   </div>
 
+  <div class="profile-grid">
+    <div class="card" id="profile-rank">
+      <h2>Место в рейтинге</h2>
+      {% if rank %}
+      <div class="profile-rank-row">
+        <span class="profile-rank">Место {{ rank }} из {{ pool_size }}</span>
+        {% if trend.arrow %}<span class="trend {{ trend.css }}" title="{{ trend.title }}"><span class="trend-arrow">{{ trend.arrow }}</span><span class="trend-num">{{ trend.num }}</span></span>{% endif %}
+        {% if trend.title and not trend.arrow %}<span class="hint">{{ trend.title }}</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="hint">Вне активного рейтинга</div>
+      {% endif %}
+    </div>
+
+    <div class="card" id="profile-last-match">
+      <h2>Последний матч</h2>
+      {% if detail.last_match %}
+      <div class="last-match-row">
+        <a href="/model/{{ detail.last_match.opp_id }}" class="edit-link">{{ detail.last_match.opp_name }}</a>
+        <span class="last-match-date">{{ detail.last_match.date_str }}</span>
+        <span class="last-match-outcome">{{ detail.last_match.outcome }}</span>
+        <span class="{{ detail.last_match.delta_class }}">{{ detail.last_match.delta_str }}</span>
+        <a href="{{ detail.last_match.url }}" class="edit-link" title="Постоянная ссылка на вердикт">вердикт №{{ detail.last_match.seq }}</a>
+      </div>
+      {% else %}
+      <div class="empty-state">Матчей нет</div>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="card">
     <h2>Динамика ELO</h2>
     {{ chart_svg|safe }}
   </div>
 
-  <div class="card">
+  <div class="card" id="h2h">
     <h2>Личные встречи</h2>
-    {% if detail.h2h %}
+    {% if not read_only() %}
+    <form method="GET" action="/model/{{ detail.id }}" class="h2h-controls">
+      <input class="h2h-input" type="search" name="h2h_q" value="{{ h2h_q }}" placeholder="Поиск соперника по имени или id" aria-label="Поиск соперника">
+      <input type="hidden" name="h2h_sort" value="{{ h2h_sort }}">
+      <input type="hidden" name="h2h_dir" value="{{ h2h_dir }}">
+      <button type="submit" class="btn btn-secondary btn-sm">Найти</button>
+      {% if h2h_q %}<a href="{{ h2h_reset_url }}" class="edit-link">сбросить</a>{% endif %}
+    </form>
+    {% endif %}
+    {% if h2h_rows %}
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">Соперник</th><th scope="col">Встреч</th><th scope="col">W</th><th scope="col">L</th><th scope="col">D</th><th scope="col">Винрейт</th></tr>
+          <tr>
+            <th scope="col">Соперник</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'games' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Встреч{% else %}<a class="sort-link" href="{{ h2h_sort_url('games') }}" title="Сортировать по числу встреч">Встреч{% if not read_only() and h2h_sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'w' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}W{% else %}<a class="sort-link" href="{{ h2h_sort_url('w') }}" title="Сортировать по победам">W{% if not read_only() and h2h_sort == 'w' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'l' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}L{% else %}<a class="sort-link" href="{{ h2h_sort_url('l') }}" title="Сортировать по поражениям">L{% if not read_only() and h2h_sort == 'l' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'd' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}D{% else %}<a class="sort-link" href="{{ h2h_sort_url('d') }}" title="Сортировать по ничьим">D{% if not read_only() and h2h_sort == 'd' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'winrate' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт{% else %}<a class="sort-link" href="{{ h2h_sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт{% if not read_only() and h2h_sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+          </tr>
         </thead>
         <tbody>
-          {% for r in detail.h2h %}
+          {% for r in h2h_rows %}
           <tr>
             <td><a href="/model/{{ r.id }}" class="edit-link">{{ r.name }}</a></td>
             <td>{{ r.games }}</td>
@@ -1866,11 +1960,11 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
       </table>
     </div>
     {% else %}
-    <div class="empty-state">Пока нет встреч</div>
+    <div class="empty-state">{% if h2h_q %}Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link">Сбросить поиск</a>{% else %}Пока нет встреч{% endif %}</div>
     {% endif %}
   </div>
 
-  <div class="card">
+  <div class="card" id="history">
     <h2>История матчей</h2>
     {% if detail.history %}
     <div class="table-wrap">
@@ -1882,7 +1976,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
           {% for h in detail.history %}
           <tr>
             <td><a href="/model/{{ h.opp_id }}" class="edit-link">{{ h.opp_name }}</a></td>
-            <td>{{ h.date_str }}</td>
+            <td><a href="{{ h.url }}" class="edit-link" title="Постоянная ссылка на вердикт №{{ h.seq }}">{{ h.date_str }}</a></td>
             <td>{{ h.outcome }}</td>
             <td>{{ h.before }}</td>
             <td class="{{ h.delta_class }}">{{ h.delta_str }}</td>
@@ -1894,6 +1988,93 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     </div>
     {% else %}
     <div class="empty-state">Пока нет матчей</div>
+    {% endif %}
+    <div class="card-actions">
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('history_page', model=detail.id) }}">Показать в истории</a>
+    </div>
+  </div>
+
+  {% if task_coverage %}
+  <div class="card" id="task-coverage">
+    <h2>Покрытие по таскам</h2>
+    <ul class="coverage-list">
+      {% for t in task_coverage %}
+      <li><a href="/task/{{ t.task }}" class="edit-link">{{ t.task }}</a> — {{ t.games if t.games else "—" }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if detail.meta %}
+  <div class="card" id="model-meta">
+    <h2>Метаданные</h2>
+    <dl class="meta-list">
+      {% for field in detail.meta %}
+      <div class="meta-row"><dt>{{ field.label }}</dt><dd>{{ field.value }}</dd></div>
+      {% endfor %}
+    </dl>
+  </div>
+  {% endif %}
+{% endblock %}
+"""
+
+
+# ─── HTML: Task page ──────────────────────────────────────────────
+
+TASK_TEMPLATE = """{% extends "shell.html" %}
+{% from "_verdict_row.html" import verdict_row with context %}
+{% from "_pagination.html" import pagination %}
+{% block title %}{{ task.id }} — {{ task.title or 'Задача' }} — ELO Benchmark{% endblock %}
+{% block content %}
+  <div class="detail-header">
+    <span class="detail-title">
+      <h1>{{ task.title or task.id }}</h1>
+      <span class="model-caption">{{ task.id }}</span>
+      {% if task.project %}<span class="model-caption">Проект: {{ task.project }}</span>{% endif %}
+      {% if task.baseline_commit %}<span class="model-caption">baseline: {{ task.baseline_commit }}</span>{% endif %}
+    </span>
+    {% if task_active %}<span class="status-pill status-active">активна</span>{% else %}<span class="status-pill status-archived">неактивна</span>{% endif %}
+    {% if task_current %}<span class="status-pill status-active">текущая</span>{% endif %}
+    {% if read_only() %}
+    <span class="btn btn-primary" aria-disabled="true">Записать вердикт по таску</span>
+    {% else %}
+    <a class="btn btn-primary" href="{{ url_for('leaderboard', task=task.id) }}">Записать вердикт по таску</a>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ url_for('history_page', task=task.id) }}">История таска</a>
+    {% if not read_only() %}<a class="btn btn-secondary" href="{{ task_md_url }}">task.md</a>{% endif %}
+  </div>
+
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ progress.verdicts }}</div><div class="stat-label">Вердиктов</div></div>
+    <div class="stat-card"><div class="stat-value">{{ progress.filled }} из {{ progress.total }}</div><div class="stat-label">Пар закрыто</div></div>
+    <div class="stat-card"><div class="stat-value">{{ progress.models }}</div><div class="stat-label">Моделей</div></div>
+    <div class="stat-card"><div class="stat-value">{{ progress.voided }}</div><div class="stat-label">Аннулировано</div></div>
+  </div>
+
+  <div class="card" id="task-history">
+    <h2>Вердикты таска</h2>
+    {% if history %}
+    {% for item in history %}
+    {{ verdict_row(item, False, '', void_next) }}
+    {% endfor %}
+    {% if history_pages > 1 %}
+    <div class="history-pagination">
+      {{ pagination(history_page, history_pages, history_items, history_page_url) }}
+      {% if not read_only() %}
+      <form method="GET" action="{{ url_for('task_page', task_id=task.id) }}" class="page-jump">
+        <label class="page-jump-label" for="taskPageInput">Страница</label>
+        <input class="page-jump-input" type="number" id="taskPageInput" name="page" min="1" max="{{ history_pages }}" value="{{ history_page }}" inputmode="numeric">
+        <button type="submit" class="btn btn-secondary btn-sm">Перейти</button>
+        <a class="page-last" href="{{ history_page_url(history_pages) }}">в конец</a>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">У таска пока нет вердиктов</div>
     {% endif %}
   </div>
 {% endblock %}
@@ -1910,6 +2091,16 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
     <h1>Аналитика</h1>
   </div>
 
+  <div class="card" id="rating-intervals">
+    <h2>Интервалы рейтинга</h2>
+    <div class="hint">Точка — Elo модели, полоса — интервал ±400/√игр; модели с перекрывающимися интервалами объединены в группы «место не определено». Блок не зависит от фильтров страницы.</div>
+    {% if intervals_svg %}
+    {{ intervals_svg|safe }}
+    {% else %}
+    <div class="empty-state">Нет активных моделей.</div>
+    {% endif %}
+  </div>
+
   <div class="card" id="elo-distribution">
     <h2>Распределение Elo</h2>
     <div class="stats">{{ summary }}</div>
@@ -1924,6 +2115,221 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
     {{ chart_svg|safe }}
     {% else %}
     <div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="elo-dynamics">
+    <h2>Динамика ELO</h2>
+    <div class="hint">Матчи выбранных моделей в порядке записи; пунктирная линия — старт 1200.</div>
+    {% if not read_only() %}
+    <form method="GET" action="/stats" class="lines-form">
+      {% for h in lines_hidden %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
+      <div class="lines-row">
+        <span class="filter-label">Модели</span>
+        <div class="lines-checkboxes">
+          {% for m in lines_models %}
+          <label class="lines-check"><input type="checkbox" name="lines" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span>{{ m.name }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="lines-row">
+        <span class="filter-label">Период</span>
+        <div class="segmented" role="radiogroup" aria-label="Период">
+          <label><input type="radio" name="period" value="30" {% if period_value == '30' %}checked{% endif %}><span>30 дней</span></label>
+          <label><input type="radio" name="period" value="90" {% if period_value == '90' %}checked{% endif %}><span>90 дней</span></label>
+          <label><input type="radio" name="period" value="all" {% if period_value == 'all' %}checked{% endif %}><span>Всё</span></label>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button type="submit" class="btn btn-primary btn-sm">Показать</button>
+        <span class="lines-presets">Пресеты: <a href="{{ top5_url }}" class="edit-link">Топ-5</a> · <a href="{{ top10_url }}" class="edit-link">Топ-10</a></span>
+      </div>
+    </form>
+    {% endif %}
+    {% if dynamics_svg %}
+    {{ dynamics_svg|safe }}
+    {% else %}
+    <div class="empty-state">Нет матчей выбранных моделей в периоде.</div>
+    {% endif %}
+    {% if line_legend %}
+    <div class="line-legend">
+      {% for item in line_legend %}
+      <span class="line-legend-item{% if not item.points %} line-legend-empty{% endif %}">
+        <span class="line-swatch" style="background: {{ item.color }}"></span>
+        <a href="/model/{{ item.id }}" class="line-legend-name">{{ item.name }}</a>
+        <span class="line-legend-elo">ELO {{ item.elo }}</span>
+        {% if not item.points %}<span class="line-legend-note">нет матчей в периоде</span>{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="activity-by-day">
+    <h2>Активность по дням</h2>
+    {% if activity_svg %}
+    <div class="stats">{{ activity_summary }}</div>
+    {{ activity_svg|safe }}
+    {% else %}
+    <div class="empty-state">В истории нет вердиктов.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="pair-matrix">
+    <h2>Матрица пар</h2>
+    <div class="hint">Число применённых встреч пары по активному пулу; точка в углу ячейки — рематч.{% if not read_only() %} Клик по ячейке открывает историю пары.{% endif %}</div>
+    {% if matrix_svg %}
+    <div class="matrix-wrap">{{ matrix_svg|safe }}</div>
+    {% else %}
+    <div class="empty-state">Нет применённых встреч.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="agents-providers">
+    <h2>Агенты и компании</h2>
+    {% if agents_summary or providers_summary %}
+    <h3 class="card-subtitle">Агенты</h3>
+    <div class="table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr><th scope="col">Агент</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
+        </thead>
+        <tbody>
+          {% for g in agents_summary %}
+          <tr><td>{{ g.name }}</td><td>{{ g.models }}</td><td>{{ g.median }}</td><td>{{ g.mean }}</td><td>{{ g.games }}</td><td>{{ g.winrate }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <h3 class="card-subtitle">Компании</h3>
+    <div class="table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr><th scope="col">Компания</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
+        </thead>
+        <tbody>
+          {% for g in providers_summary %}
+          <tr><td>{{ g.name }}</td><td>{{ g.models }}</td><td>{{ g.median }}</td><td>{{ g.mean }}</td><td>{{ g.games }}</td><td>{{ g.winrate }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Нет активных моделей.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="delta-leaders">
+    <h2>Взлёты и падения</h2>
+    {% if delta_7.growth or delta_7.fall or delta_30.growth or delta_30.fall or stale %}
+    <div class="hint">Сумма изменений рейтинга по личным матчам моделей активного пула за окно.</div>
+    <div class="delta-grid">
+      {% for window in (delta_7, delta_30) %}
+      <div class="delta-col">
+        <h3 class="card-subtitle">{{ window.days }} дней</h3>
+        <h4 class="delta-label">Рост</h4>
+        {% if window.growth %}
+        <ul class="delta-list">
+          {% for row in window.growth %}
+          <li>
+            <a href="/model/{{ row.id }}" class="delta-name">{{ row.name }}</a>
+            <span class="delta-sum delta-up">+{{ row.sum }}</span>
+            <span class="delta-games">игр: {{ row.games }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="delta-empty">Нет роста</div>
+        {% endif %}
+        <h4 class="delta-label">Падение</h4>
+        {% if window.fall %}
+        <ul class="delta-list">
+          {% for row in window.fall %}
+          <li>
+            <a href="/model/{{ row.id }}" class="delta-name">{{ row.name }}</a>
+            <span class="delta-sum delta-down">{{ row.sum }}</span>
+            <span class="delta-games">игр: {{ row.games }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="delta-empty">Нет падения</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if stale %}
+    <h3 class="card-subtitle">Остывшие</h3>
+    <div class="hint">Без личных матчей в последних 30 вердиктах.</div>
+    <ul class="delta-list delta-stale">
+      {% for row in stale %}
+      <li>
+        <a href="/model/{{ row.id }}" class="delta-name">{{ row.name }}</a>
+        <span class="delta-games">игр: {{ row.games }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">Нет применённых матчей.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="opposition">
+    <h2>Сила оппозиции</h2>
+    <div class="hint">Средний рейтинг соперников по матчам модели (перед матчем) и победы над моделями текущего топ-10.</div>
+    {% if opposition %}
+    <div class="table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr><th scope="col">Модель</th><th scope="col">Elo</th><th scope="col">Средний Elo соперников</th><th scope="col">Победы над топ-10</th><th scope="col">Игр</th></tr>
+        </thead>
+        <tbody>
+          {% for row in opposition %}
+          <tr>
+            <td><a href="/model/{{ row.id }}">{{ row.name }}</a></td>
+            <td>{{ row.elo }}</td>
+            <td>{{ row.opp_avg if row.opp_avg is not none else "—" }}</td>
+            <td>{{ row.upsets if row.upsets is not none else "—" }}</td>
+            <td>{{ row.games }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Нет активных моделей.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="outcomes">
+    <h2>Исходы</h2>
+    {% if shares.total %}
+    <div class="outcome-rows">
+      {% for row in shares.rows %}
+      <div class="outcome-row">
+        <span class="outcome-label">{{ row.label }}</span>
+        <span class="outcome-bar"><span class="outcome-fill outcome-key-{{ row.key }}" style="width: {{ row.pct }}%"></span></span>
+        <span class="outcome-n">{{ row.n }}</span>
+        <span class="outcome-pct">{{ row.pct }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="stats">всего применённых вердиктов: {{ shares.total }}</div>
+    {% if shares.by_task %}
+    <h3 class="card-subtitle">По активным задачам</h3>
+    <ul class="outcome-tasks">
+      {% for group in shares.by_task %}
+      <li>
+        <a href="/task/{{ group.task }}" class="outcome-task-id">{{ group.task }}</a>
+        <span class="outcome-task-total">вердиктов: {{ group.total }}</span>
+        {% for row in group.rows %}<span class="outcome-task-row">{{ row.label }} · {{ row.pct }}% ({{ row.n }})</span>{% endfor %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">Нет применённых вердиктов.</div>
     {% endif %}
   </div>
 {% endblock %}
@@ -2291,7 +2697,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         <tbody>
           {% for t in tasks_list %}
           <tr class="{{ 'archived' if not t.active }}">
-            <td class="id-col">{{ t.id }}</td>
+            <td class="id-col"><a href="{{ url_for('task_page', task_id=t.id) }}" class="edit-link">{{ t.id }}</a></td>
             <td class="title-col">
               {{ t.title }}
               {% if t.active %}<span class="status-pill status-active">активна</span>
@@ -2432,7 +2838,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
           <tr>
             <td class="rank">{{ queue_page_start + loop.index }}</td>
             <td class="model-cell"><a href="/model/{{ q.model_a }}" class="edit-link">{{ q.name_a }}</a> vs <a href="/model/{{ q.model_b }}" class="edit-link">{{ q.name_b }}</a></td>
-            <td>{{ q.recommended_task if q.recommended_task else "—" }}</td>
+            <td>{% if q.recommended_task %}<a href="{{ url_for('task_page', task_id=q.recommended_task) }}" class="edit-link">{{ q.recommended_task }}</a>{% else %}—{% endif %}</td>
             <td class="queue-reason">{{ q.reason }}</td>
           </tr>
           {% endfor %}
@@ -2551,6 +2957,7 @@ function confirmDelete(form) {
 INDEX_TEMPLATE = app.jinja_env.from_string(INDEX_TEMPLATE)
 HISTORY_TEMPLATE = app.jinja_env.from_string(HISTORY_TEMPLATE)
 MODEL_TEMPLATE = app.jinja_env.from_string(MODEL_TEMPLATE)
+TASK_TEMPLATE = app.jinja_env.from_string(TASK_TEMPLATE)
 STATS_TEMPLATE = app.jinja_env.from_string(STATS_TEMPLATE)
 ADD_TEMPLATE = app.jinja_env.from_string(ADD_TEMPLATE)
 EDIT_TEMPLATE = app.jinja_env.from_string(EDIT_TEMPLATE)
@@ -2789,15 +3196,162 @@ def history_page():
     )
 
 
+@app.route("/task/<task_id>")
+def task_page(task_id: str):
+    index_data = ensure_index()
+    if find_task_dir(task_id) is None and task_id not in memo_known_tasks():
+        abort(404)
+    task = get_task_info(task_id) or {
+        "id": task_id, "title": "", "project": "", "baseline_commit": "",
+    }
+
+    models = index_data.get("models", {})
+    name_map = {mid: info.get("name", mid) for mid, info in models.items()}
+    caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
+    records = [
+        h for h in merge_history_feed(
+            index_data.get("elo_history", []),
+            index_data.get("voided_history", []),
+        )
+        if history_task_id(h) == task_id
+    ]
+
+    page_size = 20
+    pages = max(1, (len(records) + page_size - 1) // page_size)
+    try:
+        page = int(request.args.get("page", "1").strip() or "1")
+    except ValueError:
+        page = 1
+    page = max(1, min(page, pages))
+    start = (page - 1) * page_size
+    history = format_elo_history(
+        records[start:start + page_size], name_map, caption_map,
+    )
+
+    def _page_url(p: int) -> str:
+        if p > 1:
+            return url_for("task_page", task_id=task_id, page=p)
+        return url_for("task_page", task_id=task_id)
+
+    settings = load_settings()
+    return TASK_TEMPLATE.render(
+        task=task,
+        task_active=is_task_active(settings, task_id),
+        task_current=memo_current_task() == task_id,
+        progress=get_task_progress(task_id),
+        history=history,
+        history_page=page,
+        history_pages=pages,
+        history_items=pagination_items(page, pages),
+        history_page_url=_page_url,
+        task_md_url=url_for("task_md", task_id=task_id),
+        void_next=_self_url(exclude=("success", "error")),
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
+        crumbs=[
+            {"label": "Рейтинг", "href": "/"},
+            {"label": "Настройки", "href": "/settings"},
+            {"label": task_id},
+        ],
+    )
+
+
+@app.route("/task/<task_id>/md")
+def task_md(task_id: str):
+    task_dir = find_task_dir(task_id)
+    task_file = task_dir / "task.md" if task_dir else None
+    if not task_file or not task_file.exists():
+        abort(404)
+    return Response(
+        task_file.read_text(encoding="utf-8"),
+        content_type="text/plain; charset=utf-8",
+    )
+
+
 @app.route("/model/<model_id>")
 def model_page(model_id: str):
     index_data = ensure_index()
-    detail = get_model_detail(index_data, model_id)
+    registry = {m["id"]: m for m in memo_models() if m.get("id")}
+    detail = get_model_detail(index_data, model_id, registry=registry)
     if detail is None:
         return (
             "<h1>404</h1><p>Модель не найдена</p>"
             '<p><a href="/">Назад к рейтингу</a></p>'
         ), 404
+
+    models = index_data.get("models", {})
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+
+    # Место и тренд — по активному пулу (как в таблице рейтинга), отдельный
+    # memo-ключ: пул профиля не зависит от фильтров главной.
+    pool_rows = [
+        {"id": mid, "elo": info.get("elo", DEFAULT_ELO)}
+        for mid, info in models.items() if is_model_active(info)
+    ]
+    pool_rows.sort(key=lambda m: (-m["elo"], m["id"]))
+    pool_ids = [m["id"] for m in pool_rows]
+    current_elo = {m["id"]: m["elo"] for m in pool_rows}
+    trends = data_cache.cached(
+        "trends:profile",
+        lambda: compute_rank_trends(
+            index_data.get("elo_history", []), pool_ids, current_elo,
+        ),
+    )
+    rank = pool_ids.index(model_id) + 1 if model_id in pool_ids else None
+    trend = trends.get(model_id, {})
+
+    # Покрытие по таскам: применённые матчи модели в каждом активном таске.
+    task_games = memo_task_model_games()
+    task_coverage = [
+        {"task": tid, "games": task_games.get(tid, {}).get(model_id, 0)}
+        for tid in memo_active_tasks()
+    ]
+
+    # «Личные встречи»: поиск по имени/id и сортировка по столбцам.
+    h2h_q = request.args.get("h2h_q", "").strip()
+    h2h_sort = request.args.get("h2h_sort", "games").strip().lower()
+    if h2h_sort not in ("games", "w", "l", "d", "winrate"):
+        h2h_sort = "games"
+    h2h_dir = request.args.get("h2h_dir", "desc").strip().lower()
+    if h2h_dir not in ("asc", "desc"):
+        h2h_dir = "desc"
+
+    h2h_rows = list(detail["h2h"])
+    if h2h_q:
+        needle = h2h_q.lower()
+        h2h_rows = [
+            r for r in h2h_rows
+            if needle in r["name"].lower() or needle in r["id"].lower()
+        ]
+
+    def _h2h_value(row: dict):
+        if h2h_sort == "winrate":
+            return (row["w"] / row["games"]) if row["games"] else None
+        return row.get(h2h_sort)
+
+    sign = -1 if h2h_dir == "desc" else 1
+    valued = [r for r in h2h_rows if _h2h_value(r) is not None]
+    nones = [r for r in h2h_rows if _h2h_value(r) is None]
+    valued.sort(key=lambda r: (sign * _h2h_value(r), r["name"].lower(), r["id"]))
+    nones.sort(key=lambda r: (r["name"].lower(), r["id"]))
+    h2h_rows = valued + nones
+
+    def h2h_sort_url(key: str) -> str:
+        """Ссылка заголовка: повторный клик по активному столбцу меняет порядок."""
+        direction = "desc"
+        if h2h_sort == key and h2h_dir == "desc":
+            direction = "asc"
+        args = {"h2h_sort": key, "h2h_dir": direction}
+        if h2h_q:
+            args["h2h_q"] = h2h_q
+        return url_for("model_page", model_id=model_id, **args)
+
+    h2h_reset_url = url_for(
+        "model_page", model_id=model_id, h2h_sort=h2h_sort, h2h_dir=h2h_dir,
+    )
+
     return MODEL_TEMPLATE.render(
         detail=detail,
         detail_caption=format_model_caption(detail),
@@ -2806,6 +3360,16 @@ def model_page(model_id: str):
             dates=(detail["date_first"], detail["date_last"])
             if detail["date_first"] and detail["date_last"] else None,
         ),
+        rank=rank,
+        pool_size=len(pool_ids),
+        trend=trend,
+        task_coverage=task_coverage,
+        h2h_rows=h2h_rows,
+        h2h_q=h2h_q,
+        h2h_sort=h2h_sort,
+        h2h_dir=h2h_dir,
+        h2h_sort_url=h2h_sort_url,
+        h2h_reset_url=h2h_reset_url,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -2878,11 +3442,135 @@ def stats_page():
     else:
         summary = "моделей: 0"
 
+    # A1 «Интервалы рейтинга»: всегда по активному пулу, фильтры не влияют.
+    active_rows = [
+        {
+            "id": mid,
+            "name": info.get("name", mid),
+            "elo": info.get("elo", DEFAULT_ELO),
+            "games": info.get("games", 0),
+            "caption": format_model_caption(info),
+        }
+        for mid, info in models.items()
+        if is_model_active(info)
+    ]
+    intervals = interval_groups(active_rows)
+
+    # A2 «Динамика ELO»: выбор из URL, иначе топ-5 активных; период 30/90/all.
+    lines_raw = ",".join(request.args.getlist("lines"))
+    selected = parse_lines_param(lines_raw, models) or default_line_ids(models)
+    period = parse_period_param(request.args.get("period"))
+    period_value = "all" if period is None else str(period)
+    series_data = build_elo_series(
+        index_data.get("elo_history", []), selected, period,
+    )
+    line_series = []
+    line_legend = []
+    for index, mid in enumerate(selected):
+        info = models.get(mid, {})
+        item = {
+            "id": mid,
+            "name": info.get("name", mid),
+            "color": ELO_LINE_COLORS[index % len(ELO_LINE_COLORS)],
+            "points": series_data["series"].get(mid, []),
+        }
+        line_series.append(item)
+        line_legend.append({
+            **item,
+            "elo": info.get("elo", DEFAULT_ELO),
+        })
+
+    # A3 «Активность по дням»: дни от первого до последнего в истории.
+    activity = activity_by_day(index_data.get("elo_history", []))
+    activity_summary = ""
+    if activity:
+        activity_summary = (
+            f"дней: {len(activity)} · "
+            f"вердиктов: {sum(d['count'] for d in activity)} · "
+            f"максимум: {max(d['count'] for d in activity)}"
+        )
+
+    # A4 «Матрица пар»: активный пул по ELO, встречи из memo pair_scan.
+    active_ids = [row["id"] for row in intervals["rows"]]
+    matrix = pair_matrix(
+        active_ids,
+        {key: st.get("games", 0) for key, st in get_pair_stats().items()},
+    )
+    model_names = {mid: info.get("name", mid) for mid, info in models.items()}
+
+    # A5 «Агенты и компании»: сводки по активному пулу.
+    active_models = {
+        mid: info for mid, info in models.items() if is_model_active(info)
+    }
+
+    # A6 «Взлёты и падения»: окна 7 и 30 дней, «остывшие» — последние 30 вердиктов.
+    elo_history = index_data.get("elo_history", [])
+    delta_7 = delta_leaders(elo_history, active_models, 7)
+    delta_30 = delta_leaders(elo_history, active_models, 30)
+    stale = stale_models(elo_history, active_models)
+
+    # A7 «Сила оппозиции»: активный пул в порядке рейтинга, апсеты против топ-10.
+    opposition = opposition_strength(elo_history, active_ids, models)
+
+    # A8 «Исходы»: разбивка по таскам только при двух и более активных.
+    active_task_ids = memo_active_tasks()
+    shares = winner_shares(
+        elo_history, active_task_ids if len(active_task_ids) >= 2 else None,
+    )
+
+    selected_set = set(selected)
+
+    def _stats_link(lines_ids: list[str], period_out: str) -> str:
+        args: dict = {}
+        for name in ("filter", "agents", "providers", "view", "chips"):
+            values = request.args.getlist(name)
+            if values:
+                args[name] = values
+        args["lines"] = ",".join(lines_ids)
+        args["period"] = period_out
+        return url_for("stats_page", **args)
+
     return STATS_TEMPLATE.render(
         summary=summary,
         stats_filter=stats_filter,
         pool_count=len(entries),
         chart_svg=build_elo_distribution_svg(entries, highlight=highlight),
+        intervals_svg=build_rating_intervals_svg(intervals["rows"]),
+        lines_models=[
+            {
+                "id": mid,
+                "name": info.get("name", mid),
+                "checked": mid in selected_set,
+            }
+            for mid, info in sorted(
+                models.items(),
+                key=lambda pair: (
+                    -int(pair[1].get("elo", DEFAULT_ELO)), pair[0],
+                ),
+            )
+            if is_model_active(info)
+        ],
+        lines_hidden=[{"name": "filter", "value": stats_filter}]
+        + filter_ctx["filter_hidden_fields"],
+        period_value=period_value,
+        top5_url=_stats_link(default_line_ids(models, 5), period_value),
+        top10_url=_stats_link(default_line_ids(models, 10), period_value),
+        dynamics_svg=build_elo_multiline_svg(
+            line_series, series_data["x_count"], series_data["dates"],
+        ),
+        line_legend=line_legend,
+        activity_summary=activity_summary,
+        activity_svg=build_activity_bars_svg(activity),
+        matrix_svg=build_pair_matrix_svg(
+            matrix, model_names, links=not read_only(),
+        ),
+        agents_summary=group_summary(active_models, "agent"),
+        providers_summary=group_summary(active_models, "provider"),
+        delta_7=delta_7,
+        delta_30=delta_30,
+        stale=stale,
+        opposition=opposition,
+        shares=shares,
         **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
