@@ -18,11 +18,13 @@ server.py — локальный веб-сервер для бенчмарка L
 
 from __future__ import annotations
 
+import csv
 import heapq
+import io
 import json
 import re
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -53,7 +55,7 @@ from register_task import (
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
     build_elo_distribution_svg, compute_rank_trends, pagination_items,
-    merge_history_feed,
+    merge_history_feed, history_task_id,
 )
 
 from register_model import parse_existing, format_model
@@ -62,7 +64,7 @@ from lookups import (
     load_lookups, save_lookups, has_value, find_value, add_value,
 )
 
-from flask import Flask, request, redirect, url_for
+from flask import Flask, request, redirect, url_for, Response
 
 app = Flask(__name__)
 
@@ -935,6 +937,372 @@ def format_reason(rec: dict) -> str:
     )
 
 
+# ─── Селекции волны 3: рейтинг, история, экспорт ────────────────────
+# (change console-wave3-data-scale)
+
+
+RATING_SORT_KEYS = ("rank", "name", "elo", "games", "winrate", "trend")
+RATING_SORT_DEFAULTS = {
+    "rank": "asc", "name": "asc", "elo": "desc", "games": "desc",
+    "winrate": "desc", "trend": "desc",
+}
+
+
+def parse_rating_sort(args) -> tuple[str, str]:
+    """Разбирает `sort`/`dir` рейтинга; невалидные — как без сортировки."""
+    sort = (args.get("sort") or "").strip().lower()
+    if sort not in RATING_SORT_KEYS:
+        return "", ""
+    direction = (args.get("dir") or "").strip().lower()
+    if direction not in ("asc", "desc"):
+        direction = RATING_SORT_DEFAULTS[sort]
+    return sort, direction
+
+
+def rating_request_state(models: dict) -> dict:
+    """Общие параметры главной из query: режим, чипы, поиск, сортировка.
+
+    Один разбор для страницы и экспорта, чтобы выборки не расходились.
+    """
+    filter_mode = (request.args.get("filter") or "active").strip().lower()
+    if filter_mode not in ("active", "all", "inactive"):
+        filter_mode = "active"
+    agents, _ = _tag_values(models, "agent")
+    providers, _ = _tag_values(models, "provider")
+    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
+    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
+    sort, direction = parse_rating_sort(request.args)
+    return {
+        "filter_mode": filter_mode,
+        "highlight": valid_filter_view(request.args.get("view")) == "highlight",
+        "agent_sel": agent_sel,
+        "provider_sel": provider_sel,
+        "query": (request.args.get("q") or "").strip(),
+        "sort": sort,
+        "direction": direction,
+    }
+
+
+def model_matches_query(info: dict, query: str) -> bool:
+    """Поиск `q` рейтинга: регистронезависимая подстрока имени или id."""
+    if not query:
+        return True
+    q = query.casefold()
+    return (
+        q in str(info.get("name", "")).casefold()
+        or q in str(info.get("id", "")).casefold()
+    )
+
+
+def _rating_sort_value(m: dict, sort: str):
+    """Ключ сортировки строки рейтинга; None — «нет значения» (в конец)."""
+    if sort == "rank":
+        return m.get("rank", 0)
+    if sort == "name":
+        return str(m.get("name", "")).casefold()
+    if sort == "elo":
+        return m.get("elo", DEFAULT_ELO)
+    if sort == "games":
+        return m.get("games", 0)
+    if sort == "winrate":
+        games = int(m.get("games", 0) or 0)
+        return (int(m.get("wins", 0) or 0) / games) if games else None
+    num = str(m.get("trend_num", "")).strip()
+    if num == "=":
+        return 0
+    try:
+        return int(num)
+    except ValueError:
+        return None
+
+
+def sort_rating_rows(rows: list[dict], sort: str, direction: str) -> list[dict]:
+    """Порядок строк для вывода: выбранный ключ, вторичный — место.
+
+    «Нет значения» (винрейт без игр, тренд «–») — в конце при любом
+    направлении; без `sort` сохраняется исходный порядок (место по ELO).
+    """
+    if not sort:
+        return list(rows)
+    ordered = sorted(rows, key=lambda m: m.get("rank", 0))
+    with_value = [m for m in ordered if _rating_sort_value(m, sort) is not None]
+    without = [m for m in ordered if _rating_sort_value(m, sort) is None]
+    with_value.sort(
+        key=lambda m: _rating_sort_value(m, sort), reverse=(direction == "desc")
+    )
+    return with_value + without
+
+
+def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
+                     provider_sel: set, highlight: bool, query: str) -> dict:
+    """Пул и видимые строки рейтинга — общий конвейер страницы и экспорта.
+
+    Места и индикаторы d5 считаются по статусному пулу (копии строк,
+    мемо-index чистый); блок «Фильтр» и поиск только сужают состав:
+    в «Скрывать лишние» — сам список, в «Подсвечивать» — список при
+    сохранении разметки hit. Сортировка — вызывающей стороной через
+    `sort_rating_rows` (тренды должны быть проставлены раньше).
+    """
+    models = index_data.get("models", {})
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+
+    if highlight:
+        models_sorted = [dict(info) for info in models.values()]
+    elif filter_mode == "active":
+        models_sorted = [
+            dict(info) for info in models.values() if is_model_active(info)
+        ]
+    elif filter_mode == "inactive":
+        models_sorted = [
+            dict(info) for info in models.values() if not is_model_active(info)
+        ]
+    else:
+        models_sorted = [dict(info) for info in models.values()]
+    models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
+
+    for rank, m in enumerate(models_sorted, start=1):
+        m["rank"] = rank
+        m["caption"] = format_model_caption(m)
+
+    def status_matches(info: dict) -> bool:
+        """Статусный критерий «Показывать» (в подсветке — критерий hit)."""
+        if filter_mode == "active":
+            return is_model_active(info)
+        if filter_mode == "inactive":
+            return not is_model_active(info)
+        return True
+
+    if highlight:
+        for m in models_sorted:
+            m["hit"] = status_matches(m) and model_passes_tags(m, agent_sel, provider_sel)
+        models_visible = [m for m in models_sorted if model_matches_query(m, query)]
+        highlight_hits = sum(1 for m in models_visible if m["hit"])
+    else:
+        models_visible = [
+            m for m in models_sorted
+            if model_passes_tags(m, agent_sel, provider_sel)
+            and model_matches_query(m, query)
+        ]
+        highlight_hits = 0
+
+    # Тренды d5: пул детерминирован парой (highlight, filter_mode).
+    pool_ids = [m.get("id", "") for m in models_sorted]
+    current_elo = {m.get("id", ""): m.get("elo", DEFAULT_ELO) for m in models_sorted}
+    trends = data_cache.cached(
+        f"trends:{'all' if highlight else filter_mode}",
+        lambda: compute_rank_trends(
+            index_data.get("elo_history", []), pool_ids, current_elo,
+        ),
+    )
+    for m in models_sorted:
+        t = trends.get(m.get("id", ""), {})
+        m["trend_label"] = t.get("label", "–")
+        m["trend_arrow"] = t.get("arrow", "")
+        m["trend_num"] = t.get("num", "–")
+        m["trend_class"] = t.get("css", "history-delta-neutral")
+        m["trend_title"] = t.get("title", "")
+
+    return {
+        "models_sorted": models_sorted,
+        "models_visible": models_visible,
+        "highlight_hits": highlight_hits,
+    }
+
+
+def rating_sort_context() -> dict:
+    """Контекст сортировки рейтинга: активный ключ и `sort_url(col)`.
+
+    `sort_url` сохраняет прочие параметры страницы (фильтр, чипы, поиск) и
+    переворачивает направление при повторном клике по активной колонке.
+    """
+    sort, direction = parse_rating_sort(request.args)
+    base = {
+        key: value for key, value in request.args.items()
+        if key not in ("sort", "dir") and value
+    }
+
+    def sort_url(col: str) -> str:
+        if sort == col:
+            next_dir = "asc" if direction == "desc" else "desc"
+        else:
+            next_dir = RATING_SORT_DEFAULTS.get(col, "asc")
+        return url_for("leaderboard", **base, sort=col, dir=next_dir)
+
+    return {"sort": sort, "sort_dir": direction, "sort_url": sort_url}
+
+
+def rating_export_urls() -> dict:
+    """Ссылки экспорта рейтинга с текущими параметрами страницы."""
+    base = {key: value for key, value in request.args.items() if value}
+    return {
+        "csv": url_for("export_rating_csv", **base),
+        "json": url_for("export_rating_json", **base),
+    }
+
+
+def _valid_iso_date(value: str | None) -> str:
+    """Валидная дата `YYYY-MM-DD`; иначе пусто (фильтр игнорируется)."""
+    value = (value or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return ""
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return value
+
+
+def parse_history_search(models: dict) -> dict:
+    """Поисковые фильтры истории из query; невалидные значения игнорируются.
+
+    `pair` вида `idA:idB` с обоими id из реестра — точная пара; иначе —
+    подстрока по id и именам обеих моделей записи. `active` — задан ли
+    поисковый фильтр (для счётчика «найдено»), без чипа «только
+    аннулированные»: он фильтрует ленту отдельно.
+    """
+    task = (request.args.get("task") or "").strip().split("/", 1)[0].strip()
+    outcome = (request.args.get("outcome") or "").strip().lower()
+    if outcome not in ("a", "b", "draw"):
+        outcome = ""
+    pair = (request.args.get("pair") or "").strip()
+    pair_ids = None
+    if pair.count(":") == 1:
+        left, right = (part.strip() for part in pair.split(":", 1))
+        if left and right and left != right and left in models and right in models:
+            pair_ids = (left, right)
+    from_value = _valid_iso_date(request.args.get("from"))
+    to_value = _valid_iso_date(request.args.get("to"))
+    return {
+        "task": task,
+        "from": from_value,
+        "to": to_value,
+        "outcome": outcome,
+        "pair": "" if pair_ids else pair,
+        "pair_ids": pair_ids,
+        "only_voided": (request.args.get("only_voided") or "") == "1",
+        "active": bool(task or from_value or to_value or outcome or pair),
+    }
+
+
+def history_date_of(item: dict) -> str:
+    """Дата записи для фильтра: `date`, при отсутствии — `recorded_at`."""
+    value = str(item.get("date") or "").strip()
+    if value:
+        return value[:10]
+    return str(item.get("recorded_at") or "")[:10]
+
+
+def history_matches_search(item: dict, search: dict, models: dict) -> bool:
+    """Поисковые фильтры ленты: таск, диапазон дат, исход, поиск по паре."""
+    if search["task"] and history_task_id(item) != search["task"]:
+        return False
+    date_value = history_date_of(item)
+    if search["from"] and date_value < search["from"]:
+        return False
+    if search["to"] and date_value > search["to"]:
+        return False
+    if search["outcome"] and str(item.get("winner") or "") != search["outcome"]:
+        return False
+    pair_ids = search["pair_ids"]
+    if pair_ids:
+        pair = {str(item.get("model_a_id") or ""), str(item.get("model_b_id") or "")}
+        if pair != set(pair_ids):
+            return False
+    elif search["pair"]:
+        a_id = str(item.get("model_a_id") or "")
+        b_id = str(item.get("model_b_id") or "")
+        a_name = str((models.get(a_id) or {}).get("name") or a_id)
+        b_name = str((models.get(b_id) or {}).get("name") or b_id)
+        blob = f"{a_id} {b_id} {a_name} {b_name}".casefold()
+        if search["pair"].casefold() not in blob:
+            return False
+    return True
+
+
+def build_history_feed(index_data: dict, models: dict, search: dict, *,
+                       model_id: str, agent_sel: set, provider_sel: set,
+                       highlight: bool, include_voided: bool) -> dict:
+    """Лента истории — общий конвейер страницы и экспорта.
+
+    Объединение с аннулированными (`include_voided` или `only_voided`) →
+    фильтры модель/чипы → «только аннулированные» → поисковые фильтры →
+    счётчики. «Всего записей» — до поисковых фильтров, «найдено» — после;
+    в «Подсвечивать» состав по модель/чипам не сужается, отобранные
+    помечаются hit.
+    """
+    if include_voided or search["only_voided"]:
+        records = merge_history_feed(
+            index_data.get("elo_history", []),
+            index_data.get("voided_history", []),
+        )
+    else:
+        records = list(reversed(index_data.get("elo_history", [])))
+
+    if highlight:
+        for h in records:
+            if model_id:
+                h["hit"] = (
+                    h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
+                )
+            else:
+                h["hit"] = (
+                    model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
+                    or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
+                )
+    elif model_id:
+        records = [
+            h for h in records
+            if h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
+        ]
+    else:
+        records = [
+            h for h in records
+            if model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
+            or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
+        ]
+
+    total = len(records)
+    if search["only_voided"]:
+        records = [h for h in records if h.get("voided")]
+    if search["active"]:
+        records = [h for h in records if history_matches_search(h, search, models)]
+    hits = sum(1 for h in records if h.get("hit")) if highlight else 0
+    return {
+        "records": records,
+        "total": total,
+        "found": len(records),
+        "voided": sum(1 for h in records if h.get("voided")),
+        "hits": hits,
+    }
+
+
+def history_export_urls(history_params: dict) -> dict:
+    """Ссылки экспорта истории с текущими параметрами страницы."""
+    base = {key: value for key, value in history_params.items() if value}
+    return {
+        "csv": url_for("export_history_csv", **base),
+        "json": url_for("export_history_json", **base),
+    }
+
+
+def _attachment(filename: str, content_type: str, body: str) -> Response:
+    """Ответ-файл с Content-Disposition: attachment."""
+    response = Response(body, content_type=content_type)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _csv_text(header: list[str], rows: list[list]) -> str:
+    """CSV выборки: UTF-8 с BOM, разделитель `;`, переводы строк CRLF."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return "\ufeff" + buffer.getvalue()
+
+
 # ─── HTML: Leaderboard page ─────────────────────────────────────────
 
 INDEX_TEMPLATE = """{% extends "shell.html" %}
@@ -998,33 +1366,47 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         <label><input type="radio" name="filter" value="all" {% if filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
         <label><input type="radio" name="filter" value="inactive" {% if filter == 'inactive' %}checked{% endif %} onchange="this.form.submit()"><span>Неактивные</span></label>
       </div>
+      {% if not read_only() %}
+      <span class="filter-label">Поиск</span>
+      <input type="search" name="q" value="{{ search_query }}" class="filter-search" placeholder="имя или id" aria-label="Поиск по имени или id" onchange="this.form.submit()">
+      {% endif %}
     {% endcall %}
   </div>
 
   <div class="content-grid">
     <div class="main-column">
       <div class="card rating-card">
-        <h2>Рейтинг</h2>
+        <div class="card-head">
+          <h2>Рейтинг</h2>
+          {% if not read_only() and export_rating_urls %}
+          <span class="export-links" aria-label="Экспорт выборки">
+            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.csv }}">Скачать CSV</a>
+            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.json }}">Скачать JSON</a>
+          </span>
+          {% endif %}
+        </div>
         {% if models_visible %}
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th scope="col">#</th>
-                <th scope="col">Модель</th>
-                <th scope="col">ELO</th>
+                <th scope="col"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}#{% else %}<a class="sort-link" href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" href="{{ sort_url('trend') }}" title="Сортировать по тренду d5">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Модель{% else %}<a class="sort-link" href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}ELO{% else %}<a class="sort-link" href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
                 <th scope="col">±</th>
                 <th scope="col">Побед</th>
                 <th scope="col">Поражений</th>
                 <th scope="col">Ничьих</th>
-                <th scope="col">Всего</th>
-                <th scope="col">Винрейт, %</th>
+                <th scope="col"{% if sort == 'games' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Всего{% else %}<a class="sort-link" href="{{ sort_url('games') }}" title="Сортировать по числу игр">Всего{% if sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'winrate' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт, %{% else %}<a class="sort-link" href="{{ sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт, %{% if sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
               </tr>
             </thead>
             <tbody>
               {% for m in models_visible %}
               <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
-                <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span>{% if m.trend_arrow %} <span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
+                <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span></td>
+                <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
                   <div>
                     <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
@@ -1050,8 +1432,13 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         {% endif %}
         {% elif models_sorted %}
         <div class="empty-state">
+          {% if search_query %}
+          Ничего не найдено по запросу «{{ search_query }}».
+          Сбросьте поиск, чтобы увидеть список.
+          {% else %}
           Под выбранный фильтр не попала ни одна модель.
           Сбросьте фильтр, чтобы увидеть список.
+          {% endif %}
         </div>
         {% else %}
         <div class="empty-state">
@@ -1128,19 +1515,19 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <div class="verdict-row">
             <div class="form-group">
               <label>Модель A</label>
-              <select name="model_a" id="modelA" onchange="validate()">
+              <select name="model_a" id="modelA"{% if not read_only() %} data-combobox data-label="Модель A"{% endif %} onchange="validate()">
                 <option value="">— выбрать —</option>
-                {% for mid, mname in models_list %}
-                <option value="{{ mid }}" {% if mid == pre_a %}selected{% endif %}>{{ mname }}</option>
+                {% for mid, mname, magent in models_list %}
+                <option value="{{ mid }}" data-agent="{{ magent }}" {% if mid == pre_a %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="form-group">
               <label>Модель B</label>
-              <select name="model_b" id="modelB" onchange="validate()">
+              <select name="model_b" id="modelB"{% if not read_only() %} data-combobox data-label="Модель B"{% endif %} onchange="validate()">
                 <option value="">— выбрать —</option>
-                {% for mid, mname in models_list %}
-                <option value="{{ mid }}" {% if mid == pre_b %}selected{% endif %}>{{ mname }}</option>
+                {% for mid, mname, magent in models_list %}
+                <option value="{{ mid }}" data-agent="{{ magent }}" {% if mid == pre_b %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -1257,12 +1644,19 @@ function writeMore() {
   const alert = document.querySelector('.alert-success');
   if (alert) alert.hidden = true;
   const b = document.getElementById('modelB');
-  if (b) { b.focus(); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  if (b) {
+    const combo = b.closest('.combobox');
+    const target = combo ? combo.querySelector('.combobox-input') : b;
+    (target || b).focus();
+    b.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }
 
 const modelAEl = document.getElementById('modelA');
 if (modelAEl) {
-  modelAEl.focus();
+  const combo = modelAEl.closest('.combobox');
+  const target = combo ? combo.querySelector('.combobox-input') : modelAEl;
+  if (target) target.focus();
   validate();
 }
 </script>
@@ -1274,7 +1668,7 @@ if (modelAEl) {
 # ─── HTML: History page ─────────────────────────────────────────────
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import filter_panel with context %}
+{% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
 {% from "_pagination.html" import pagination %}
 {% block title %}История — ELO Benchmark{% endblock %}
 {% block content %}
@@ -1287,15 +1681,48 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="controls">
     <div class="stats">
-      Всего записей: {{ history_total }}{% if include_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
+      Всего записей: {{ history_total }}{% if include_voided or only_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if history_search_active %} · найдено: {{ history_found }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
     </div>
+    {% if not read_only() %}
+    <div class="export-links" aria-label="Экспорт выборки">
+      <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.csv }}">Скачать CSV</a>
+      <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.json }}">Скачать JSON</a>
+    </div>
+    {% endif %}
     {% call filter_panel() %}
       <span class="filter-label">Модель</span>
-      <select name="model" id="model" onchange="this.form.submit()">
+      <select name="model" id="model"{% if not read_only() %} data-combobox data-label="Модель"{% endif %} onchange="this.form.submit()">
         {% for m in models_dropdown %}
-        <option value="{{ m.id }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
+        <option value="{{ m.id }}" data-agent="{{ m.agent }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
         {% endfor %}
       </select>
+      {% if not read_only() %}
+      <span class="filter-label">Таск</span>
+      <select name="task" id="historyTask" onchange="this.form.submit()">
+        <option value="">— все таски —</option>
+        {% for t in history_tasks %}
+        <option value="{{ t.id }}" {% if t.selected %}selected{% endif %}>{{ t.id }}</option>
+        {% endfor %}
+      </select>
+      <span class="filter-label">Даты</span>
+      <input type="date" name="from" value="{{ history_from }}" aria-label="Начало периода" onchange="this.form.submit()">
+      <span class="filter-dash" aria-hidden="true">—</span>
+      <input type="date" name="to" value="{{ history_to }}" aria-label="Конец периода" onchange="this.form.submit()">
+      <span class="filter-presets" role="group" aria-label="Пресеты периода">
+        <a class="filter-preset{% if history_preset_active == '7' %} is-active{% endif %}" href="{{ history_preset_urls['7'] }}">7 дней</a>
+        <a class="filter-preset{% if history_preset_active == '30' %} is-active{% endif %}" href="{{ history_preset_urls['30'] }}">30 дней</a>
+        <a class="filter-preset{% if history_preset_active == 'all' %} is-active{% endif %}" href="{{ history_preset_urls['all'] }}">всё</a>
+      </span>
+      <span class="filter-label">Исход</span>
+      <div class="segmented" role="radiogroup" aria-label="Исход">
+        <label><input type="radio" name="outcome" value="" {% if not history_outcome %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
+        <label><input type="radio" name="outcome" value="a" {% if history_outcome == 'a' %}checked{% endif %} onchange="this.form.submit()"><span>Победила A</span></label>
+        <label><input type="radio" name="outcome" value="b" {% if history_outcome == 'b' %}checked{% endif %} onchange="this.form.submit()"><span>Победила B</span></label>
+        <label><input type="radio" name="outcome" value="draw" {% if history_outcome == 'draw' %}checked{% endif %} onchange="this.form.submit()"><span>Ничья</span></label>
+      </div>
+      <span class="filter-label">Пара</span>
+      <input type="text" name="pair" value="{{ history_pair }}" class="filter-pair" placeholder="id или имя" aria-label="Поиск по паре моделей" onchange="this.form.submit()">
+      {% endif %}
       <label class="chip">
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
         <span>Включать неактивные</span>
@@ -1304,6 +1731,12 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <input type="checkbox" name="include_voided" value="1" {% if include_voided %}checked{% endif %} onchange="this.form.submit()">
         <span>Показывать аннулированные</span>
       </label>
+      {% if not read_only() %}
+      <label class="chip">
+        <input type="checkbox" name="only_voided" value="1" {% if only_voided %}checked{% endif %} onchange="this.form.submit()">
+        <span>Только аннулированные</span>
+      </label>
+      {% endif %}
     {% endcall %}
   </div>
 
@@ -1311,17 +1744,26 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
-    <div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}">
+    <div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %}>
+      {% if item.task %}
+      {% if read_only() %}<span class="badge-task">{{ item.task }}</span>
+      {% else %}<a class="badge-task" href="{{ url_for('history_page', task=item.task) }}" title="Показать записи таска {{ item.task }}">{{ item.task }}</a>{% endif %}
+      {% endif %}
       <span class="history-model">
-        <span class="history-side">{{ item.model_a_name }}{% if item.model_a_caption %}<span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
+        <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_a_id) }}">{{ item.model_a_name }}</a>{% if item.model_a_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
         <span class="history-vs">vs</span>
-        <span class="history-side">{{ item.model_b_name }}{% if item.model_b_caption %}<span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
+        <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_b_id) }}">{{ item.model_b_name }}</a>{% if item.model_b_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
       </span>
+      {% if item.winner_label %}<span class="outcome outcome-{{ item.winner }}" aria-label="{{ item.winner_aria }}">{{ item.winner_label }}</span>{% endif %}
       <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span>
       <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
       <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
       <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
       <span class="history-date">{{ item.date_str }}</span>
+      {% if item.matchup %}
+      {% if read_only() %}<span class="matchup-chip">{{ item.matchup }}</span>
+      {% else %}<a class="matchup-chip" href="{{ url_for('history_page', v=item.seq) }}#v-{{ item.seq }}" title="Постоянная ссылка на вердикт">{{ item.matchup }}</a>{% endif %}
+      {% endif %}
       {% if item.voided %}
       <span class="history-void-note">{{ item.void_str }}</span>
       {% elif not read_only() and item.matchup %}
@@ -1341,10 +1783,28 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
     {% endif %}
     {% if history_pages > 1 %}
-    {{ pagination(history_page, history_pages, history_items, history_page_url) }}
+    <div class="history-pagination">
+      {{ pagination(history_page, history_pages, history_items, history_page_url) }}
+      {% if not read_only() %}
+      <form method="GET" action="/history" class="page-jump">
+        {{ filter_hidden() }}
+        {% for h in history_hidden_fields %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
+        <label class="page-jump-label" for="historyPageInput">Страница</label>
+        <input class="page-jump-input" type="number" id="historyPageInput" name="page" min="1" max="{{ history_pages }}" value="{{ history_page }}" inputmode="numeric">
+        <button type="submit" class="btn btn-secondary btn-sm">Перейти</button>
+        <a class="page-last" href="{{ history_page_url(history_pages) }}">в конец</a>
+      </form>
+      {% endif %}
+    </div>
     {% endif %}
     {% else %}
-    <div class="empty-state">Нет истории</div>
+    <div class="empty-state">
+      {% if history_search_active and history_total %}
+      По выбранным условиям записей не найдено.
+      {% else %}
+      Нет истории
+      {% endif %}
+    </div>
     {% endif %}
   </div>
 {% endblock %}
@@ -2114,12 +2574,19 @@ def history_page():
     model_id = request.args.get("model", "").strip()
     include_inactive = request.args.get("include_inactive", "") == "1"
     include_voided = request.args.get("include_voided", "") == "1"
+    search = parse_history_search(models)
+    history_pair_value = search["pair"] or (
+        ":".join(search["pair_ids"]) if search["pair_ids"] else ""
+    )
 
     filter_ctx = filter_panel_context(
         models,
         action="/history",
         reset_url=url_for("history_page"),
-        reset_extra=bool(model_id) or include_inactive,
+        reset_extra=(
+            bool(model_id) or include_inactive or include_voided
+            or search["active"] or search["only_voided"]
+        ),
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
     filter_view = filter_ctx["filter_view"]
@@ -2129,6 +2596,12 @@ def history_page():
         "model": model_id or None,
         "include_inactive": "1" if include_inactive else None,
         "include_voided": "1" if include_voided else None,
+        "task": search["task"] or None,
+        "from": search["from"] or None,
+        "to": search["to"] or None,
+        "outcome": search["outcome"] or None,
+        "pair": history_pair_value or None,
+        "only_voided": "1" if search["only_voided"] else None,
         "agents": filter_ctx["filter_agents_csv"] or None,
         "providers": filter_ctx["filter_providers_csv"] or None,
         "view": filter_view if filter_view != "hide" else None,
@@ -2138,7 +2611,7 @@ def history_page():
     # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
     # состав дополнительно сужается блоком «Фильтр».
     all_models = sorted(models.values(), key=lambda m: m.get("name", "").lower())
-    dropdown = [{"id": "", "name": "Все", "archived": False, "selected": not model_id}]
+    dropdown = [{"id": "", "name": "Все", "agent": "", "archived": False, "selected": not model_id}]
     for m in all_models:
         mid = m.get("id", "")
         status = m.get("status", "active")
@@ -2150,53 +2623,60 @@ def history_page():
         dropdown.append({
             "id": mid,
             "name": m.get("name", mid),
+            "agent": str(m.get("agent") or "").strip(),
             "archived": archived,
             "selected": mid == model_id,
         })
 
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
     caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
-    if include_voided:
-        # Объединённая лента: аннулированные стоят на месте своего исходного seq.
-        raw_history = merge_history_feed(
+    feed = build_history_feed(
+        index_data, models, search,
+        model_id=model_id, agent_sel=agent_sel, provider_sel=provider_sel,
+        highlight=highlight, include_voided=include_voided,
+    )
+    records = feed["records"]
+
+    # Постоянная ссылка `?v=<seq>`: редирект на страницу с записью; если в
+    # текущем составе её нет — ищем по полной ленте (с аннулированными) и
+    # ведём туда, сбросив поисковые фильтры; неизвестный seq — предупреждение.
+    page_size = 20
+    v_value = (request.args.get("v") or "").strip()
+    v_error = ""
+    if v_value.isdigit() and v_value != "0":
+        position = next(
+            (i for i, h in enumerate(records) if str(h.get("seq") or "") == v_value),
+            None,
+        )
+        if position is not None:
+            page = position // page_size + 1
+            target = (
+                url_for("history_page", page=page, **history_params) if page > 1
+                else url_for("history_page", **history_params)
+            )
+            return redirect(target + f"#v-{v_value}")
+        full_feed = merge_history_feed(
             index_data.get("elo_history", []),
             index_data.get("voided_history", []),
         )
-    else:
-        raw_history = list(reversed(index_data.get("elo_history", [])))
+        position = next(
+            (i for i, h in enumerate(full_feed) if str(h.get("seq") or "") == v_value),
+            None,
+        )
+        if position is not None:
+            page = position // page_size + 1
+            target = (
+                url_for("history_page", page=page, include_voided="1") if page > 1
+                else url_for("history_page", include_voided="1")
+            )
+            return redirect(target + f"#v-{v_value}")
+        v_error = f"Вердикт v={v_value} не найден — список записей не изменён."
 
-    if highlight:
-        # «Подсвечивать»: состав записей не сужается, отобранные помечаются
-        # по правилам состава скрывающего режима (модель / чипы агента и компании).
-        for h in raw_history:
-            if model_id:
-                h["hit"] = (
-                    h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
-                )
-            else:
-                h["hit"] = (
-                    model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
-                    or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
-                )
-    elif model_id:
-        raw_history = [
-            h for h in raw_history
-            if h.get("model_a_id") == model_id or h.get("model_b_id") == model_id
-        ]
-    else:
-        # «Все»: показываем записи, где хотя бы один участник проходит фильтр
-        raw_history = [
-            h for h in raw_history
-            if model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
-            or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
-        ]
-
-    # Пагинация по 20 записей
-    page_size = 20
-    total_history = len(raw_history)
-    history_voided = sum(1 for h in raw_history if h.get("voided"))
-    history_hits = sum(1 for h in raw_history if h.get("hit")) if highlight else 0
-    history_pages = (total_history + page_size - 1) // page_size if total_history else 1
+    total_history = feed["total"]
+    history_found = feed["found"]
+    history_voided = feed["voided"]
+    history_hits = feed["hits"]
+    history_pages = (history_found + page_size - 1) // page_size if history_found else 1
     history_page_num = request.args.get("page", "1").strip()
     try:
         history_page_num = int(history_page_num)
@@ -2205,7 +2685,7 @@ def history_page():
     history_page_num = max(1, min(history_page_num, history_pages))
     start = (history_page_num - 1) * page_size
     end = start + page_size
-    history = format_elo_history(raw_history[start:end], name_map, caption_map,
+    history = format_elo_history(records[start:end], name_map, caption_map,
                                  highlight=highlight)
 
     model_name = name_map.get(model_id, model_id) if model_id else ""
@@ -2214,22 +2694,92 @@ def history_page():
         """Ссылка на страницу истории с сохранением фильтров и настроек отображения."""
         return url_for("history_page", page=page, **history_params)
 
+    # Пресеты диапазона дат: «7 дней» / «30 дней» / «всё» — ссылки с
+    # сохранением прочих фильтров; активный пресет вычисляется по from/to.
+    today_iso = date.today().isoformat()
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    month_ago = (date.today() - timedelta(days=30)).isoformat()
+
+    def _preset_url(from_value: str, to_value: str) -> str:
+        params = {
+            key: value for key, value in history_params.items()
+            if key not in ("from", "to") and value
+        }
+        if from_value:
+            params["from"] = from_value
+        if to_value:
+            params["to"] = to_value
+        return url_for("history_page", **params)
+
+    history_preset_urls = {
+        "7": _preset_url(week_ago, today_iso),
+        "30": _preset_url(month_ago, today_iso),
+        "all": _preset_url("", ""),
+    }
+    history_preset_active = ""
+    if search["from"] == week_ago and search["to"] == today_iso:
+        history_preset_active = "7"
+    elif search["from"] == month_ago and search["to"] == today_iso:
+        history_preset_active = "30"
+    elif not search["from"] and not search["to"]:
+        history_preset_active = "all"
+
+    # Скрытые параметры формы «страница №»: всё состояние фильтров страницы
+    # (agents/providers/view/chips добавляет filter_hidden()).
+    history_hidden_fields = [
+        {"name": name, "value": value}
+        for name, value in (
+            ("model", model_id),
+            ("include_inactive", "1" if include_inactive else ""),
+            ("include_voided", "1" if include_voided else ""),
+            ("task", search["task"]),
+            ("from", search["from"]),
+            ("to", search["to"]),
+            ("outcome", search["outcome"]),
+            ("pair", history_pair_value),
+            ("only_voided", "1" if search["only_voided"] else ""),
+        ) if value
+    ]
+
+    # Выпадайка «Таск»: таски записей ленты (применённые + аннулированные),
+    # плюс выбранный из URL, даже если записей по нему нет.
+    task_ids = {history_task_id(h) for h in index_data.get("elo_history", [])}
+    task_ids |= {history_task_id(h) for h in index_data.get("voided_history", [])}
+    if search["task"]:
+        task_ids.add(search["task"])
+    history_tasks = [
+        {"id": t, "selected": t == search["task"]} for t in sorted(task_ids) if t
+    ]
+
     return HISTORY_TEMPLATE.render(
         history=history,
         history_page=history_page_num,
         history_pages=history_pages,
         history_total=total_history,
+        history_found=history_found,
+        history_search_active=search["active"],
         history_voided=history_voided,
         history_hits=history_hits,
         history_items=pagination_items(history_page_num, history_pages),
         history_page_url=_history_page_url,
+        history_hidden_fields=history_hidden_fields,
+        history_tasks=history_tasks,
+        history_task=search["task"],
+        history_from=search["from"],
+        history_to=search["to"],
+        history_outcome=search["outcome"],
+        history_pair=history_pair_value,
+        only_voided=search["only_voided"],
+        history_preset_urls=history_preset_urls,
+        history_preset_active=history_preset_active,
+        history_export_urls=history_export_urls(history_params),
         models_dropdown=dropdown,
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
         include_voided=include_voided,
         void_next=_self_url(exclude=("success", "error")),
-        error=request.args.get("error", ""),
+        error=request.args.get("error", "") or v_error,
         success=request.args.get("success", ""),
         **filter_ctx,
         crumbs=[
@@ -2350,72 +2900,42 @@ def leaderboard():
         info.setdefault("id", mid)
         info.setdefault("status", "active")
 
-    # Фильтр таблицы: active / all / inactive
-    filter_mode = request.args.get("filter", "active").strip().lower()
-    if filter_mode not in ("active", "all", "inactive"):
-        filter_mode = "active"
+    # Общие параметры страницы и экспорта: режим, чипы, поиск, сортировка
+    state = rating_request_state(models)
+    filter_mode = state["filter_mode"]
+    query = state["query"]
 
     filter_ctx = filter_panel_context(
         models,
         action="/",
         reset_url=url_for("leaderboard"),
-        reset_extra=filter_mode != "active",
+        reset_extra=filter_mode != "active" or bool(query),
     )
-    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    agent_sel, provider_sel = state["agent_sel"], state["provider_sel"]
     filter_view = filter_ctx["filter_view"]
-    highlight = filter_view == "highlight"
+    highlight = state["highlight"]
 
-    def status_matches(info: dict) -> bool:
-        """Статусный критерий блока «Показывать» (в подсветке — критерий hit)."""
-        if filter_mode == "active":
-            return is_model_active(info)
-        if filter_mode == "inactive":
-            return not is_model_active(info)
-        return True
+    # Пул, места/медали/d5 и видимые строки — общий конвейер с экспортом
+    # (rating_selection); сортировка по клику только переупорядочивает
+    # вывод, места и медали не пересчитываются.
+    selection = rating_selection(
+        index_data, filter_mode, agent_sel, provider_sel, highlight, query,
+    )
+    models_sorted = selection["models_sorted"]
+    models_visible = sort_rating_rows(
+        selection["models_visible"], state["sort"], state["direction"],
+    )
+    highlight_hits = selection["highlight_hits"]
 
-    if highlight:
-        # «Подсвечивать»: виден весь реестр; ранги/медали/d5 — по полному пулу.
-        # Копии строк: рендер аннотирует rank/hit/trend, мемо-index остаётся чистым.
-        models_sorted = [dict(info) for info in models.values()]
-    elif filter_mode == "active":
-        models_sorted = [
-            dict(info) for info in models.values()
-            if is_model_active(info)
-        ]
-    elif filter_mode == "inactive":
-        models_sorted = [
-            dict(info) for info in models.values()
-            if not is_model_active(info)
-        ]
-    else:
-        models_sorted = [dict(info) for info in models.values()]
-
-    models_sorted.sort(key=lambda m: (-m.get("elo", DEFAULT_ELO), m.get("id", "")))
-
-    # Места/медали/d5 считаются по полному (статусному) пулу: блок «Фильтр»
-    # только скрывает строки, номера мест не пересчитываются. В подсветке
-    # пул — весь реестр без пропусков.
-    for rank, m in enumerate(models_sorted, start=1):
-        m["rank"] = rank
-        m["caption"] = format_model_caption(m)
-
-    if highlight:
-        for m in models_sorted:
-            m["hit"] = status_matches(m) and model_passes_tags(m, agent_sel, provider_sel)
-        models_visible = models_sorted
-        highlight_hits = sum(1 for m in models_sorted if m["hit"])
-    else:
-        models_visible = [
-            m for m in models_sorted if model_passes_tags(m, agent_sel, provider_sel)
-        ]
-        highlight_hits = 0
-
-    # Для формы вердикта — только активные модели
+    # Для формы вердикта — только активные модели (id, имя, агент)
     active_models = {
         mid: info for mid, info in models.items() if is_model_active(info)
     }
     models_list = sorted(
-        ((mid, info.get("name", mid)) for mid, info in active_models.items()),
+        (
+            (mid, info.get("name", mid), str(info.get("agent") or "").strip())
+            for mid, info in active_models.items()
+        ),
         key=lambda x: x[1].lower(),
     )
 
@@ -2481,24 +3001,8 @@ def leaderboard():
     for info in archived_list:
         info["caption"] = format_model_caption(info)
 
-    # Тренд позиций d5: оба конца в текущем видимом пуле,
-    # чтобы архивация не дергала чужие стрелки. Пул детерминирован
-    # парой (highlight, filter_mode) — memo по этому имени.
-    pool_ids = [m.get("id", "") for m in models_sorted]
-    current_elo = {m.get("id", ""): m.get("elo", DEFAULT_ELO) for m in models_sorted}
-    trends = data_cache.cached(
-        f"trends:{'all' if highlight else filter_mode}",
-        lambda: compute_rank_trends(
-            index_data.get("elo_history", []), pool_ids, current_elo,
-        ),
-    )
-    for m in models_sorted:
-        t = trends.get(m.get("id", ""), {})
-        m["trend_label"] = t.get("label", "–")
-        m["trend_arrow"] = t.get("arrow", "")
-        m["trend_num"] = t.get("num", "–")
-        m["trend_class"] = t.get("css", "history-delta-neutral")
-        m["trend_title"] = t.get("title", "")
+    # Тренды позиций d5 (пул детерминирован парой highlight/filter_mode)
+    # проставлены rating_selection; здесь только представление.
 
     # Настройки: прогресс покрытия (memo; task_options/current_task уже выше)
     coverage = memo_coverage()
@@ -2549,8 +3053,173 @@ def leaderboard():
         **filter_ctx,
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
+        search_query=query,
+        **rating_sort_context(),
+        export_rating_urls=rating_export_urls(),
         format_winrate=format_winrate,
         format_confidence=format_confidence,
+    )
+
+
+# ─── Экспорт выборок (change console-wave3-data-scale) ──────────────
+
+
+@app.route("/export/rating.csv")
+def export_rating_csv():
+    return _rating_export("csv")
+
+
+@app.route("/export/rating.json")
+def export_rating_json():
+    return _rating_export("json")
+
+
+def _rating_export(fmt: str):
+    """Экспорт текущей выборки рейтинга: фильтры, поиск и порядок строк —
+    как в таблице страницы (общий конвейер rating_selection)."""
+    index_data = ensure_index()
+    models = index_data.get("models", {})
+    state = rating_request_state(models)
+    selection = rating_selection(
+        index_data, state["filter_mode"], state["agent_sel"], state["provider_sel"],
+        state["highlight"], state["query"],
+    )
+    rows = sort_rating_rows(
+        selection["models_visible"], state["sort"], state["direction"],
+    )
+    data = [
+        {
+            "place": m.get("rank", ""),
+            "id": m.get("id", ""),
+            "name": m.get("name", ""),
+            "provider": str(m.get("provider") or "").strip(),
+            "agent": str(m.get("agent") or "").strip(),
+            "elo": m.get("elo", DEFAULT_ELO),
+            "confidence": format_confidence(m.get("games", 0)),
+            "games": m.get("games", 0),
+            "wins": m.get("wins", 0),
+            "losses": m.get("losses", 0),
+            "draws": m.get("draws", 0),
+            "winrate": format_winrate(m.get("wins", 0), m.get("games", 0)),
+        }
+        for m in rows
+    ]
+    today = date.today().isoformat()
+    if fmt == "csv":
+        header = ["Место", "id", "Имя", "Компания", "Агент", "ELO", "±", "Игры",
+                  "Победы", "Поражения", "Ничьи", "Винрейт, %"]
+        return _attachment(
+            f"rating-{today}.csv", "text/csv; charset=utf-8",
+            _csv_text(header, [list(row.values()) for row in data]),
+        )
+    payload = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "filters": {
+            "filter": state["filter_mode"],
+            "agents": sorted(state["agent_sel"]),
+            "providers": sorted(state["provider_sel"]),
+            "q": state["query"],
+        },
+        "sort": state["sort"] or "rank",
+        "dir": state["direction"] or "asc",
+        "count": len(data),
+        "rows": data,
+    }
+    return _attachment(
+        f"rating-{today}.json", "application/json; charset=utf-8",
+        json.dumps(payload, ensure_ascii=False, indent=2),
+    )
+
+
+@app.route("/export/history.csv")
+def export_history_csv():
+    return _history_export("csv")
+
+
+@app.route("/export/history.json")
+def export_history_json():
+    return _history_export("json")
+
+
+def _history_export(fmt: str):
+    """Экспорт текущей выборки истории: поисковые фильтры и аннулированные —
+    как в ленте страницы (общий конвейер build_history_feed)."""
+    index_data = ensure_index()
+    models = index_data.get("models", {})
+    for mid, info in models.items():
+        info.setdefault("id", mid)
+        info.setdefault("status", "active")
+    model_id = (request.args.get("model") or "").strip()
+    include_voided = request.args.get("include_voided", "") == "1"
+    search = parse_history_search(models)
+    agents, _ = _tag_values(models, "agent")
+    providers, _ = _tag_values(models, "provider")
+    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
+    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
+    highlight = valid_filter_view(request.args.get("view")) == "highlight"
+    feed = build_history_feed(
+        index_data, models, search,
+        model_id=model_id, agent_sel=agent_sel, provider_sel=provider_sel,
+        highlight=highlight, include_voided=include_voided,
+    )
+    name_map = {mid: info.get("name", mid) for mid, info in models.items()}
+    data = []
+    for rec in feed["records"]:
+        a_id = str(rec.get("model_a_id") or "")
+        b_id = str(rec.get("model_b_id") or "")
+        elo_a = rec.get("elo_a") or {}
+        elo_b = rec.get("elo_b") or {}
+        void = rec.get("void") or {}
+        data.append({
+            "seq": rec.get("seq", ""),
+            "matchup": rec.get("matchup", ""),
+            "task": history_task_id(rec),
+            "date": str(rec.get("date") or ""),
+            "recorded_at": str(rec.get("recorded_at") or ""),
+            "model_a_id": a_id,
+            "model_a_name": name_map.get(a_id, a_id),
+            "model_b_id": b_id,
+            "model_b_name": name_map.get(b_id, b_id),
+            "winner": str(rec.get("winner") or ""),
+            "elo_a_before": elo_a.get("before", DEFAULT_ELO),
+            "elo_a_after": elo_a.get("after", DEFAULT_ELO),
+            "delta_a": elo_a.get("delta", 0),
+            "elo_b_before": elo_b.get("before", DEFAULT_ELO),
+            "elo_b_after": elo_b.get("after", DEFAULT_ELO),
+            "delta_b": elo_b.get("delta", 0),
+            "voided": "1" if rec.get("voided") else "0",
+            "void_date": str(void.get("date") or void.get("recorded_at") or ""),
+            "void_reason": str(void.get("reason") or ""),
+        })
+    today = date.today().isoformat()
+    if fmt == "csv":
+        header = ["seq", "matchup", "task", "date", "recorded_at", "model_a_id",
+                  "model_a_name", "model_b_id", "model_b_name", "winner",
+                  "elo_a_before", "elo_a_after", "delta_a", "elo_b_before",
+                  "elo_b_after", "delta_b", "voided", "void_date", "void_reason"]
+        return _attachment(
+            f"history-{today}.csv", "text/csv; charset=utf-8",
+            _csv_text(header, [list(row.values()) for row in data]),
+        )
+    payload = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "filters": {
+            "model": model_id,
+            "include_voided": include_voided,
+            "task": search["task"],
+            "from": search["from"],
+            "to": search["to"],
+            "outcome": search["outcome"],
+            "pair": search["pair"],
+            "pair_ids": list(search["pair_ids"]) if search["pair_ids"] else [],
+            "only_voided": search["only_voided"],
+        },
+        "count": len(data),
+        "rows": data,
+    }
+    return _attachment(
+        f"history-{today}.json", "application/json; charset=utf-8",
+        json.dumps(payload, ensure_ascii=False, indent=2),
     )
 
 

@@ -337,6 +337,18 @@ def test_export_links_and_markers():
             assert 'href="../static/css/console.css"' in history
             model = (Path(out) / "model" / "alpha" / "index.html").read_text(encoding="utf-8")
             assert 'src="../../static/js/theme.js"' in model
+
+            # Волна 3: live-only элементы и мёртвые ссылки в слепок не попадают
+            assert 'name="q"' not in html
+            for marker in ("export-links", "sort-link", "aria-sort",
+                           "data-combobox", "combobox.js"):
+                assert marker not in html, f"слепок главной: live-only {marker}"
+            for marker in ("export-links", "data-combobox", "combobox.js",
+                           "page-jump", 'name="task"', 'name="from"',
+                           'name="outcome"', 'name="pair"', 'name="only_voided"'):
+                assert marker not in history, f"слепок истории: live-only {marker}"
+            assert '<span class="badge-task">T-001</span>' in history
+            assert "matchup-chip" in history and "/history?v=" not in history
     print("2.2 links and markers: OK")
 
 
@@ -496,7 +508,7 @@ def test_export_history_voided():
             assert "history-item-voided" in history, "нет пометки аннулированной строки"
             assert "ошибка протокола" in history, "нет причины аннулирования"
             rows = re.findall(
-                r'<div data-a="[^"]*" data-b="[^"]*" class="history-item[^"]*">.*?</div>',
+                r'<div data-a="[^"]*" data-b="[^"]*" class="history-item[^"]*"[^>]*>.*?</div>',
                 history, re.S,
             )
             assert len(rows) == 2, f"строк истории: {len(rows)}"

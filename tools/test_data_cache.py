@@ -29,6 +29,13 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     защита next, отказ без причины), контекст формы после записи
     (победитель в A, таск/дата, matchup_id), дата вердикта, подсказка
     личных встреч (JSON-остров) и обмен A ↔ B.
+  * Волна 3 (данные и масштаб): поисковые фильтры истории (task/from/to/
+    outcome/pair/only_voided, счётчик «найдено», пустое состояние),
+    самодостаточная строка (ссылки моделей, бейдж таска, метка исхода,
+    чип matchup_id, якорь id="v-<seq>") и редиректы `?v=`, поле «страница
+    №» и «в конец» с сохранением фильтров, поиск и сортировка рейтинга
+    (aria-sort, стабильные места), экспорт выборки CSV/JSON, деградация
+    слепка (нет поиска, сортировки, комбобокса и экспорта).
 
 Запуск: python tools/test_data_cache.py
 """
@@ -43,6 +50,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -560,7 +568,7 @@ def test_history_voided_feed():
         assert "Всего записей: 2 · аннулированных: 1" in html
         assert 'name="include_voided" value="1" checked' in html
 
-        rows = re.findall(r'<div class="history-item[^"]*">.*?</div>', html, re.S)
+        rows = re.findall(r'<div class="history-item[^"]*"[^>]*>.*?</div>', html, re.S)
         assert len(rows) == 2, [r[:90] for r in rows]
         # плоская разметка: во вложенных div-ах нет (экспорт зеркала)
         assert rows[0].count("<div") == 1 and rows[1].count("<div") == 1
@@ -653,7 +661,9 @@ def test_pair_hints_island():
         assert "function updatePairHint" in html
         assert "function updateOutcomeLabels" in html
         assert "function optionName" in html
-        assert "modelAEl.focus()" in html
+        # Фокус при загрузке — на поле A (в волне 3 — на input комбобокса)
+        assert "const modelAEl = document.getElementById('modelA');" in html
+        assert "target.focus()" in html
         assert "не встречались" in html
 
         # Невалидные параметры игнорируются: дата — сегодня, таск — current
@@ -664,7 +674,7 @@ def test_pair_hints_island():
         ).get_data(as_text=True)
         assert f'value="{today}"' in html2
         assert '<option value="nope" selected' not in html2
-        assert '<option value="beta" selected>' in html2
+        assert re.search(r'<option value="beta" data-agent="[^"]*" selected>', html2)
         assert '<option value="T-001" selected>' in html2
     print("wave2 pair hints island: OK")
 
@@ -1108,6 +1118,421 @@ def test_progress_card_states():
     print("3.3 progress card states: OK")
 
 
+def _wave3_journal() -> str:
+    """Журнал волны 3: T-001 и T-002, разные даты и исходы (replay ELO)."""
+    elo_a = elo_b = elo.DEFAULT_ELO
+    games_a = games_b = 0
+    counters = {"T-001": 0, "T-002": 0}
+    events = [
+        ("T-001", "a", "2026-01-02"),
+        ("T-002", "b", "2026-01-10"),
+        ("T-002", "draw", "2026-01-20"),
+    ]
+    lines: list[str] = []
+    for seq, (task, winner, day) in enumerate(events, start=1):
+        if winner == "a":
+            s_a, s_b = 1.0, 0.0
+        elif winner == "b":
+            s_a, s_b = 0.0, 1.0
+        else:
+            s_a, s_b = 0.5, 0.5
+        before_a, before_b = elo_a, elo_b
+        e_a = elo.expected_score(before_a, before_b)
+        new_a, new_b = elo.update_elo(
+            before_a, elo.k_factor(games_a), s_a, e_a,
+            before_b, elo.k_factor(games_b), s_b, 1.0 - e_a,
+        )
+        elo_a, elo_b = new_a, new_b
+        games_a += 1
+        games_b += 1
+        counters[task] += 1
+        lines.append(json.dumps({
+            "version": elo.VERDICT_VERSION,
+            "seq": seq,
+            "task": task,
+            "matchup": f"{task}/{counters[task]:03d}",
+            "model_a": "alpha",
+            "model_b": "beta",
+            "model_a_id": "alpha",
+            "model_b_id": "beta",
+            "winner": winner,
+            "date": day,
+            "recorded_at": f"{day}T10:00:00+03:00",
+            "elo": {
+                "alpha": {"before": before_a, "after": new_a, "delta": new_a - before_a},
+                "beta": {"before": before_b, "after": new_b, "delta": new_b - before_b},
+            },
+        }, ensure_ascii=False))
+    return "\n".join(lines) + "\n"
+
+
+def _history_rows(html: str) -> list[str]:
+    """Строки ленты истории (контракт зеркального постпроцессора)."""
+    return re.findall(
+        r'<div class="history-item[^"]*"[^>]*>.*?</div>', html, re.S,
+    )
+
+
+def _rating_rows(html: str) -> list[str]:
+    """Строки таблицы рейтинга."""
+    return re.findall(r'<tr class="[^"]*">\s*<td class="rank">.*?</tr>', html, re.S)
+
+
+def test_wave3_history_filters():
+    """Волна 3: поисковые фильтры истории — таск, даты, исход, пара, комбинации."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _wave3_journal())
+        data_cache.clear()
+        client.post("/verdict/void", data={
+            "matchup_id": "T-002/001", "reason": "дубль матча", "next": "/history",
+        })
+
+        html = client.get("/history?include_voided=1").get_data(as_text=True)
+        assert len(_history_rows(html)) == 3
+        assert "Всего записей: 3 · аннулированных: 1" in html
+
+        # Таск: T-002 — применённая и аннулированная записи
+        for value in ("T-002", "T-002/002"):
+            html = client.get(
+                f"/history?task={value}&include_voided=1"
+            ).get_data(as_text=True)
+            assert len(_history_rows(html)) == 2
+            assert "T-002/002" in html and "T-002/001" in html
+            assert "T-001/001" not in html, "запись другого таска не отфильтрована"
+        assert "Всего записей: 3 · аннулированных: 1 · найдено: 2" in html
+
+        # Даты: только запись 2026-01-10 (она аннулирована)
+        html = client.get("/history?from=2026-01-05&to=2026-01-15").get_data(as_text=True)
+        assert _history_rows(html) == []
+        assert "По выбранным условиям записей не найдено." in html
+        html = client.get(
+            "/history?from=2026-01-05&to=2026-01-15&include_voided=1"
+        ).get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 1 and "T-002/001" in rows[0]
+        assert " · найдено: 1" in html
+
+        # Исход
+        html = client.get("/history?outcome=draw").get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 1 and "T-002/002" in rows[0]
+        assert 'name="outcome" value="draw" checked' in html
+
+        # Пара: подстрока по id и именам (регистр не важен)
+        for value in ("alph", "BETA"):
+            html = client.get(
+                f"/history?pair={value}&include_voided=1"
+            ).get_data(as_text=True)
+            assert len(_history_rows(html)) == 3
+        html = client.get("/history?pair=gamma").get_data(as_text=True)
+        assert _history_rows(html) == []
+
+        # Точная пара idA:idB: порядок не важен, чужая пара — пусто
+        html = client.get(
+            "/history?pair=beta:alpha&include_voided=1"
+        ).get_data(as_text=True)
+        assert len(_history_rows(html)) == 3
+        html = client.get(
+            "/history?pair=alpha:gamma&include_voided=1"
+        ).get_data(as_text=True)
+        assert _history_rows(html) == []
+
+        # Комбинация фильтров
+        html = client.get(
+            "/history?task=T-002&outcome=b&include_voided=1"
+        ).get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 1 and "T-002/001" in rows[0]
+
+        # Невалидные значения игнорируются
+        html = client.get("/history?from=2026-99-99&outcome=zzz").get_data(as_text=True)
+        assert len(_history_rows(html)) == 2
+        assert " · найдено:" not in html
+        assert " · аннулированных:" not in html
+
+        # Чип «Только аннулированные»
+        html = client.get("/history?only_voided=1").get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 1 and "history-item-voided" in rows[0]
+        assert "Всего записей: 3 · аннулированных: 1" in html
+        assert 'name="only_voided" value="1" checked' in html
+        assert "filter-reset" in html
+    print("wave3 history filters: OK")
+
+
+def test_wave3_history_row_anchor():
+    """Волна 3: самодостаточная строка истории и постоянные ссылки `?v=`."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _wave3_journal())
+        data_cache.clear()
+        client.post("/verdict/void", data={
+            "matchup_id": "T-002/001", "reason": "дубль матча", "next": "/history",
+        })
+
+        html = client.get("/history?include_voided=1").get_data(as_text=True)
+        rows = _history_rows(html)
+        assert len(rows) == 3
+        applied = [r for r in rows if 'id="v-3"' in r][0]
+        assert 'class="badge-task"' in applied
+        assert 'href="/history?task=T-002"' in applied
+        assert 'href="/model/alpha"' in applied and 'href="/model/beta"' in applied
+        assert "history-divider" in applied
+        assert 'class="outcome outcome-draw"' in applied
+        assert 'aria-label="Ничья: Alpha vs Beta"' in applied
+        assert 'class="matchup-chip"' in applied
+        assert 'href="/history?v=3#v-3"' in applied
+        assert "void-form-open" in applied
+
+        voided = [r for r in rows if 'id="v-2"' in r][0]
+        assert "history-item-voided" in voided
+        assert "аннулировано" in voided and "дубль матча" in voided
+        assert "history-void-note" in voided and "void-form-open" not in voided
+
+        # `?v=` по записи в текущем составе: редирект на якорь, фильтры целы
+        resp = client.get("/history?v=1")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/history#v-1"
+        resp = client.get("/history?include_voided=1&v=2")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/history?include_voided=1#v-2"
+        # Аннулированная запись вне текущего состава: полная лента + include_voided
+        resp = client.get("/history?v=2")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/history?include_voided=1#v-2"
+        # Ссылка на запись со второй страницы несёт page
+        resp = client.get("/history?model=alpha&v=3")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/history?model=alpha#v-3"
+
+        # Неизвестный seq: предупреждение, список не изменён
+        html = client.get("/history?v=999").get_data(as_text=True)
+        assert "Вердикт v=999 не найден — список записей не изменён." in html
+        assert len(_history_rows(html)) == 2
+
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _history_journal(25))
+        data_cache.clear()
+        resp = client.get("/history?v=1")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "/history?page=2#v-1"
+    print("wave3 history row and anchor: OK")
+
+
+def test_wave3_history_controls():
+    """Волна 3: контролы поиска истории, пресеты дат, «страница №» и «в конец»."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/history").get_data(as_text=True)
+        assert 'name="task"' in html and 'name="from"' in html and 'name="to"' in html
+        assert 'name="pair"' in html
+        assert 'name="outcome" value="a"' in html and 'name="outcome" value="b"' in html
+        assert 'name="outcome" value="draw"' in html
+        assert 'name="only_voided"' in html
+        assert ">7 дней<" in html and ">30 дней<" in html and ">всё<" in html
+        # Одна страница — ни поля, ни «в конец»
+        assert 'class="page-jump"' not in html
+        assert "в конец" not in html
+
+        # 30 записей → 2 страницы: поле перехода и «в конец» с фильтрами
+        _write(paths["journal"], _history_journal(30))
+        data_cache.clear()
+        html = client.get("/history?task=T-001&include_voided=1").get_data(as_text=True)
+        assert len(_history_rows(html)) == 20
+        assert 'class="page-jump"' in html
+        jump = html.split('class="page-jump"', 1)[1].split("</form>", 1)[0]
+        assert 'name="task" value="T-001"' in jump
+        assert 'name="include_voided" value="1"' in jump
+        assert 'name="page"' in jump and 'max="2"' in jump
+        assert 'href="/history?page=2&amp;include_voided=1&amp;task=T-001"' in html
+        assert "в конец" in html
+
+        # Пресеты дат сохраняют прочие фильтры; активный — по from/to
+        html = client.get("/history?model=alpha").get_data(as_text=True)
+        assert '<a class="filter-preset is-active" href="/history?model=alpha">всё</a>' in html
+        week_ago = (date.today() - timedelta(days=7)).isoformat()
+        today = date.today().isoformat()
+        assert (
+            f'href="/history?model=alpha&amp;from={week_ago}&amp;to={today}"' in html
+        )
+        html = client.get(f"/history?from={week_ago}&to={today}").get_data(as_text=True)
+        assert (
+            f'<a class="filter-preset is-active" '
+            f'href="/history?from={week_ago}&amp;to={today}">7 дней</a>' in html
+        )
+    print("wave3 history controls: OK")
+
+
+def test_wave3_rating_search_sort():
+    """Волна 3: поиск `q` и сортировка таблицы рейтинга."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Поиск: подстрока имени/id, значение остаётся в поле
+        html = client.get("/?q=alph").get_data(as_text=True)
+        rows = _rating_rows(html)
+        assert len(rows) == 1 and "model/alpha" in rows[0]
+        assert 'name="q" value="alph"' in html
+
+        _write(paths["models"], MODELS_YAML + """\
+  - id: delta
+    name: Delta
+    agent: Other
+    provider: Other
+    added: 2026-01-01
+    status: active
+""")
+        data_cache.clear()
+        # Комбинация с чипами агентов (И между группами)
+        html = client.get("/?q=elta&agents=Other").get_data(as_text=True)
+        rows = _rating_rows(html)
+        assert len(rows) == 1 and "model/delta" in rows[0]
+        html = client.get("/?q=elta&agents=Agent").get_data(as_text=True)
+        assert _rating_rows(html) == []
+        assert "Ничего не найдено по запросу «elta»" in html
+        # Подсветка: поиск сужает список, чипы только красят
+        html = client.get("/?q=elta&view=highlight").get_data(as_text=True)
+        assert len(_rating_rows(html)) == 1
+
+        # Невалидный sort игнорируется
+        html = client.get("/?sort=hack").get_data(as_text=True)
+        assert "aria-sort" not in html
+        assert len(_rating_rows(html)) == 3
+
+        # Сортировка по ELO: asc, aria-sort и стрелка только у активной колонки
+        html = client.get("/?sort=elo&dir=asc").get_data(as_text=True)
+        rows = _rating_rows(html)
+        assert "model/beta" in rows[0], "elo asc: первой должна идти beta"
+        assert "model/alpha" in rows[2], "elo asc: alpha (максимум) — последняя"
+        assert html.count('aria-sort="ascending"') == 1
+        assert 'aria-sort="descending"' not in html
+        assert '<span class="rank-num">1</span>' in rows[2], "места не пересчитаны"
+        # Повторный клик по активной колонке — переворот направления
+        assert 'href="/?sort=elo&amp;dir=desc"' in html
+        # Колонка «Тренд» сортируемая
+        assert 'href="/?sort=trend&amp;dir=desc"' in html
+
+        # Ссылки сортировки сохраняют поиск и чипы
+        html = client.get("/?q=alpha&agents=Agent&sort=name&dir=asc").get_data(as_text=True)
+        assert 'href="/?q=alpha&amp;agents=Agent&amp;sort=name&amp;dir=desc"' in html
+        assert 'href="/?q=alpha&amp;agents=Agent&amp;sort=elo&amp;dir=desc"' in html
+
+        # По умолчанию — по месту, без aria-sort и стрелок; комбобокс подключён
+        html = client.get("/").get_data(as_text=True)
+        assert "aria-sort" not in html
+        assert "sort-arrow" not in html
+        assert 'src="/static/js/combobox.js"' in html
+        assert "data-combobox" in html
+    print("wave3 rating search and sort: OK")
+
+
+def test_wave3_export_routes():
+    """Волна 3: экспорт выборки рейтинга и истории (CSV/JSON)."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _wave3_journal())
+        data_cache.clear()
+        client.post("/verdict/void", data={
+            "matchup_id": "T-002/001", "reason": "дубль матча", "next": "/history",
+        })
+
+        idx = json.loads(paths["index"].read_text(encoding="utf-8"))
+        elo_alpha = idx["models"]["alpha"]["elo"]
+        elo_beta = idx["models"]["beta"]["elo"]
+        today = date.today().isoformat()
+
+        # Ссылки экспорта на странице — с текущими параметрами
+        html = client.get("/?q=alpha&sort=elo&dir=asc").get_data(as_text=True)
+        assert 'href="/export/rating.csv?q=alpha&amp;sort=elo&amp;dir=asc"' in html
+        assert 'href="/export/rating.json?q=alpha&amp;sort=elo&amp;dir=asc"' in html
+
+        resp = client.get("/export/rating.csv?sort=elo&dir=asc")
+        assert resp.status_code == 200
+        assert resp.headers["Content-Disposition"] == (
+            f'attachment; filename="rating-{today}.csv"'
+        )
+        text = resp.get_data(as_text=True)
+        assert text.startswith("\ufeff"), "CSV без BOM"
+        lines = text.lstrip("\ufeff").rstrip("\r\n").split("\r\n")
+        assert lines[0].startswith(
+            "Место;id;Имя;Компания;Агент;ELO;±;Игры;Победы;Поражения;Ничьи;Винрейт, %"
+        )
+        assert lines[1].startswith(f"2;beta;Beta;Prov;Agent;{elo_beta};")
+        assert lines[2].startswith(f"1;alpha;Alpha;Prov;Agent;{elo_alpha};")
+
+        resp = client.get("/export/rating.json?sort=elo&dir=asc&q=beta")
+        payload = resp.get_json()
+        assert payload["count"] == 1 and payload["rows"][0]["id"] == "beta"
+        assert payload["sort"] == "elo" and payload["dir"] == "asc"
+        assert payload["filters"]["q"] == "beta"
+        assert payload["generated_at"]
+
+        # История: аннулированная запись с причиной, фильтры страницы
+        resp = client.get("/export/history.csv?include_voided=1")
+        assert resp.headers["Content-Disposition"] == (
+            f'attachment; filename="history-{today}.csv"'
+        )
+        body = resp.get_data(as_text=True).lstrip("\ufeff")
+        lines = body.rstrip("\r\n").split("\r\n")
+        assert lines[0].startswith("seq;matchup;task;date;recorded_at;model_a_id;")
+        assert len(lines) == 4, "в выборке истории не 3 записи"
+        assert "T-002/001" in body and "дубль матча" in body and ";1;" in body
+
+        resp = client.get("/export/history.json?task=T-002&outcome=draw")
+        payload = resp.get_json()
+        assert payload["filters"]["task"] == "T-002"
+        assert payload["filters"]["outcome"] == "draw"
+        assert payload["count"] == 1
+        assert payload["rows"][0]["matchup"] == "T-002/002"
+        assert payload["rows"][0]["task"] == "T-002"
+
+        # Экспорт — только чтение: журнал не меняется
+        journal_before = paths["journal"].read_bytes()
+        client.get("/export/rating.csv")
+        client.get("/export/history.json")
+        assert paths["journal"].read_bytes() == journal_before
+    print("wave3 export routes: OK")
+
+
+def test_wave3_read_only_degrade():
+    """Волна 3: в слепке нет поиска, сортировки, комбобокса и экспорта."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _wave3_journal())
+        data_cache.clear()
+        saved = bool(server.app.config.get("READ_ONLY"))
+        server.app.config["READ_ONLY"] = True
+        try:
+            html = client.get("/").get_data(as_text=True)
+            assert 'name="q"' not in html
+            assert "export-links" not in html and "/export/rating" not in html
+            assert "sort-link" not in html and "aria-sort" not in html
+            assert "data-combobox" not in html
+            assert "combobox.js" not in html
+
+            html = client.get("/history").get_data(as_text=True)
+            assert 'name="task"' not in html
+            assert 'name="from"' not in html and 'name="to"' not in html
+            assert 'name="outcome"' not in html and 'name="pair"' not in html
+            assert 'name="only_voided"' not in html
+            assert 'class="page-jump"' not in html
+            assert "/export/history" not in html
+            assert "data-combobox" not in html
+        finally:
+            server.app.config["READ_ONLY"] = saved
+    print("wave3 read-only degrade: OK")
+
+
 if __name__ == "__main__":
     test_key_changes_per_file()
     test_builder_runs_once()
@@ -1130,4 +1555,10 @@ if __name__ == "__main__":
     test_rematch_count_unit()
     test_summary_line()
     test_progress_card_states()
+    test_wave3_history_filters()
+    test_wave3_history_row_anchor()
+    test_wave3_history_controls()
+    test_wave3_rating_search_sort()
+    test_wave3_export_routes()
+    test_wave3_read_only_degrade()
     print("\nALL DATA CACHE TESTS PASSED")

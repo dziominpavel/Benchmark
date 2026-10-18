@@ -458,6 +458,24 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
   margin-bottom: var(--sp-4);
 }
 
+/* шапка карточки с действиями (ссылки экспорта — change console-wave3-data-scale) */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.card-head h2 { margin-bottom: 0; }
+
+.export-links {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .card--plain {
   background: transparent;
   border: none;
@@ -608,6 +626,24 @@ tbody tr:hover { background: var(--surface-2); }
 
 .trend-arrow { font-size: 1.3em; line-height: 1; font-weight: 800; }
 .trend-num { font-size: 0.78em; font-weight: 700; margin-left: 3px; }
+
+/* колонка «Тренд» и сортируемые заголовки (change console-wave3-data-scale) */
+.trend-cell { color: var(--muted); }
+.trend-cell .trend { margin-left: 0; }
+
+.sort-link {
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sort-link:hover { color: var(--text); text-decoration: underline; }
+
+.sort-arrow {
+  margin-left: 4px;
+  font-size: 0.9em;
+  color: var(--accent);
+}
 
 .confidence { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
 
@@ -1095,6 +1131,55 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 }
 .pagination .disabled { opacity: 0.4; pointer-events: none; }
 
+/* пагинация истории: поле «страница №» и «в конец» (change console-wave3-data-scale) */
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.history-pagination .pagination { margin-top: 0; flex: 1 1 auto; }
+
+.page-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+.page-jump-label {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.page-jump-input {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+
+.page-last {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.page-last:hover {
+  color: var(--text);
+  border-bottom-color: var(--border-strong);
+}
+
 /* --- карточка модели ------------------------------------------------------ */
 
 .detail-header {
@@ -1452,6 +1537,54 @@ rect.dist-pt.filter-miss { opacity: 0.5; }
   cursor: pointer;
 }
 
+/* поля поиска и диапазона дат истории (change console-wave3-data-scale) */
+.filter-row input[type="search"],
+.filter-row input[type="text"],
+.filter-row input[type="date"] {
+  padding: 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+
+.filter-search { min-width: 160px; }
+.filter-pair { min-width: 180px; }
+
+.filter-dash { color: var(--muted); }
+
+.filter-presets {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.filter-preset {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.filter-preset:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+
+.filter-preset.is-active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--text);
+}
+
 /* чипы-переключатели (мультивыбор «Агент» и «Компания») */
 .filter-chips {
   display: flex;
@@ -1542,6 +1675,99 @@ rect.dist-pt.filter-miss { opacity: 0.5; }
   font-weight: 600;
 }
 
+/* --- комбобокс селектов моделей (change console-wave3-data-scale) --------- */
+
+.combobox {
+  position: relative;
+  display: inline-block;
+  min-width: 220px;
+  max-width: 100%;
+}
+
+.form-group .combobox {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* нативный select остаётся источником значения, но визуально скрыт */
+.combobox-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.combobox-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-family: inherit;
+}
+
+.filter-row .combobox-input {
+  padding: 7px 12px;
+  background: var(--surface);
+  font-size: var(--fs-sm);
+}
+
+.combobox-input:focus-visible {
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+.combobox-list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.combobox-group {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.combobox-option {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.combobox-option.is-active,
+.combobox-option:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+
+.combobox-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
 /* --- секция «Справочники» (настройки) ------------------------------------- */
 
 .lookup-section { margin-bottom: var(--sp-5); }
@@ -1592,9 +1818,76 @@ rect.dist-pt.filter-miss { opacity: 0.5; }
   min-width: 140px;
 }
 
-.history-side { display: flex; flex-direction: column; }
+.history-side {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
 .history-side .model-caption { margin-top: 0; }
 .history-vs { color: var(--muted); font-weight: 400; }
+
+/* самодостаточная строка истории (change console-wave3-data-scale) */
+.history-item { scroll-margin-top: 84px; }
+
+.history-item:target {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: var(--sp-3);
+}
+
+.history-side a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.history-side a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.history-divider { color: var(--muted); font-weight: 400; }
+
+.badge-task,
+.matchup-chip,
+.outcome {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.badge-task {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.badge-task:hover { border-color: var(--accent); }
+
+.matchup-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+a.matchup-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.outcome { border: 1px solid transparent; }
+.outcome-a { background: var(--pos-tint); color: var(--pos-text); }
+.outcome-b { background: var(--neg-tint); color: var(--neg-text); }
+.outcome-draw { background: var(--surface-2); color: var(--muted); }
 
 .archived-name, .model-list-name { display: flex; flex-direction: column; }
 .archived-name .model-caption, .model-list-name .model-caption { margin-top: 0; }

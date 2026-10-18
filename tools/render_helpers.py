@@ -183,6 +183,21 @@ def get_model_detail(index_data: dict, model_id: str) -> dict | None:
     }
 
 
+def history_task_id(item: dict) -> str:
+    """Таск записи истории: префикс matchup (`T-NNN`), fallback — поле task.
+
+    У применённых записей отдельного поля task нет — таск всегда закодирован
+    в matchup (`T-NNN/NNN`); у аннулированных записей поле task есть.
+    """
+    matchup = str(item.get("matchup") or "")
+    if "/" in matchup:
+        return matchup.split("/", 1)[0]
+    return str(item.get("task") or "")
+
+
+WINNER_LABELS = {"a": "победила A", "b": "победила B", "draw": "ничья"}
+
+
 def format_elo_history(history: list[dict], name_map: dict,
                        caption_map: dict | None = None,
                        highlight: bool = False) -> list[dict]:
@@ -192,10 +207,12 @@ def format_elo_history(history: list[dict], name_map: dict,
     highlight: режим «Подсвечивать» — отдаёт item["hit"] (признак отобранной
     записи, проставленный роутом в исходных словарях); иначе hit=False.
     Возвращает список словарей с полями:
-      model_a_name, model_b_name, model_a_caption, model_b_caption,
+      model_a_id, model_b_id, model_a_name, model_b_name,
+      model_a_caption, model_b_caption,
       elo_a_before, elo_a_after, elo_a_delta, elo_a_delta_str, elo_a_delta_class,
       elo_b_before, elo_b_after, elo_b_delta, elo_b_delta_str, elo_b_delta_class,
-      date_str, hit, matchup, voided, void_str.
+      date_str, hit, matchup, task, seq, winner, winner_label, winner_aria,
+      voided, void_str.
     """
     items = []
     for item in history:
@@ -237,7 +254,19 @@ def format_elo_history(history: list[dict], name_map: dict,
                 void_str += f" · {reason}"
 
         captions = caption_map or {}
+        winner = str(item.get("winner") or "")
+        winner_label = WINNER_LABELS.get(winner, "")
+        if winner == "a":
+            winner_aria = f"Победила A — {a_name}"
+        elif winner == "b":
+            winner_aria = f"Победила B — {b_name}"
+        elif winner == "draw":
+            winner_aria = f"Ничья: {a_name} vs {b_name}"
+        else:
+            winner_aria = ""
         items.append({
+            "model_a_id": a_id,
+            "model_b_id": b_id,
             "model_a_name": a_name,
             "model_b_name": b_name,
             "model_a_caption": captions.get(a_id, ""),
@@ -255,6 +284,11 @@ def format_elo_history(history: list[dict], name_map: dict,
             "date_str": date_str,
             "hit": bool(item.get("hit")) if highlight else False,
             "matchup": item.get("matchup", ""),
+            "task": history_task_id(item),
+            "seq": item.get("seq"),
+            "winner": winner,
+            "winner_label": winner_label,
+            "winner_aria": winner_aria,
             "voided": voided,
             "void_str": void_str,
         })

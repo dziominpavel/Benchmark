@@ -54,8 +54,9 @@ CATALOG_MARKER = "__catalog__"
 # Абсолютные адреса консоли в разметке: корневые ссылки и ресурсы
 _ATTR_RE = re.compile(r'(?P<attr>href|src|action)="(?P<value>/[^"]*)"')
 
-# Строка истории: внутри .history-item нет вложенных div (только span/ссылки)
-_HISTORY_ROW_RE = re.compile(r'<div class="history-item[^"]*">.*?</div>', re.S)
+# Строка истории: внутри .history-item нет вложенных div (только span/ссылки);
+# после class допускаются атрибуты (якорь id="v-<seq>" для постоянных ссылок).
+_HISTORY_ROW_RE = re.compile(r'<div class="history-item[^"]*"[^>]*>.*?</div>', re.S)
 
 # ─── Разметка клиентского слоя зеркала ──────────────────────────────
 
