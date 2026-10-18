@@ -194,17 +194,28 @@ def _fetch(client, url: str) -> str:
 def _build_history(client, index_data: dict) -> str:
     """«История»: строки всех страниц консоли в один документ.
 
+    Лента запрашивается с `include_voided=1` (аннулированные помечены
+    классом `history-item-voided` и по умолчанию прячутся mirror.js).
     Клиентская пагинация зеркала (20 записей на страницу) работает по
     полному составу DOM, поэтому строки собираются со всех страниц
     консоли в порядке вывода, а к строке добавляются данные участников
     (data-a/data-b) — их использует mirror.js для фильтров.
     """
-    base = _fetch(client, "/history")
-    records = list(reversed(index_data.get("elo_history", [])))
+    base = _fetch(client, "/history?include_voided=1")
+    # Слепок открывается с выключенным фильтром: аннулированные скрыты по
+    # умолчанию (mirror.js), поэтому снимаем серверную отметку чекбокса.
+    base = base.replace(
+        'name="include_voided" value="1" checked',
+        'name="include_voided" value="1"',
+    )
+    records = server.merge_history_feed(
+        index_data.get("elo_history", []),
+        index_data.get("voided_history", []),
+    )
     pages = max(1, math.ceil(len(records) / HISTORY_PAGE_SIZE))
     rows: list[str] = []
     for k in range(1, pages + 1):
-        html = base if k == 1 else _fetch(client, f"/history?page={k}")
+        html = base if k == 1 else _fetch(client, f"/history?include_voided=1&page={k}")
         found = _HISTORY_ROW_RE.findall(html)
         expected = max(0, min(HISTORY_PAGE_SIZE, len(records) - (k - 1) * HISTORY_PAGE_SIZE))
         if len(found) != expected:

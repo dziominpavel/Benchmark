@@ -681,6 +681,160 @@ def test_record_verdict_journal():
     print("record_verdict journal: OK")
 
 
+def test_record_verdict_date():
+    """record_verdict: verdict_date попадает в событие; невалидная дата — ValueError."""
+    import json
+    import tempfile
+    from datetime import date as date_cls
+
+    with tempfile.TemporaryDirectory() as td:
+        with _temp_storage(Path(td)) as elo_mod:
+            r1 = elo_mod.record_verdict(
+                "T-001", "A", "B", "a", verdict_date="2026-09-04",
+                regenerate_index=False,
+            )
+            assert r1["verdict"]["date"] == "2026-09-04", r1["verdict"]
+            first = json.loads(
+                elo_mod.JOURNAL_PATH.read_text(encoding="utf-8").splitlines()[0]
+            )
+            assert first["date"] == "2026-09-04", first
+
+            # Пустое значение эквивалентно «сегодня»
+            r2 = elo_mod.record_verdict(
+                "T-001", "A", "B", "b", verdict_date="", regenerate_index=False,
+            )
+            assert r2["verdict"]["date"] == date_cls.today().isoformat()
+
+            # Невалидные значения отклоняются до записи
+            before = len(elo_mod.load_matchups())
+            for bad in ("2026/09/04", "04.09.2026", "2026-9-4", "2026-02-30", "вчера"):
+                try:
+                    elo_mod.record_verdict(
+                        "T-001", "A", "B", "a", verdict_date=bad,
+                        regenerate_index=False,
+                    )
+                    raise AssertionError(f"ожидался ValueError для {bad!r}")
+                except ValueError:
+                    pass
+            assert len(elo_mod.load_matchups()) == before
+    print("record_verdict date: OK")
+
+
+def test_void_rejections():
+    """Повторное аннулирование и аннулирование tombstone отклоняются без записи."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        with _temp_storage(Path(td)) as elo_mod:
+            elo_mod.record_verdict("T-001", "A", "B", "a", regenerate_index=False)
+            elo_mod.void_matchup("T-001/001", reason="ошибка записи")
+            assert len(elo_mod.load_matchups()) == 2
+
+            # Повторное аннулирование уже аннулированного вердикта
+            try:
+                elo_mod.void_matchup("T-001/001", reason="ещё раз")
+                raise AssertionError("ожидался ValueError для повторного аннулирования")
+            except ValueError:
+                pass
+
+            # Аннулирование самого tombstone-события
+            try:
+                elo_mod.void_matchup("T-001/002", reason="удалить аудит")
+                raise AssertionError("ожидался ValueError для аннулирования tombstone")
+            except ValueError:
+                pass
+
+            assert len(elo_mod.load_matchups()) == 2
+    print("void rejections: OK")
+
+
+def test_voided_history():
+    """voided_history: поля, порядок по seq цели, первый tombstone, пустота."""
+    from elo import matchup_sort_key
+
+    def verdict(seq, mid, a, b, winner, with_elo=True):
+        ev = {
+            "seq": seq, "task": "T-001", "matchup": mid,
+            "model_a_id": a, "model_b_id": b, "winner": winner,
+            "date": "2026-09-05", "recorded_at": f"2026-09-05T10:00:0{seq}+03:00",
+            "_matchup_id": mid,
+        }
+        if with_elo:
+            ev["elo"] = {a: {"before": 1200, "after": 1220, "delta": 20},
+                         b: {"before": 1200, "after": 1180, "delta": -20}}
+        return ev
+
+    def tomb(seq, mid, void_of, reason):
+        return {
+            "seq": seq, "task": "T-001", "matchup": mid, "void_of": void_of,
+            "reason": reason, "date": "2026-10-18",
+            "recorded_at": f"2026-10-18T10:00:0{seq}+03:00", "_matchup_id": mid,
+        }
+
+    matchups = [
+        verdict(1, "T-001/001", "A", "B", "a"),
+        verdict(2, "T-001/002", "A", "C", "b"),
+        verdict(3, "T-001/003", "B", "C", "draw"),
+        verdict(4, "T-001/004", "A", "B", "a", with_elo=False),
+        tomb(5, "T-001/005", "T-001/001", "ошибка записи"),
+        tomb(6, "T-001/006", "T-001/001", "повторный tombstone"),
+        tomb(7, "T-001/007", "T-001/002", "дубль матча"),
+        tomb(8, "T-001/008", "T-001/004", ""),
+    ]
+    matchups.sort(key=matchup_sort_key)
+    result = recalculate(matchups, ["A", "B", "C"])
+
+    # elo_history и счётчики не затронуты аннулированными
+    assert [h["matchup"] for h in result["elo_history"]] == ["T-001/003"], \
+        result["elo_history"]
+    assert result["voided"] == ["T-001/001", "T-001/002", "T-001/004"]
+    assert len(result["tombstones"]) == 4
+
+    vh = result["voided_history"]
+    assert [e["matchup"] for e in vh] == ["T-001/001", "T-001/002", "T-001/004"], vh
+    first = vh[0]
+    assert first["seq"] == 1 and first["task"] == "T-001"
+    assert first["model_a_id"] == "A" and first["model_b_id"] == "B"
+    assert first["winner"] == "a" and first["date"] == "2026-09-05"
+    assert first["elo_a"] == {"before": 1200, "after": 1220, "delta": 20}
+    # при дублях tombstone аудит — первый по seq
+    assert first["void"]["reason"] == "ошибка записи"
+    assert first["void"]["matchup"] == "T-001/005"
+    assert first["void"]["recorded_at"] == "2026-10-18T10:00:05+03:00"
+    # legacy-вердикт без снэпшота — нулевой fallback
+    legacy = vh[2]
+    assert legacy["matchup"] == "T-001/004"
+    assert legacy["elo_a"] == {"before": 1200, "after": 1200, "delta": 0}
+    assert legacy["elo_b"] == {"before": 1200, "after": 1200, "delta": 0}
+
+    # Пустая секция без аннулированных
+    plain = recalculate([verdict(1, "T-001/001", "A", "B", "a")], ["A", "B"])
+    assert plain["voided_history"] == []
+    print("voided_history: OK")
+
+
+def test_generate_index_voided_history():
+    """generate_index кладёт voided_history в index.json на диск."""
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        with _temp_storage(Path(td)) as elo_mod:
+            elo_mod.record_verdict("T-001", "A", "B", "a", regenerate_index=False)
+            elo_mod.void_matchup("T-001/001", reason="дубль записи")
+            idx = elo_mod.generate_index()
+            elo_mod.save_index(idx)
+
+            assert idx["voided_history"][0]["matchup"] == "T-001/001"
+            assert idx["voided_history"][0]["void"]["reason"] == "дубль записи"
+            assert idx["matchups_summary"]["voided"] == 1
+            assert all(h["matchup"] != "T-001/001" for h in idx["elo_history"])
+
+            saved = json.loads(elo_mod.INDEX_PATH.read_text(encoding="utf-8"))
+            assert saved["voided_history"][0]["void"]["reason"] == "дубль записи"
+    print("generate_index voided_history: OK")
+
+
 _CHILD_WRITER = (
     "import sys, time\n"
     "from pathlib import Path\n"
@@ -746,5 +900,9 @@ if __name__ == "__main__":
     test_journal_check_problems()
     test_run_check_reports_journal_problems()
     test_record_verdict_journal()
+    test_record_verdict_date()
+    test_void_rejections()
+    test_voided_history()
+    test_generate_index_voided_history()
     test_journal_parallel_writes()
     print("\nALL ELO TESTS PASSED")

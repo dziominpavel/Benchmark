@@ -22,7 +22,7 @@ import heapq
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -38,7 +38,7 @@ import data_cache
 
 from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
-    is_index_stale, record_verdict,
+    is_index_stale, record_verdict, void_matchup,
     load_settings, save_settings, known_tasks, active_tasks, is_task_active,
     resolve_current_task, get_coverage, is_valid_task_id,
     load_answer_flags, save_answer_flags, get_answer_matrix,
@@ -53,6 +53,7 @@ from register_task import (
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
     build_elo_distribution_svg, compute_rank_trends, pagination_items,
+    merge_history_feed,
 )
 
 from register_model import parse_existing, format_model
@@ -77,6 +78,40 @@ def read_only() -> bool:
 
 
 app.jinja_env.globals["read_only"] = read_only
+
+
+def _self_url(*, exclude: tuple[str, ...] = ()) -> str:
+    """Путь текущей страницы с query, без указанных параметров (для `next`).
+
+    Используется как цель возврата после аннулирования: сквозные сообщения
+    (`success`/`error`) и уже применённые действия исключаются, чтобы
+    пользователь вернулся к тому же состоянию страницы.
+    """
+    args = [
+        (key, value)
+        for key, value in request.args.items(multi=True)
+        if key not in exclude
+    ]
+    query = urlencode(args)
+    return request.path + (f"?{query}" if query else "")
+
+
+def _is_local_path(path: str) -> bool:
+    """Разрешён ли `next` как локальный путь (защита от open redirect)."""
+    return (
+        path.startswith("/")
+        and not path.startswith("//")
+        and not path.startswith("/\\")
+    )
+
+
+def _redirect_with_message(target: str, *, error: str = "", success: str = ""):
+    """Redirect на локальный target с одним сообщением (error или success)."""
+    message, key = (error, "error") if error else (success, "success")
+    if not message:
+        return redirect(target)
+    sep = "&" if "?" in target else "?"
+    return redirect(f"{target}{sep}{urlencode({key: message})}")
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -145,6 +180,29 @@ def get_pair_stats() -> dict[frozenset[str], dict]:
     только games, не меняя счёт побед.
     """
     return data_cache.cached("pair_scan", _build_pair_scan)[0]
+
+
+def build_pair_hints_json() -> str:
+    """Компактный JSON личных встреч для подсказки формы (memo).
+
+    Ключ — `"<id_x>|<id_y>"` (ids отсортированы), значение — `{g, x, y}`:
+    число игр, победы x, победы y. Пары без игр отсутствуют. `</`
+    экранируется, чтобы JSON не оборвал script-блок.
+    """
+    payload: dict[str, dict] = {}
+    for key, st in get_pair_stats().items():
+        ids = sorted(key)
+        if len(ids) != 2:
+            continue
+        x, y = ids
+        payload[f"{x}|{y}"] = {
+            "g": st.get("games", 0),
+            "x": st.get("wins", {}).get(x, 0),
+            "y": st.get("wins", {}).get(y, 0),
+        }
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).replace("</", "<\\/")
 
 
 def _build_pair_scan() -> tuple[dict[frozenset[str], dict],
@@ -884,7 +942,27 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
 {% block title %}ELO Benchmark{% endblock %}
 {% block content %}
   {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
-  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
+  {% if success %}
+  <div class="alert alert-success" role="status">
+    <span class="alert-text">{{ success }}</span>
+    {% if not read_only() %}
+    <span class="alert-actions">
+      {% if saved_matchup_id %}
+      <details class="void-form void-form-inline">
+        <summary class="void-form-open">Отменить</summary>
+        <form method="POST" action="/verdict/void" class="void-form-body">
+          <input type="hidden" name="matchup_id" value="{{ saved_matchup_id }}">
+          <input type="hidden" name="next" value="{{ void_next }}">
+          <input type="text" name="reason" class="void-reason" placeholder="Причина аннулирования" required>
+          <button type="submit" class="btn btn-danger btn-sm">Аннулировать вердикт</button>
+        </form>
+      </details>
+      {% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="writeMore()">Записать ещё</button>
+    </span>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <div class="progress-card{% if coverage_pct is none %} progress-card--empty{% elif coverage_done %} progress-card--done{% endif %}">
     {% if coverage_done %}
@@ -1067,7 +1145,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               </select>
             </div>
             <div class="form-group">
-              <label>Таск</label>
+              <label for="taskField">Таск</label>
               <select name="task" id="taskField" onchange="validate()" required>
                 <option value="">— выбрать —</option>
                 {% for t in task_options %}
@@ -1075,6 +1153,14 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
                 {% endfor %}
               </select>
             </div>
+            <div class="form-group">
+              <label for="dateField">Дата</label>
+              <input type="date" name="date" id="dateField" value="{{ pre_date or today }}">
+            </div>
+          </div>
+          <div class="verdict-hint-row">
+            <button type="button" class="btn btn-secondary btn-sm" id="swapBtn" onclick="swapModels()">Поменять A ↔ B</button>
+            <span class="pair-hint" id="pairHint" aria-live="polite"></span>
           </div>
           <div class="verdict-actions">
             <button type="submit" name="winner" value="a" class="btn btn-win" id="btnA" disabled>Победила A</button>
@@ -1091,8 +1177,43 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
     </div>
   </div>
 
+<script type="application/json" id="pair-hints">{{ pair_hints_json|safe }}</script>
+
 {% if not read_only() %}
 <script>
+const pairHints = (() => {
+  const el = document.getElementById('pair-hints');
+  if (!el) return {};
+  try { return JSON.parse(el.textContent); } catch (e) { return {}; }
+})();
+
+function optionName(select, value) {
+  for (const opt of select.options) {
+    if (opt.value === value) return opt.textContent.trim();
+  }
+  return '';
+}
+
+function updateOutcomeLabels(a, b) {
+  const named = a && b && a !== b;
+  document.getElementById('btnA').textContent =
+    named ? 'Победила ' + optionName(document.getElementById('modelA'), a) : 'Победила A';
+  document.getElementById('btnB').textContent =
+    named ? 'Победила ' + optionName(document.getElementById('modelB'), b) : 'Победила B';
+}
+
+function updatePairHint(a, b) {
+  const el = document.getElementById('pairHint');
+  if (!el) return;
+  if (!a || !b || a === b) { el.textContent = ''; return; }
+  const h = pairHints[[a, b].sort().join('|')];
+  if (!h) { el.textContent = 'Личные встречи: не встречались'; return; }
+  const winsA = (a <= b) ? h.x : h.y;
+  const winsB = (b <= a) ? h.x : h.y;
+  el.textContent = 'Личные встречи: ' + h.g + ' · счёт по победам ' + winsA + ':' + winsB +
+    ' · ничьи: ' + (h.g - h.x - h.y);
+}
+
 function validate() {
   const a = document.getElementById('modelA').value;
   const b = document.getElementById('modelB').value;
@@ -1101,6 +1222,17 @@ function validate() {
   document.getElementById('btnA').disabled = !ok;
   document.getElementById('btnB').disabled = !ok;
   document.getElementById('btnDraw').disabled = !ok;
+  updateOutcomeLabels(a, b);
+  updatePairHint(a, b);
+}
+
+function swapModels() {
+  const selA = document.getElementById('modelA');
+  const selB = document.getElementById('modelB');
+  const tmp = selA.value;
+  selA.value = selB.value;
+  selB.value = tmp;
+  validate();
 }
 
 function usePair(a, b, task) {
@@ -1120,7 +1252,19 @@ function cycleRecommendation() {
   items[current].hidden = true;
   items[(current + 1) % items.length].hidden = false;
 }
-validate();
+
+function writeMore() {
+  const alert = document.querySelector('.alert-success');
+  if (alert) alert.hidden = true;
+  const b = document.getElementById('modelB');
+  if (b) { b.focus(); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+const modelAEl = document.getElementById('modelA');
+if (modelAEl) {
+  modelAEl.focus();
+  validate();
+}
 </script>
 {% endif %}
 {% endblock %}
@@ -1138,9 +1282,12 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <h1>История ELO</h1>
   </div>
 
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
+
   <div class="controls">
     <div class="stats">
-      Всего записей: {{ history_total }}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
+      Всего записей: {{ history_total }}{% if include_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
     </div>
     {% call filter_panel() %}
       <span class="filter-label">Модель</span>
@@ -1153,6 +1300,10 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
         <span>Включать неактивные</span>
       </label>
+      <label class="chip">
+        <input type="checkbox" name="include_voided" value="1" {% if include_voided %}checked{% endif %} onchange="this.form.submit()">
+        <span>Показывать аннулированные</span>
+      </label>
     {% endcall %}
   </div>
 
@@ -1160,7 +1311,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     <h2 class="hidden">История</h2>
     {% if history %}
     {% for item in history %}
-    <div class="history-item{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}">
+    <div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if filter_view == 'highlight' and history_hits %} {{ 'filter-hit' if item.hit else 'filter-miss' }}{% endif %}">
       <span class="history-model">
         <span class="history-side">{{ item.model_a_name }}{% if item.model_a_caption %}<span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
         <span class="history-vs">vs</span>
@@ -1171,6 +1322,19 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
       <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
       <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
       <span class="history-date">{{ item.date_str }}</span>
+      {% if item.voided %}
+      <span class="history-void-note">{{ item.void_str }}</span>
+      {% elif not read_only() and item.matchup %}
+      <details class="void-form">
+        <summary class="void-form-open">Аннулировать</summary>
+        <form method="POST" action="/verdict/void" class="void-form-body">
+          <input type="hidden" name="matchup_id" value="{{ item.matchup }}">
+          <input type="hidden" name="next" value="{{ void_next }}">
+          <input type="text" name="reason" class="void-reason" placeholder="Причина аннулирования" required>
+          <button type="submit" class="btn btn-danger btn-sm">Аннулировать</button>
+        </form>
+      </details>
+      {% endif %}
     </div>
     {% endfor %}
     {% if filter_view == 'highlight' and not history_hits %}
@@ -1949,6 +2113,7 @@ def history_page():
 
     model_id = request.args.get("model", "").strip()
     include_inactive = request.args.get("include_inactive", "") == "1"
+    include_voided = request.args.get("include_voided", "") == "1"
 
     filter_ctx = filter_panel_context(
         models,
@@ -1963,6 +2128,7 @@ def history_page():
     history_params = {
         "model": model_id or None,
         "include_inactive": "1" if include_inactive else None,
+        "include_voided": "1" if include_voided else None,
         "agents": filter_ctx["filter_agents_csv"] or None,
         "providers": filter_ctx["filter_providers_csv"] or None,
         "view": filter_view if filter_view != "hide" else None,
@@ -1990,7 +2156,14 @@ def history_page():
 
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
     caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
-    raw_history = list(reversed(index_data.get("elo_history", [])))
+    if include_voided:
+        # Объединённая лента: аннулированные стоят на месте своего исходного seq.
+        raw_history = merge_history_feed(
+            index_data.get("elo_history", []),
+            index_data.get("voided_history", []),
+        )
+    else:
+        raw_history = list(reversed(index_data.get("elo_history", [])))
 
     if highlight:
         # «Подсвечивать»: состав записей не сужается, отобранные помечаются
@@ -2021,6 +2194,7 @@ def history_page():
     # Пагинация по 20 записей
     page_size = 20
     total_history = len(raw_history)
+    history_voided = sum(1 for h in raw_history if h.get("voided"))
     history_hits = sum(1 for h in raw_history if h.get("hit")) if highlight else 0
     history_pages = (total_history + page_size - 1) // page_size if total_history else 1
     history_page_num = request.args.get("page", "1").strip()
@@ -2045,6 +2219,7 @@ def history_page():
         history_page=history_page_num,
         history_pages=history_pages,
         history_total=total_history,
+        history_voided=history_voided,
         history_hits=history_hits,
         history_items=pagination_items(history_page_num, history_pages),
         history_page_url=_history_page_url,
@@ -2052,6 +2227,10 @@ def history_page():
         model=model_id,
         model_name=model_name,
         include_inactive=include_inactive,
+        include_voided=include_voided,
+        void_next=_self_url(exclude=("success", "error")),
+        error=request.args.get("error", ""),
+        success=request.args.get("success", ""),
         **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
@@ -2257,6 +2436,23 @@ def leaderboard():
         pre_a, pre_b = "", ""
     if pre_task not in task_options:
         pre_task = ""
+
+    # Дата вердикта: валидная из URL, иначе сегодня; `today` — значение по умолчанию.
+    today = date.today().isoformat()
+    pre_date = (request.args.get("date") or "").strip()
+    if pre_date:
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", pre_date):
+                raise ValueError
+            datetime.strptime(pre_date, "%Y-%m-%d")
+        except ValueError:
+            pre_date = ""
+    pre_date = pre_date or today
+
+    # Идентификатор только что записанного вердикта — для действия «Отменить».
+    saved_matchup_id = (request.args.get("matchup_id") or "").strip()
+    if not re.fullmatch(r"T-\d{3,}/\d{3,}", saved_matchup_id):
+        saved_matchup_id = ""
     # Рекомендации пар (+ строка-обоснование для отображения).
     # top-3: карточка показывает первый вариант, «Другая пара» листает
     # остальные без перезагрузки (карусель и URL-состояние запрещены).
@@ -2339,6 +2535,11 @@ def leaderboard():
         pre_a=pre_a,
         pre_b=pre_b,
         pre_task=pre_task,
+        pre_date=pre_date,
+        today=today,
+        saved_matchup_id=saved_matchup_id,
+        void_next=_self_url(exclude=("success", "error", "matchup_id")),
+        pair_hints_json=data_cache.cached("pair_hints_json", build_pair_hints_json),
         task_options=task_options,
         coverage=coverage,
         coverage_pct=coverage_pct,
@@ -2473,6 +2674,7 @@ def record_verdict_route():
     model_b = request.form.get("model_b", "").strip()
     winner = request.form.get("winner", "").strip()
     task = request.form.get("task", "").strip()
+    verdict_date = request.form.get("date", "").strip()
 
     if not model_a or not model_b or not winner:
         return redirect(url_for("leaderboard", error="Выберите обе модели и победителя"))
@@ -2492,6 +2694,7 @@ def record_verdict_route():
             model_a=model_a,
             model_b=model_b,
             winner=winner,
+            verdict_date=verdict_date or None,
         )
     except ValueError as e:
         return redirect(url_for("leaderboard", error=str(e)))
@@ -2501,10 +2704,39 @@ def record_verdict_route():
     name_b = name_map.get(model_b, model_b)
     winner_label = {"a": name_a, "b": name_b, "draw": "Ничья"}[winner]
 
+    # Контекст формы после записи: победитель — в поле A (при ничьей — прежняя A),
+    # поле B очищается; таск и дата сохраняются; matchup_id — для «Отменить».
+    keep_a = model_b if winner == "b" else model_a
+    context = {"model_a": keep_a, "task": task, "matchup_id": result["matchup_id"]}
+    if verdict_date:
+        context["date"] = verdict_date
+
     return redirect(url_for(
         "leaderboard",
         success=f"Записано: {name_a} vs {name_b} → {winner_label}",
+        **context,
     ))
+
+
+@app.route("/verdict/void", methods=["POST"])
+def void_verdict_route():
+    matchup_id = request.form.get("matchup_id", "").strip()
+    reason = request.form.get("reason", "").strip()
+    next_path = request.form.get("next", "").strip()
+    target = next_path if _is_local_path(next_path) else "/history"
+
+    if not matchup_id:
+        return _redirect_with_message(target, error="Не указан вердикт для аннулирования")
+
+    if not reason:
+        return _redirect_with_message(target, error="Укажите причину аннулирования")
+
+    try:
+        void_matchup(matchup_id, reason=reason)
+    except ValueError as e:
+        return _redirect_with_message(target, error=str(e))
+
+    return _redirect_with_message(target, success=f"Вердикт {matchup_id} аннулирован")
 
 
 @app.route("/settings")

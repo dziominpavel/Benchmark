@@ -869,6 +869,7 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 
 .form-group select,
 .form-group input[type="text"],
+.form-group input[type="date"],
 .form-group textarea {
   width: 100%;
   padding: 10px 12px;
@@ -882,6 +883,7 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
 
 .form-group select:focus-visible,
 .form-group input[type="text"]:focus-visible,
+.form-group input[type="date"]:focus-visible,
 .form-group textarea:focus-visible {
   outline-offset: 0;
   border-color: var(--accent);
@@ -988,6 +990,77 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
   margin-left: auto;
   white-space: nowrap;
 }
+
+/* аннулированные записи: приглушение и перечёркивание; маркер — поверх строки */
+.history-item-voided { opacity: 0.75; }
+.history-item-voided > span { text-decoration: line-through; }
+.history-item-voided > .history-void-note { text-decoration: none; }
+.history-void-note {
+  flex-basis: 100%;
+  color: var(--neg-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+/* форма аннулирования: раскрывашка в строке истории и в success-строке */
+.void-form { font-size: var(--fs-xs); }
+.history-item .void-form { flex-basis: 100%; }
+.void-form-open {
+  cursor: pointer;
+  color: var(--neg-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.void-form-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+.void-reason {
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  min-width: 180px;
+}
+.void-reason:focus-visible {
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+/* кнопка аннулирования — негативный акцент на токенах темы */
+.btn-danger {
+  background: var(--neg-tint);
+  color: var(--neg-text);
+  border-color: color-mix(in srgb, var(--neg) 45%, transparent);
+}
+.btn-danger:hover { background: color-mix(in srgb, var(--neg) 24%, var(--surface)); }
+
+/* действия success-строки: «Отменить» и «Записать ещё» */
+.alert-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: var(--sp-3);
+  vertical-align: middle;
+}
+.void-form-inline { display: inline-block; }
+.void-form-inline .void-form-body { margin-top: var(--sp-2); }
+
+/* блок подсказки и обмена сторон под селектами формы вердикта */
+.verdict-hint-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.pair-hint { color: var(--muted); font-size: var(--fs-xs); }
 
 .pagination {
   display: flex;

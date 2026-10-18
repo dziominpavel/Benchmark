@@ -23,6 +23,12 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     сообщений, scope="col" у заголовков таблиц, варианты карточки
     рекомендации («Другая пара»), счётчик рематчей, единая сводка,
     компактная плашка прогресса при 100%, favicon и подтверждения.
+  * Волна 2 (UI): лента истории с аннулированными (include_voided,
+    merge_history_feed, счётчик, перечёркнутая строка с причиной),
+    форма «Аннулировать» в строке и в success-строке (POST /verdict/void,
+    защита next, отказ без причины), контекст формы после записи
+    (победитель в A, таск/дата, matchup_id), дата вердикта, подсказка
+    личных встреч (JSON-остров) и обмен A ↔ B.
 
 Запуск: python tools/test_data_cache.py
 """
@@ -428,6 +434,310 @@ def test_routes_smoke():
     print("2.4 routes smoke: OK")
 
 
+def test_merge_history_feed_unit():
+    """merge_history_feed: порядок по seq, пометки voided, пустая секция."""
+    applied = [
+        {"matchup": "T-001/001", "seq": 1, "model_a_id": "alpha", "model_b_id": "beta"},
+        {"matchup": "T-001/003", "seq": 3, "model_a_id": "alpha", "model_b_id": "beta"},
+    ]
+    voided = [{
+        "matchup": "T-001/002", "seq": 2, "model_a_id": "alpha", "model_b_id": "gamma",
+        "void": {"reason": "ошибка", "date": "2026-01-03",
+                 "recorded_at": "2026-01-03T10:00:00+03:00", "matchup": "T-001/004"},
+    }]
+    feed = render_helpers.merge_history_feed(applied, voided)
+    assert [h["matchup"] for h in feed] == ["T-001/003", "T-001/002", "T-001/001"]
+    assert not feed[0].get("voided") and not feed[2].get("voided")
+    assert feed[1]["voided"] is True
+    # исходные словари не мутируются
+    assert "voided" not in applied[0] and "voided" not in voided[0]
+
+    # Пустая секция аннулированных: только применённые в обратном порядке
+    feed2 = render_helpers.merge_history_feed(applied)
+    assert [h["matchup"] for h in feed2] == ["T-001/003", "T-001/001"]
+
+    # format_elo_history: passthrough matchup/voided/void_str с причиной и датой
+    items = render_helpers.format_elo_history(
+        feed, {"alpha": "Alpha", "beta": "Beta", "gamma": "Gamma"}
+    )
+    assert items[1]["voided"] is True and items[1]["matchup"] == "T-001/002"
+    assert "аннулировано" in items[1]["void_str"]
+    assert "ошибка" in items[1]["void_str"]
+    assert items[0]["voided"] is False and items[0]["void_str"] == ""
+    print("wave2 merge history feed: OK")
+
+
+def test_void_route():
+    """POST /verdict/void: успех, пустая причина, чужой id, повтор, защита next."""
+    with _temp_storage() as _paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Пустая причина: ошибка без изменения журнала
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/001", "reason": "   ", "next": "/history",
+        })
+        assert resp.status_code == 302
+        assert "error=" in resp.headers["Location"]
+        assert len(elo.load_matchups()) == 1
+
+        # Неизвестный вердикт: ошибка без изменения журнала
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/999", "reason": "нет такого", "next": "/history",
+        })
+        assert "error=" in resp.headers["Location"]
+        assert len(elo.load_matchups()) == 1
+
+        # Успех: tombstone в журнале; внешний next игнорируется
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/001", "reason": "ошибка записи",
+            "next": "//evil.example/x",
+        })
+        assert resp.status_code == 302
+        loc = resp.headers["Location"]
+        assert loc.startswith("/history?") and "evil" not in loc, loc
+        assert "success=" in loc
+        events = elo.load_matchups()
+        assert len(events) == 2
+        assert events[1]["void_of"] == "T-001/001"
+        assert events[1]["reason"] == "ошибка записи"
+
+        # Повторное аннулирование отклонено без нового события
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/001", "reason": "ещё раз", "next": "/history",
+        })
+        assert "error=" in resp.headers["Location"]
+        assert len(elo.load_matchups()) == 2
+
+        # Аннулирование tombstone-события отклонено
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/002", "reason": "удалить аудит", "next": "/history",
+        })
+        assert "error=" in resp.headers["Location"]
+        assert len(elo.load_matchups()) == 2
+
+        # Локальный next с фильтром сохраняется
+        client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta", "winner": "b",
+            "task": "T-001", "date": "2026-01-03",
+        })
+        resp = client.post("/verdict/void", data={
+            "matchup_id": "T-001/003", "reason": "дубль матча",
+            "next": "/history?model=alpha",
+        })
+        loc = resp.headers["Location"]
+        assert loc.startswith("/history?model=alpha&"), loc
+        assert "success=" in loc
+    print("wave2 void route: OK")
+
+
+def test_history_voided_feed():
+    """История: include_voided, счётчик, перечёркнутая строка и форма аннулирования."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Второй вердикт, чтобы после аннулирования осталась применённая запись
+        client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta", "winner": "a",
+            "task": "T-001", "date": "2026-01-03",
+        })
+        client.post("/verdict/void", data={
+            "matchup_id": "T-001/001", "reason": "ошибка протокола",
+            "next": "/history",
+        })
+
+        # По умолчанию аннулированных в ленте нет, чекбокс выключен
+        html = client.get("/history").get_data(as_text=True)
+        assert "history-item-voided" not in html
+        assert "Показывать аннулированные" in html
+        assert 'name="include_voided" value="1" checked' not in html
+
+        # С фильтром: строка видна, перечёркнута, с причиной и датой; счётчик
+        html = client.get("/history?include_voided=1").get_data(as_text=True)
+        assert "history-item-voided" in html
+        assert "аннулировано" in html and "ошибка протокола" in html
+        assert "Всего записей: 2 · аннулированных: 1" in html
+        assert 'name="include_voided" value="1" checked' in html
+
+        rows = re.findall(r'<div class="history-item[^"]*">.*?</div>', html, re.S)
+        assert len(rows) == 2, [r[:90] for r in rows]
+        # плоская разметка: во вложенных div-ах нет (экспорт зеркала)
+        assert rows[0].count("<div") == 1 and rows[1].count("<div") == 1
+        # применённая строка: маркер и форма аннулирования
+        assert "history-item-voided" not in rows[0]
+        assert 'action="/verdict/void"' in rows[0]
+        assert 'value="T-001/002"' in rows[0]
+        # аннулированная строка: маркер есть, формы нет
+        assert "history-item-voided" in rows[1]
+        assert 'action="/verdict/void"' not in rows[1]
+        assert "ошибка протокола" in rows[1]
+
+        # Пагинация сохраняет include_voided
+        _write(paths["journal"], _history_journal(30))
+        data_cache.clear()
+        client.post("/verdict/void", data={
+            "matchup_id": "T-001/001", "reason": "дубль", "next": "/history",
+        })
+        html = client.get("/history?include_voided=1").get_data(as_text=True)
+        assert (
+            "include_voided=1&amp;page=2" in html
+            or "page=2&amp;include_voided=1" in html
+        ), "ссылка пагинации не сохраняет include_voided"
+    print("wave2 history voided feed: OK")
+
+
+def test_verdict_context_and_actions():
+    """Форма: дата, контекст после записи, success-строка с «Отменить»."""
+    with _temp_storage() as _paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Невалидная дата: ошибка без события
+        resp = client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta", "winner": "a",
+            "task": "T-001", "date": "2026-13-40",
+        })
+        assert resp.status_code == 302 and "error=" in resp.headers["Location"]
+        assert len(elo.load_matchups()) == 1
+
+        # Запись с датой: событие несёт дату, редирект — контекст и matchup_id
+        resp = client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta", "winner": "b",
+            "task": "T-001", "date": "2026-01-03",
+        })
+        loc = resp.headers["Location"]
+        assert "model_a=beta" in loc, loc
+        assert "task=T-001" in loc and "date=2026-01-03" in loc, loc
+        assert "matchup_id=T-001" in loc, loc
+        events = elo.load_matchups()
+        assert events[-1]["date"] == "2026-01-03"
+
+        # Success-строка: поле даты, «Отменить» с формой и «Записать ещё»
+        html = client.get(loc).get_data(as_text=True)
+        assert 'value="2026-01-03"' in html
+        assert "Отменить" in html and "Записать ещё" in html
+        assert 'action="/verdict/void"' in html
+        assert 'value="T-001/002"' in html
+        assert "function writeMore" in html
+
+        # Ничья: в поле A остаётся прежняя A
+        resp = client.post("/verdict", data={
+            "model_a": "beta", "model_b": "alpha", "winner": "draw",
+            "task": "T-001", "date": "2026-01-04",
+        })
+        assert "model_a=beta" in resp.headers["Location"]
+    print("wave2 verdict context and actions: OK")
+
+
+def test_pair_hints_island():
+    """Подсказка личных встреч: JSON-остров, обмен сторон, именованные кнопки."""
+    with _temp_storage() as _paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/").get_data(as_text=True)
+        assert 'id="pair-hints"' in html
+        m = re.search(
+            r'<script type="application/json" id="pair-hints">(.*?)</script>',
+            html, re.S,
+        )
+        assert m, "JSON-остров подсказки не найден"
+        payload = json.loads(m.group(1))
+        assert payload["alpha|beta"] == {"g": 1, "x": 1, "y": 0}
+
+        # Элементы и функции подсказки/обмена в форме
+        assert 'id="pairHint"' in html
+        assert "Поменять A ↔ B" in html
+        assert "function swapModels" in html
+        assert "function updatePairHint" in html
+        assert "function updateOutcomeLabels" in html
+        assert "function optionName" in html
+        assert "modelAEl.focus()" in html
+        assert "не встречались" in html
+
+        # Невалидные параметры игнорируются: дата — сегодня, таск — current
+        from datetime import date as date_cls
+        today = date_cls.today().isoformat()
+        html2 = client.get(
+            "/?model_a=nope&model_b=beta&task=nope&date=2026-99-99"
+        ).get_data(as_text=True)
+        assert f'value="{today}"' in html2
+        assert '<option value="nope" selected' not in html2
+        assert '<option value="beta" selected>' in html2
+        assert '<option value="T-001" selected>' in html2
+    print("wave2 pair hints island: OK")
+
+
+def test_wave2_integration_scenario():
+    """Волна 2 end-to-end: запись с датой → отмена из success → лента → индекс."""
+    with _temp_storage() as paths:
+        _write(paths["journal"], "")
+        data_cache.clear()
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # 1. Запись вердикта с датой: success-строка несёт форму отмены
+        resp = client.post("/verdict", data={
+            "model_a": "alpha", "model_b": "beta", "winner": "a",
+            "task": "T-001", "date": "2026-02-05",
+        })
+        assert resp.status_code == 302
+        alert = client.get(resp.headers["Location"]).get_data(as_text=True)
+        assert "Записано" in alert and "Записать ещё" in alert
+        form = re.search(
+            r'action="/verdict/void"[^>]*>.*?name="matchup_id" value="([^"]+)"'
+            r'.*?name="next" value="([^"]+)"',
+            alert, re.S,
+        )
+        assert form, "success-строка без формы отмены"
+        matchup_id = form.group(1)
+        next_path = form.group(2).replace("&amp;", "&")
+        assert matchup_id == "T-001/001"
+
+        # 2. Отмена тем же маршрутом, что отправит браузер
+        resp = client.post("/verdict/void", data={
+            "matchup_id": matchup_id, "reason": "дубль после отмены",
+            "next": next_path,
+        })
+        assert resp.status_code == 302
+        loc = resp.headers["Location"]
+        assert "success=" in loc and "matchup_id=" not in loc
+        assert "model_a=alpha" in loc and "task=T-001" in loc, loc
+        assert "date=2026-02-05" in loc, loc
+        back = client.get(loc).get_data(as_text=True)
+        assert "Вердикт T-001/001 аннулирован" in back
+        assert "Записать ещё" in back
+        assert 'action="/verdict/void"' not in back, "повторная отмена предлагается снова"
+
+        # 3. Лента истории с фильтром показывает аннулированную запись
+        html = client.get("/history?include_voided=1&model=alpha").get_data(as_text=True)
+        assert "history-item-voided" in html
+        assert "аннулировано" in html and "дубль после отмены" in html
+        assert "Всего записей: 1 · аннулированных: 1" in html
+
+        # 4. Журнал и индекс согласованы: порядок seq, tombstone, счётчики
+        events = elo.load_matchups()
+        assert [e.get("matchup") for e in events] == ["T-001/001", "T-001/002"]
+        assert [e.get("seq") for e in events] == [1, 2]
+        assert events[1]["void_of"] == "T-001/001"
+        assert events[1]["reason"] == "дубль после отмены"
+
+        idx = server.ensure_index()
+        summary = idx["matchups_summary"]
+        assert summary["total"] == 2 and summary["voided"] == 1
+        assert summary["applied"] == 0 and summary["tombstone"] == 1
+        assert idx["elo_history"] == []
+        vh = idx["voided_history"]
+        assert len(vh) == 1, vh
+        assert vh[0]["matchup"] == "T-001/001" and vh[0]["seq"] == 1
+        assert vh[0]["date"] == "2026-02-05"
+        assert vh[0]["elo_a"] == {"before": 1200, "after": 1220, "delta": 20}
+        assert vh[0]["void"]["matchup"] == "T-001/002"
+        assert vh[0]["void"]["reason"] == "дубль после отмены"
+    print("wave2 integration scenario: OK")
+
+
 def test_pagination_items_window():
     """Окно виджета: первая/последняя/текущая ±2, троеточия, склейка разрыва."""
     items = render_helpers.pagination_items
@@ -805,6 +1115,12 @@ if __name__ == "__main__":
     test_parallel_cached_single_build()
     test_requests_do_not_reread_journal()
     test_routes_smoke()
+    test_merge_history_feed_unit()
+    test_void_route()
+    test_history_voided_feed()
+    test_verdict_context_and_actions()
+    test_pair_hints_island()
+    test_wave2_integration_scenario()
     test_caption_contrast_tokens()
     test_tables_scope_col()
     test_pagination_items_window()

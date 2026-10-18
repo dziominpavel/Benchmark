@@ -195,7 +195,7 @@ def format_elo_history(history: list[dict], name_map: dict,
       model_a_name, model_b_name, model_a_caption, model_b_caption,
       elo_a_before, elo_a_after, elo_a_delta, elo_a_delta_str, elo_a_delta_class,
       elo_b_before, elo_b_after, elo_b_delta, elo_b_delta_str, elo_b_delta_class,
-      date_str, hit.
+      date_str, hit, matchup, voided, void_str.
     """
     items = []
     for item in history:
@@ -222,6 +222,20 @@ def format_elo_history(history: list[dict], name_map: dict,
             item.get("recorded_at", ""), item.get("date", "")
         )
 
+        voided = bool(item.get("voided"))
+        void_str = ""
+        if voided:
+            void = item.get("void") or {}
+            void_date = format_recorded_at(
+                void.get("recorded_at", ""), void.get("date", "")
+            )
+            void_str = "аннулировано"
+            if void_date:
+                void_str += f" {void_date}"
+            reason = str(void.get("reason", "")).strip()
+            if reason:
+                void_str += f" · {reason}"
+
         captions = caption_map or {}
         items.append({
             "model_a_name": a_name,
@@ -240,7 +254,28 @@ def format_elo_history(history: list[dict], name_map: dict,
             "elo_b_delta_class": b_delta_class,
             "date_str": date_str,
             "hit": bool(item.get("hit")) if highlight else False,
+            "matchup": item.get("matchup", ""),
+            "voided": voided,
+            "void_str": void_str,
         })
+    return items
+
+
+def merge_history_feed(elo_history: list[dict],
+                       voided_history: list[dict] | None = None) -> list[dict]:
+    """Единая лента истории: применённые + аннулированные записи.
+
+    Копии записей `elo_history` (без пометок) и `voided_history`
+    (с `voided=True` и словарём `void` из индекса) в общем обратном
+    хронологическом порядке — по убыванию `seq` исходного вердикта:
+    аннулированная запись стоит на месте своего исходного seq.
+    """
+    items = [dict(h) for h in elo_history]
+    for v in voided_history or []:
+        entry = dict(v)
+        entry["voided"] = True
+        items.append(entry)
+    items.sort(key=lambda h: h.get("seq") or 0, reverse=True)
     return items
 
 

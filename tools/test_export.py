@@ -13,6 +13,9 @@ test_export.py — статический слепок витрины: read-only
   * 3.1 — строки архива и остров реестра «Рейтинга», номера рангов в span.
   * 3.2 — шаблон строк архива матрицы «Настроек» и данные участников истории.
   * 3.3 — JSON-остров аналитики содержит все модели полного состава.
+  * Волна 2: аннулированные строки истории в слепке (пометка, причина,
+    участники), контролы аннулирования недоступны, фильтр «Показывать
+    аннулированные» сохраняется, mirror.js знает про оба маркера.
 
 Запуск: python tools/test_export.py
 """
@@ -443,6 +446,83 @@ def test_export_mirror_layer():
     print("3.x mirror data layer: OK")
 
 
+def _void_export_journal() -> str:
+    """Журнал: две записи alpha vs beta и tombstone на первую."""
+    base = datetime(2026, 1, 2, 10, 0, 0)
+    events = []
+    for seq, winner in ((1, "a"), (2, "b")):
+        ts = base + timedelta(minutes=seq)
+        events.append(json.dumps({
+            "version": 1,
+            "seq": seq,
+            "task": "T-001",
+            "matchup": f"T-001/{seq:03d}",
+            "model_a": "alpha",
+            "model_b": "beta",
+            "model_a_id": "alpha",
+            "model_b_id": "beta",
+            "winner": winner,
+            "date": ts.date().isoformat(),
+            "recorded_at": ts.isoformat(timespec="seconds"),
+        }, ensure_ascii=False))
+    ts = base + timedelta(minutes=3)
+    events.append(json.dumps({
+        "version": 1,
+        "seq": 3,
+        "task": "T-001",
+        "matchup": "T-001/003",
+        "void_of": "T-001/001",
+        "reason": "ошибка протокола",
+        "date": ts.date().isoformat(),
+        "recorded_at": ts.isoformat(timespec="seconds"),
+    }, ensure_ascii=False))
+    return "\n".join(events) + "\n"
+
+
+def test_export_history_voided():
+    """Волна 2: аннулированные строки в слепке; контролы записи недоступны."""
+    with _temp_storage() as paths:
+        _write(paths["journal"], _void_export_journal())
+        data_cache.clear()
+
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_void_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            root = Path(out)
+            history = (root / "history" / "index.html").read_text(encoding="utf-8")
+            home = (root / "index.html").read_text(encoding="utf-8")
+
+            # Аннулированная строка собрана в слепок: пометка, причина, участники
+            assert "history-item-voided" in history, "нет пометки аннулированной строки"
+            assert "ошибка протокола" in history, "нет причины аннулирования"
+            rows = re.findall(
+                r'<div data-a="[^"]*" data-b="[^"]*" class="history-item[^"]*">.*?</div>',
+                history, re.S,
+            )
+            assert len(rows) == 2, f"строк истории: {len(rows)}"
+            assert "history-item-voided" not in rows[0], "порядок ленты нарушен"
+            assert "history-item-voided" in rows[1], "аннулированная строка не помечена"
+            assert 'data-a="alpha" data-b="beta"' in rows[1], "нет участников у строки"
+
+            # Контролы записи в зеркале недоступны, фильтр отображения остаётся
+            assert 'action="/verdict/void"' not in history
+            assert "Аннулировать" not in history
+            assert "Показывать аннулированные" in history
+            assert 'name="include_voided"' in history
+            assert 'name="include_voided" value="1" checked' not in history, (
+                "чекбокс аннулированных пришёл отмеченным — фильтр не скрыт по умолчанию"
+            )
+            assert "function swapModels" not in home
+            assert 'name="date"' in home
+            assert "Поменять A ↔ B" in home
+
+            # Клиентский слой зеркала знает про аннулированные строки и фильтр
+            script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
+            for marker in ("history-item-voided", "include_voided"):
+                assert marker in script, f"mirror.js: нет маркера {marker}"
+    print("wave2 export history voided: OK")
+
+
 def test_check_output_violations():
     with tempfile.TemporaryDirectory(prefix="bench_mirror_bad_") as out:
         root = Path(out)
@@ -495,6 +575,7 @@ if __name__ == "__main__":
     test_export_links_and_markers()
     test_export_queue_pages()
     test_export_mirror_layer()
+    test_export_history_voided()
     test_check_output_violations()
     test_export_history_threshold_warning()
     print("\nALL EXPORT TESTS PASSED")

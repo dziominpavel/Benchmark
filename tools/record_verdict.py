@@ -12,6 +12,11 @@ record_verdict.py — единственная точка записи верд�
         --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
         --winner b
 
+    # Матч задним числом (date — YYYY-MM-DD; по умолчанию — сегодня):
+    python tools/record_verdict.py --task T-001 \
+        --model-a devin-swe-1-7-max --model-b opencode-mimo-v2-5-free \
+        --winner b --date 2026-09-04
+
     # Аннулировать ошибочный вердикт: в журнал дозаписывается
     # tombstone-событие, исходная строка не удаляется:
     python tools/record_verdict.py --void T-001/001 --reason "ошибка записи"
@@ -54,6 +59,8 @@ def main() -> int:
                         help="Модель B: реальный id из models.yaml")
     parser.add_argument("--winner", choices=["a", "b", "draw"],
                         help="Победитель: a | b | draw")
+    parser.add_argument("--date",
+                        help="Дата вердикта YYYY-MM-DD (по умолчанию — сегодня)")
     parser.add_argument("--void", metavar="MATCHUP_ID",
                         help="Аннулировать вердикт <task>/<NNN> "
                              "(tombstone-событие в журнале)")
@@ -81,6 +88,7 @@ def main() -> int:
             model_a=args.model_a,
             model_b=args.model_b,
             winner=args.winner,
+            verdict_date=args.date,
             regenerate_index=not args.no_index,
         )
         v = result["verdict"]

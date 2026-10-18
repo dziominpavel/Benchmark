@@ -237,7 +237,7 @@
         });
       }
     }
-    for (const name of ["only_debts", "include_inactive"]) {
+    for (const name of ["only_debts", "include_inactive", "include_voided"]) {
       const inputs = [...form.querySelectorAll('input[name="' + name + '"]')];
       if (!inputs.length || params.get(name) === null) continue;
       inputs.forEach((el) => {
@@ -521,6 +521,7 @@
     const state = () => ({
       model: select ? select.value : "",
       includeInactive: isChecked(form, "include_inactive"),
+      includeVoided: isChecked(form, "include_voided"),
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       agentSel: formTags(form, "agents"),
@@ -601,14 +602,17 @@
       const states = rows.map((row) => {
         const a = row.dataset.a || "";
         const b = row.dataset.b || "";
+        const voided = row.classList.contains("history-item-voided");
         const modelMatch = Boolean(st.model) && (a === st.model || b === st.model);
         const tagMatch =
           passesTags(a, st.agentSel, st.providerSel) ||
           passesTags(b, st.agentSel, st.providerSel);
-        const shown = keepAll || (st.model ? modelMatch : tagMatch);
-        return { row, shown, hit: keepAll && (st.model ? modelMatch : tagMatch) };
+        const matches = keepAll || (st.model ? modelMatch : tagMatch);
+        const shown = matches && (!voided || st.includeVoided);
+        return { row, shown, hit: keepAll && (st.model ? modelMatch : tagMatch), voided };
       });
       const visible = states.filter((s) => s.shown).length;
+      const voidedVisible = states.filter((s) => s.shown && s.voided).length;
       const hits = keepAll ? states.filter((s) => s.hit).length : 0;
       const pages = Math.max(1, Math.ceil(visible / HISTORY_PAGE_SIZE));
       currentPage = Math.max(1, Math.min(currentPage, pages));
@@ -631,6 +635,7 @@
 
       if (statsEl) {
         let text = "Всего записей: " + visible;
+        if (st.includeVoided) text += " · аннулированных: " + voidedVisible;
         if (keepAll) text += " · подсвечено: " + hits;
         else if (st.model) text += " · Фильтр: " + modelName(st.model);
         statsEl.textContent = text;
@@ -661,6 +666,7 @@
       writeUrl([
         ["model", st.model],
         ["include_inactive", st.includeInactive ? "1" : ""],
+        ["include_voided", st.includeVoided ? "1" : ""],
         ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],

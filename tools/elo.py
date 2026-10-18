@@ -334,6 +334,23 @@ def _replay_state(matchups: list[dict], model_ids: list[str]) -> tuple[dict, dic
     return elo, stats
 
 
+def _parse_verdict_date(value: str) -> str:
+    """Проверяет дату вердикта: ровно `YYYY-MM-DD` и календарно корректную.
+
+    Возвращает нормализованную строку; бросает ValueError.
+    """
+    value = value.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError(
+            f"Дата вердикта должна быть в формате YYYY-MM-DD, получено '{value}'"
+        )
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Некорректная дата вердикта: '{value}'") from None
+    return value
+
+
 def record_verdict(
     task: str,
     model_a: str,
@@ -341,6 +358,7 @@ def record_verdict(
     winner: str,
     *,
     recorded_at: str | None = None,
+    verdict_date: str | None = None,
     regenerate_index: bool = True,
 ) -> dict:
     """Записывает вердикт в журнал — ЕДИНСТВЕННАЯ точка записи.
@@ -348,6 +366,8 @@ def record_verdict(
     - model_a/model_b SHALL быть реальными id из models.yaml.
     - Назначает глобальный seq и matchup (<task>/NNN), штампует
       recorded_at системным временем.
+    - verdict_date — дата вердикта (YYYY-MM-DD, по умолчанию — сегодня);
+      пустое значение эквивалентно «сегодня».
     - Вычисляет и записывает снэпшот ELO (before/after/delta) — делает
       подмену или вставку задним числом детектируемой через --check.
     - Дозаписывает строку в data/matchups/journal.jsonl под
@@ -362,6 +382,8 @@ def record_verdict(
         raise ValueError(f"winner должен быть a|b|draw, получено '{winner}'")
     if model_a == model_b:
         raise ValueError("Модели A и B должны различаться")
+    if verdict_date:
+        verdict_date = _parse_verdict_date(verdict_date)
 
     settings = load_settings()
 
@@ -409,7 +431,7 @@ def record_verdict(
             "model_a_id": id_a,
             "model_b_id": id_b,
             "winner": winner,
-            "date": date.today().isoformat(),
+            "date": verdict_date or date.today().isoformat(),
             "recorded_at": recorded_at or now_iso(),
             "elo": {
                 id_a: {"before": r_a, "after": new_a, "delta": new_a - r_a},
@@ -428,7 +450,8 @@ def void_matchup(matchup_id: str, reason: str = "") -> dict:
     """Аннулирует вердикт tombstone-событием (сам вердикт не удаляется).
 
     matchup_id вида 'T-001/001'; цель ищется среди событий журнала.
-    Возвращает dict с path журнала и id нового события.
+    Повторное аннулирование и аннулирование tombstone-события отклоняются
+    с ValueError до записи. Возвращает dict с path журнала и id нового события.
     """
     if "/" not in matchup_id:
         raise ValueError(f"matchup_id должен быть вида '<task>/<NNN>', получено '{matchup_id}'")
@@ -436,8 +459,15 @@ def void_matchup(matchup_id: str, reason: str = "") -> dict:
 
     with journal_lock() as f:
         events = load_matchups()
-        if not any(mu.get("_matchup_id") == matchup_id for mu in events):
+        target = next((mu for mu in events if mu.get("_matchup_id") == matchup_id), None)
+        if target is None:
             raise ValueError(f"Вердикт {matchup_id} не найден в журнале")
+        if target.get("void_of"):
+            raise ValueError(
+                f"{matchup_id} — событие аннулирования: аннулировать его нельзя"
+            )
+        if any(mu.get("void_of") == matchup_id for mu in events):
+            raise ValueError(f"Вердикт {matchup_id} уже аннулирован")
 
         seq = _next_seq(events)
         new_id = next_matchup_id(task, events)
@@ -468,6 +498,8 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
       models: {id: {elo, games, wins, losses, draws}}
       elo_history: [{matchup, seq, date, recorded_at, model_a_id, model_b_id,
                      winner, elo_a, elo_b}, ...]
+      voided_history: [{matchup, seq, task, date, recorded_at, model_a_id,
+                        model_b_id, winner, elo_a, elo_b, void}, ...]
       warnings: [str]
       applied/voided/tombstone/skipped: списки matchup_id
     """
@@ -487,6 +519,50 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
     for vid in sorted(voided):
         if not any(mu["_matchup_id"] == vid for mu in matchups):
             warnings.append(f"tombstone ссылается на несуществующее событие: {vid}")
+
+    # Аудит аннулированных: детали исходной записи (снэпшот как записан)
+    # плюс tombstone-событие. На ELO, elo_history и счётчики не влияет.
+    # При исторических дублях tombstone на одну цель берётся первый по seq.
+    voided_history: list[dict] = []
+    seen_voided: set[str] = set()
+    events_by_id = {mu.get("_matchup_id"): mu for mu in matchups}
+    for mu in sorted(
+        (m for m in matchups if m.get("void_of")),
+        key=lambda m: m.get("seq") or 0,
+    ):
+        vid = mu["void_of"]
+        if vid in seen_voided:
+            continue
+        target = events_by_id.get(vid)
+        if target is None:
+            continue  # висячая ссылка — уже в warnings
+        seen_voided.add(vid)
+        a = target.get("model_a_id", "")
+        b = target.get("model_b_id", "")
+        snap = target.get("elo") or {}
+        snap_a = snap.get(a) if a else None
+        snap_b = snap.get(b) if b else None
+        voided_history.append({
+            "matchup": vid,
+            "seq": target.get("seq"),
+            "task": target.get("task", ""),
+            "date": target.get("date", ""),
+            "recorded_at": target.get("recorded_at", ""),
+            "model_a_id": a,
+            "model_b_id": b,
+            "winner": target.get("winner", ""),
+            "elo_a": snap_a if isinstance(snap_a, dict)
+            else {"before": DEFAULT_ELO, "after": DEFAULT_ELO, "delta": 0},
+            "elo_b": snap_b if isinstance(snap_b, dict)
+            else {"before": DEFAULT_ELO, "after": DEFAULT_ELO, "delta": 0},
+            "void": {
+                "reason": mu.get("reason", ""),
+                "date": mu.get("date", ""),
+                "recorded_at": mu.get("recorded_at", ""),
+                "matchup": mu.get("_matchup_id", mu.get("matchup", "")),
+            },
+        })
+    voided_history.sort(key=lambda e: e.get("seq") or 0)
 
     for mu in matchups:
         mu_id = mu.get("_matchup_id", "")
@@ -560,6 +636,7 @@ def recalculate(matchups: list[dict], model_ids: list[str]) -> dict:
     return {
         "models": models_out,
         "elo_history": history,
+        "voided_history": voided_history,
         "warnings": warnings,
         "applied": applied,
         "skipped": skipped,
@@ -796,6 +873,7 @@ def generate_index() -> dict:
         "tasks": tasks_info,
         "matchups_summary": matchups_summary,
         "elo_history": elo_data["elo_history"],
+        "voided_history": elo_data["voided_history"],
     }
 
 
