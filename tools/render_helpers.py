@@ -40,6 +40,23 @@ def format_winrate(wins: int, games: int) -> str:
     return f"{(wins / games) * 100:.1f}%"
 
 
+def plural_ru(n: int, one: str, few: str, many: str) -> str:
+    """Русская форма слова по числу: 1 запись, 2 записи, 5 записей.
+
+    Числа 11–14 — всегда форма «many» (11 записей), независимо от
+    последней цифры; отрицательные приводятся к модулю.
+    """
+    n = abs(int(n))
+    if 11 <= n % 100 <= 14:
+        return many
+    last = n % 10
+    if last == 1:
+        return one
+    if 2 <= last <= 4:
+        return few
+    return many
+
+
 def pagination_items(page: int, pages: int) -> list[int | None]:
     """Пункты виджета пагинации: номера страниц, None — троеточие.
 
@@ -88,7 +105,9 @@ def get_model_detail(index_data: dict, model_id: str,
         delta_class, after, seq, matchup, url} в ОБРАТНОМ порядке seq —
         новые матчи сверху; url — постоянная ссылка вердикта),
       points (список after-значений в ХРОНОЛОГИЧЕСКОМ порядке seq, включая
-        стартовое DEFAULT_ELO — для графика).
+        стартовое DEFAULT_ELO — для графика),
+      point_links (ссылки точек графика, параллельно points: [None] +
+        {url, title} на каждый матч — переход к записи вердикта).
     """
     models = index_data.get("models", {})
     info = models.get(model_id)
@@ -105,6 +124,7 @@ def get_model_detail(index_data: dict, model_id: str,
     mine.sort(key=lambda e: e.get("seq", 0))
 
     points = [DEFAULT_ELO]
+    point_links: list[dict | None] = [None]
     h2h: dict[str, dict] = {}
     history = []
     for e in mine:
@@ -147,6 +167,10 @@ def get_model_detail(index_data: dict, model_id: str,
             "seq": seq,
             "matchup": str(e.get("matchup") or ""),
             "url": f"/history?v={seq}#v-{seq}",
+        })
+        point_links.append({
+            "url": f"/history?v={seq}#v-{seq}",
+            "title": f"запись v={seq}",
         })
 
     h2h_list = [
@@ -215,6 +239,7 @@ def get_model_detail(index_data: dict, model_id: str,
         "draws": info.get("draws", 0),
         "winrate": format_winrate(info.get("wins", 0), games),
         "points": points,
+        "point_links": point_links,
         "date_first": (
             (mine[0].get("date") or mine[0].get("recorded_at", ""))[:10]
             if mine else ""
@@ -373,6 +398,7 @@ def build_elo_svg(
     dates: tuple[str, str] | None = None,
     width: int = 860,
     height: int = 220,
+    links: list[dict | None] | None = None,
 ) -> str:
     """Строит SVG-график динамики ELO из точек (старт + after каждого матча).
 
@@ -380,6 +406,8 @@ def build_elo_svg(
     Ось X подписана датами первой и последней точки (dates); пунктирная линия
     на уровне 1200 — старт. min/max — цветные метки на линии, текущее значение
     и период — в HTML-легенде под графиком (без вложенных SVG-подписей).
+    links — параллельный points список {url, title} | None: точка со ссылкой
+    получает прозрачный хит-круг r=9 и ведёт, например, к записи вердикта.
     """
     if len(points) < 2:
         return '<div class="chart-empty">Нет матчей</div>'
@@ -403,10 +431,20 @@ def build_elo_svg(
         return top + plot_h * (1 - (v - lo) / (hi - lo))
 
     poly = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(points))
-    dots = "".join(
-        f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="3.5" class="chart-dot"/>'
-        for i, v in enumerate(points)
-    )
+    dots = ""
+    for i, v in enumerate(points):
+        dot = f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="3.5" class="chart-dot"/>'
+        link = links[i] if links and i < len(links) else None
+        if link:
+            href = html.escape(str(link.get("url", "")), quote=True)
+            title = html.escape(str(link.get("title", "")))
+            dots += (
+                f'<a href="{href}" class="chart-dot-link">{dot}'
+                f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="9" '
+                f'class="chart-dot-hit"><title>{title}</title></circle></a>'
+            )
+        else:
+            dots += dot
     grid = ""
     for frac, label in ((0.0, hi), (0.5, (hi + lo) / 2), (1.0, lo)):
         gy = top + plot_h * frac
@@ -524,9 +562,10 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
                                highlight: bool = False) -> str:
     """Строит SVG bar-chart распределения ELO пула моделей.
 
-    entries: список {elo: int, name: str = "", games: int = 0,
+    entries: список {elo: int, id: str = "", name: str = "", games: int = 0,
     caption: str = "", hit: bool = True}; сортировка
     по убыванию Elo — внутри. У каждого бара имя модели и значение.
+    Бар и имя модели с непустым id — ссылки на профиль `/model/<id>`.
     Бары окрашены непрерывным градиентом по Elo (см. build_elo_scale):
     минимум пула — тёмно-красный, 1200 — жёлтый, максимум — тёмно-зелёный;
     пара опор и доля смешивания передаются в inline --a/--b/--p.
@@ -587,7 +626,8 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
         )
         tip = html.escape(f'{tip_name} · {v} · игр: {p.get("games", 0)}')
         label = html.escape(str(p.get("name", "")))
-        bars += (
+        mid = str(p.get("id", ""))
+        row_svg = (
             f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
             f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" '
             f'class="{cls}" style="{style}">'
@@ -596,12 +636,17 @@ def build_elo_distribution_svg(entries: list[dict], width: int = 860,
             f'class="dist-name">{label}<title>{tip}</title></text>'
         )
         if caption:
-            bars += (
+            row_svg += (
                 f'<text x="{left - 8}" y="{cy + 15:.1f}" text-anchor="end" '
                 f'class="dist-caption">{html.escape(caption)}<title>{tip}</title></text>'
             )
+        if mid:
+            row_svg = (
+                f'<a href="/model/{html.escape(mid)}" class="dist-link">{row_svg}</a>'
+            )
         bars += (
-            f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
+            row_svg
+            + f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
             f'class="dist-value">{v}</text>'
         )
 
@@ -1179,6 +1224,8 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
     series — [{"id", "name", "points": [(x, elo)]}] в порядке легенды;
     цвета берутся по индексу серии (палитра ELO_LINE_COLORS). Ось Y
     включает опорную линию 1200; подписи дат — первая и последняя.
+    Серия с непустым id кликабельна: линия оборачивается ссылкой
+    на `/model/<id>` (невидимый хит-слой stroke-width 12).
     Нет матчей у всех серий → "" (шаблон показывает пустое состояние).
     """
     drawn = [s for s in series if s.get("points")]
@@ -1241,18 +1288,33 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
     for index, item in enumerate(drawn):
         color = colors[index % len(colors)]
         points = item["points"]
+        mid = str(item.get("id", ""))
         name = html.escape(str(item.get("name", item.get("id", ""))))
         poly = " ".join(f"{x(px):.1f},{y(pv):.1f}" for px, pv in points)
         end_x, end_y = x(points[-1][0]), y(points[-1][1])
-        lines += (
+        visible = (
             f'<polyline points="{poly}" class="chart-line-multi" fill="none" '
             f'stroke="{color}">'
             f"<title>{name}: {len(points)} матчей, Elo {points[-1][1]}</title>"
             f"</polyline>"
+        )
+        end_dot = (
             f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="3.5" '
             f'fill="{color}"><title>{name}: текущий Elo {points[-1][1]}</title>'
             f"</circle>"
         )
+        if mid:
+            hit = (
+                f'<polyline points="{poly}" class="chart-line-hit" fill="none" '
+                f'stroke-linecap="round">'
+                f"<title>{name}: {len(points)} матчей, Elo {points[-1][1]}"
+                f" — открыть профиль</title></polyline>"
+            )
+            lines += (
+                f'<a href="/model/{html.escape(mid)}">{visible}{hit}{end_dot}</a>'
+            )
+        else:
+            lines += visible + end_dot
 
     return (
         f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
@@ -1293,9 +1355,14 @@ def activity_by_day(elo_history: list[dict]) -> list[dict]:
     return days
 
 
-def build_activity_bars_svg(days: list[dict], width: int = 860,
-                            height: int = 170) -> str:
-    """SVG столбиков A3: число вердиктов на день, подсказка — дата и N."""
+def build_activity_bars_svg(days: list[dict], links: bool = True,
+                            width: int = 860, height: int = 170) -> str:
+    """SVG столбиков A3: число вердиктов на день, подсказка — дата и N.
+
+    links=True — столбики дней с вердиктами ведут на историю этого дня
+    (`/history?from=D&to=D`); links=False — без ссылок (слепок: фильтр
+    дат живёт только в консоли, зеркало его не применяет).
+    """
     if not days:
         return ""
     left, right, top, bottom = 44, 12, 16, 26
@@ -1314,11 +1381,15 @@ def build_activity_bars_svg(days: list[dict], width: int = 860,
         bx = left + index * bar_span + (bar_span - bar_w) / 2
         by = top + plot_h - bar_h
         cls = "activity-bar" + ("" if count else " activity-bar-zero")
-        bars += (
+        rect = (
             f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
             f'height="{bar_h:.1f}" class="{cls}">'
             f'<title>{_fmt_axis_date(item["day"])}: {count}</title></rect>'
         )
+        if links and count:
+            day = item["day"]
+            rect = f'<a href="/history?from={day}&amp;to={day}">{rect}</a>'
+        bars += rect
 
     grid = (
         f'<line x1="{left}" y1="{top}" x2="{width - right}" y2="{top}" '

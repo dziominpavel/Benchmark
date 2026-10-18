@@ -2038,6 +2038,56 @@ def test_wave4_profile():
     print("wave4 profile: OK")
 
 
+def test_wave5_history_title():
+    """Волна 5: заголовок вкладки истории несёт число записей выборки."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/history").get_data(as_text=True)
+        assert "<title>История — 1 запись — ELO Benchmark</title>" in html
+
+        one = client.get("/history?model=alpha").get_data(as_text=True)
+        assert "<title>История — 1 запись — ELO Benchmark</title>" in one
+
+        empty = client.get("/history?model=gamma").get_data(as_text=True)
+        assert "<title>История — 0 записей — ELO Benchmark</title>" in empty
+    print("wave5 history title: OK")
+
+
+def test_wave5_chart_links():
+    """Волна 5: графики кликабельны — распределение/A2/A3 и точки профиля."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        assert '<a href="/model/alpha" class="dist-link">' in html
+        assert 'class="chart-line-hit"' in html and 'href="/model/beta"' in html
+        assert (
+            'href="/history?from=2026-01-02&amp;to=2026-01-02"' in html
+        ), "столбик дня без ссылки"
+
+        model = client.get("/model/alpha").get_data(as_text=True)
+        assert 'class="chart-dot-link"' in model and 'class="chart-dot-hit"' in model
+        assert model.count('href="/history?v=1#v-1"') >= 2, (
+            "точка графика не ведёт к записи вердикта"
+        )
+
+        saved = bool(server.app.config.get("READ_ONLY"))
+        server.app.config["READ_ONLY"] = True
+        try:
+            ro = client.get("/stats").get_data(as_text=True)
+            assert "/history?from=" not in ro, "столбики дней ведут на фильтр дат"
+            assert 'class="dist-link"' in ro, "бары распределения без ссылок"
+            assert 'class="chart-line-hit"' in ro, "линии A2 без ссылок"
+            ro_model = client.get("/model/alpha").get_data(as_text=True)
+            assert 'class="chart-dot-link"' in ro_model, "точки графика без ссылок"
+        finally:
+            server.app.config["READ_ONLY"] = saved
+    print("wave5 chart links: OK")
+
+
 if __name__ == "__main__":
     test_key_changes_per_file()
     test_builder_runs_once()
@@ -2073,4 +2123,6 @@ if __name__ == "__main__":
     test_wave4_stats_a3_a5()
     test_wave4_stats_a6_a8()
     test_wave4_profile()
+    test_wave5_history_title()
+    test_wave5_chart_links()
     print("\nALL DATA CACHE TESTS PASSED")

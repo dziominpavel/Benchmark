@@ -208,6 +208,12 @@ def test_elo_multiline_svg():
     assert "chart-baseline" in svg, "нет опорной линии 1200"
     assert "02.01.2026" in svg and "01.02.2026" in svg
     assert "Динамика ELO: линий 2, матчей 2" in svg
+    assert 'href="/model/a"' in svg and 'href="/model/b"' in svg, "линия без ссылки"
+    assert svg.count('class="chart-line-hit"') == 2, "нет хит-слоя на линии"
+    no_link = rh.build_elo_multiline_svg(
+        [{"name": "A", "points": [(0, 1210), (1, 1230)]}], 2, (),
+    )
+    assert "/model/" not in no_link, "серия без id не должна вести на профиль"
     assert rh.build_elo_multiline_svg([], 0, ()) == ""
     assert rh.build_elo_multiline_svg(
         [{"id": "a", "name": "A", "points": []}], 3, (),
@@ -242,8 +248,48 @@ def test_activity_bars_svg():
     assert "01.01.2026: 3" in svg and "03.01.2026: 1" in svg
     assert "activity-bar-zero" in svg, "день без вердиктов не помечен нулевым"
     assert "дней 3, вердиктов 4, максимум 3" in svg
+    assert 'href="/history?from=2026-01-01&amp;to=2026-01-01"' in svg, "столбик без ссылки"
+    assert "from=2026-01-02" not in svg, "нулевой день не ведёт в историю"
+    unlinked = rh.build_activity_bars_svg(days, links=False)
+    assert "/history?from=" not in unlinked, "links=False должен отключать ссылки"
     assert rh.build_activity_bars_svg([]) == ""
     print("A3 activity bars svg: OK")
+
+
+def test_plural_ru():
+    """Счётчик title: формы слова по числу, включая 11–14 и сотые."""
+    cases = {
+        0: "записей", 1: "запись", 2: "записи", 4: "записи", 5: "записей",
+        11: "записей", 12: "записей", 14: "записей", 21: "запись",
+        22: "записи", 102: "записи", 111: "записей", 595: "записей", 602: "записи",
+    }
+    for n, expected in cases.items():
+        assert rh.plural_ru(n, "запись", "записи", "записей") == expected, n
+    print("plural ru: OK")
+
+
+def test_elo_distribution_links():
+    """«Распределение Elo»: бар и имя с id — ссылка на профиль, без id — нет."""
+    svg = rh.build_elo_distribution_svg([
+        {"id": "a", "elo": 1250, "name": "Alpha", "games": 3},
+        {"elo": 1150, "name": "Beta", "games": 1},
+    ])
+    assert 'href="/model/a"' in svg and 'class="dist-link"' in svg
+    assert svg.count('href="/model/') == 1, "строка без id не ведёт на профиль"
+    print("distribution links: OK")
+
+
+def test_elo_svg_point_links():
+    """Профиль: точка с links ведёт к записи вердикта, без — некликабельна."""
+    svg = rh.build_elo_svg(
+        [1200, 1216, 1208],
+        links=[None, {"url": "/history?v=1#v-1", "title": "запись v=1"}, None],
+    )
+    assert 'href="/history?v=1#v-1"' in svg and "запись v=1" in svg
+    assert svg.count('class="chart-dot-hit"') == 1, "ссылка только у матчевой точки"
+    plain = rh.build_elo_svg([1200, 1216])
+    assert "/history?" not in plain and "chart-dot-hit" not in plain
+    print("profile elo svg point links: OK")
 
 
 def test_pair_matrix():
@@ -467,6 +513,9 @@ if __name__ == "__main__":
     test_elo_multiline_svg()
     test_activity_by_day()
     test_activity_bars_svg()
+    test_plural_ru()
+    test_elo_distribution_links()
+    test_elo_svg_point_links()
     test_pair_matrix()
     test_pair_matrix_svg()
     test_group_summary()

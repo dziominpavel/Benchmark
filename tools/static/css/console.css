@@ -1425,6 +1425,8 @@ rect.dist-pt.filter-miss { opacity: 0.5; }
 .dist-name { fill: var(--text); font-size: 12px; }
 .dist-value { fill: var(--muted); font-size: 12px; }
 .dist-caption { fill: var(--muted); font-size: 10px; opacity: var(--caption-opacity); }
+a.dist-link { text-decoration: none; }
+a.dist-link:hover .dist-name { fill: var(--accent); }
 
 /* --- блок «Фильтр» и подписи моделей -------------------------------------- */
 
@@ -1980,6 +1982,10 @@ a.interval-name:hover { fill: var(--accent); }
 .lines-presets { margin-left: auto; font-size: var(--fs-sm); color: var(--muted); }
 
 .chart-line-multi { stroke-width: 2; opacity: 0.9; }
+
+/* хит-слои кликабельных графиков: прозрачные фигуры поверх видимых */
+.chart-line-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
+.chart-dot-hit { fill: transparent; pointer-events: all; }
 
 .line-legend {
   display: flex;

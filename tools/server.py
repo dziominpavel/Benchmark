@@ -55,7 +55,7 @@ from register_task import (
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
     build_elo_distribution_svg, compute_rank_trends, pagination_items,
-    merge_history_feed, history_task_id,
+    merge_history_feed, history_task_id, plural_ru,
     interval_groups, build_rating_intervals_svg,
     parse_lines_param, parse_period_param, default_line_ids,
     build_elo_series, build_elo_multiline_svg, ELO_LINE_COLORS,
@@ -1751,7 +1751,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
 {% from "_verdict_row.html" import verdict_row with context %}
 {% from "_pagination.html" import pagination %}
-{% block title %}История — ELO Benchmark{% endblock %}
+{% block title %}История — {{ history_found_label }} — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
     <h1>История ELO</h1>
@@ -3081,6 +3081,11 @@ def history_page():
 
     total_history = feed["total"]
     history_found = feed["found"]
+    # Заголовок вкладки: число записей текущей выборки с правильной формой
+    # слова («История — 602 записи — ELO Benchmark»).
+    history_found_label = (
+        f"{history_found} {plural_ru(history_found, 'запись', 'записи', 'записей')}"
+    )
     history_voided = feed["voided"]
     history_hits = feed["hits"]
     history_pages = (history_found + page_size - 1) // page_size if history_found else 1
@@ -3164,6 +3169,7 @@ def history_page():
         history_pages=history_pages,
         history_total=total_history,
         history_found=history_found,
+        history_found_label=history_found_label,
         history_search_active=search["active"],
         history_voided=history_voided,
         history_hits=history_hits,
@@ -3359,6 +3365,7 @@ def model_page(model_id: str):
             detail["points"],
             dates=(detail["date_first"], detail["date_last"])
             if detail["date_first"] and detail["date_last"] else None,
+            links=detail.get("point_links"),
         ),
         rank=rank,
         pool_size=len(pool_ids),
@@ -3415,6 +3422,7 @@ def stats_page():
     entries = []
     for m in pool:
         entry = {
+            "id": m.get("id", ""),
             "elo": m.get("elo", DEFAULT_ELO),
             "name": m.get("name", m.get("id", "")),
             "games": m.get("games", 0),
@@ -3560,7 +3568,7 @@ def stats_page():
         ),
         line_legend=line_legend,
         activity_summary=activity_summary,
-        activity_svg=build_activity_bars_svg(activity),
+        activity_svg=build_activity_bars_svg(activity, links=not read_only()),
         matrix_svg=build_pair_matrix_svg(
             matrix, model_names, links=not read_only(),
         ),

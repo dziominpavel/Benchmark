@@ -601,6 +601,12 @@ def test_export_stats_analytics():
             assert "/history?pair=" not in stats, "ячейки матрицы слепка — ссылки"
             assert "Клик по ячейке" not in stats, "подсказка live-перехода в слепке"
 
+            # Волна 5: бары распределения и линии A2 кликабельны (ссылки моделей
+            # разрешаются в файлы), столбики A3 без ссылок — фильтра дат в зеркале нет
+            assert 'class="dist-link"' in stats, "бары распределения слепка без ссылок"
+            assert 'class="chart-line-hit"' in stats, "линии A2 слепка без ссылок"
+            assert "/history?from=" not in stats, "столбики A3 слепка ведут на фильтр дат"
+
             # A6–A8 рендерятся (разбивка A8 по таскам — только при 2+ активных)
             assert "Взлёты и падения" in stats and "delta-list" in stats
             assert "Сила оппозиции" in stats
@@ -666,6 +672,9 @@ def test_export_profile():
             assert "мало игр для тренда" in page
             assert 'id="profile-last-match"' in page
             assert 'href="../../history/?v=1#v-1"' in page
+
+            # Волна 5: точки графика динамики ведут к записям вердиктов
+            assert 'class="chart-dot-link"' in page, "точки графика слепка без ссылок"
 
             # 5.3: кнопка «Показать в истории» ведёт на экспортированную историю
             assert 'href="../../history/?model=alpha"' in page
