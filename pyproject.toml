@@ -1,7 +1,7 @@
 [project]
 name = "benchmark-elo"
 # Релизный трек: версия меняется только в момент релиза (docs/versioning.md).
-version = "0.2.0"
+version = "0.3.0"
 description = "ELO Benchmark web server (tools/server.py)"
 requires-python = ">=3.10"
 dependencies = [
