@@ -21,6 +21,8 @@
 </div>
 {% endif %}
 {% set path = request.path %}
+{% set app_ver = app_version() %}
+{% set app_build = app_build_time() %}
 {% set nav = 'rating' if path == '/' else
              'history' if path.startswith('/history') else
              'stats' if path.startswith('/stats') else
@@ -55,11 +57,13 @@
 </main>
 
 <footer class="site-footer">
-  {% if read_only() %}
-  <p>ELO Benchmark · демонстрационная копия · данные на момент сборки слепка · <a href="/settings">Настройки</a></p>
-  {% else %}
-  <p>ELO Benchmark · локальная консоль · данные: data/index.json · <a href="/settings">Настройки</a></p>
-  {% endif %}
+  <p>
+    ELO Benchmark
+    {%- if app_ver %} <span class="footer-version" title="Версия консоли">{{ app_ver }}</span>{% endif %}
+    {%- if app_build %} · <span class="footer-build" title="Дата и время сборки">сборка {{ app_build }}</span>{% endif %}
+    {%- if read_only() %} · демонстрационная копия · данные на момент сборки слепка · <a href="/settings">Настройки</a>
+    {%- else %} · локальная консоль · данные: data/index.json · <a href="/settings">Настройки</a>{% endif %}
+  </p>
 </footer>
 </body>
 </html>

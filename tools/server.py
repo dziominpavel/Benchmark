@@ -23,6 +23,7 @@ import heapq
 import io
 import json
 import re
+import subprocess
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -86,6 +87,123 @@ def read_only() -> bool:
 
 
 app.jinja_env.globals["read_only"] = read_only
+
+
+# ─── Версия и сборка консоли ────────────────────────────────────────
+# Показываются в подвале (shell.html) и в разделе «О консоли» страницы
+# настроек. Версия — тег последнего релиза: релиз фиксируется тегом
+# `vX.Y.Z` (docs/versioning.md), промежуточных версий не существует,
+# поэтому на коммитах после релиза UI честно показывает последний
+# выпущенный релиз. Сборка — время коммита, из которого запущен код
+# (у запуска из архива без git — время файла версии проекта).
+
+APP_ROOT = Path(__file__).resolve().parent.parent  # корень репозитория
+
+_RELEASE_TAG = re.compile(r"^v?(\d+\.\d+\.\d+)$")
+_BUILD_TIME_FMT = "%d.%m.%Y %H:%M"
+
+# git вызывается один раз при импорте модуля (резолв версии и сборки
+# ниже); на Windows без консоли (launch.vbs) запуск не мигает окном.
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _run_git(root: Path, *args: str) -> str | None:
+    """Вывод git-команды или None, если git/команда недоступны."""
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _git_version(root: Path) -> str | None:
+    """Тег ближайшего релиза (`git describe`) или None, если git/тега нет."""
+    return _run_git(root, "describe", "--tags", "--abbrev=0")
+
+
+def _file_version(root: Path) -> str | None:
+    """Версия из файла версии проекта (pyproject.toml) или None."""
+    try:
+        text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r'^\s*version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def resolve_app_version(root: Path = APP_ROOT) -> str:
+    """Версия консоли для UI в форме релизного тега `vX.Y.Z`.
+
+    Приоритет у тега ближайшего релиза (`git describe`); фолбэк — файл
+    версии проекта (git недоступен: архив, клон без тегов — блок не
+    должен пустовать). Оба источника нормализуются к `vX.Y.Z`; если
+    версии нет вовсе, возвращается пустая строка (блок скрывается).
+    """
+    for raw in (_git_version(root), _file_version(root)):
+        if raw and (tag := _RELEASE_TAG.match(raw.strip())):
+            return f"v{tag.group(1)}"
+    return ""
+
+
+def _git_build_time(root: Path) -> str | None:
+    """Время последнего коммита в локальной зоне или None без git."""
+    raw = _run_git(root, "show", "-s", "--format=%cI", "HEAD")
+    if not raw:
+        return None
+    try:
+        moment = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return moment.astimezone().strftime(_BUILD_TIME_FMT)
+
+
+def _file_build_time(root: Path) -> str | None:
+    """Время файла версии проекта — фолбэк без git (архив, распаковка)."""
+    try:
+        mtime = (root / "pyproject.toml").stat().st_mtime
+    except OSError:
+        return None
+    return datetime.fromtimestamp(mtime).strftime(_BUILD_TIME_FMT)
+
+
+def resolve_build_time(root: Path = APP_ROOT) -> str:
+    """Дата и время сборки для UI (локальная зона) или пустая строка.
+
+    Приоритет у времени последнего коммита (`git show`); фолбэк — время
+    файла версии проекта (git недоступен). Если нет и его, UI покажет
+    только версию.
+    """
+    return _git_build_time(root) or _file_build_time(root) or ""
+
+
+# Версия и сборка — константы процесса: git-вызовы происходят при
+# импорте, а не в первом запросе (бюджеты холодной главной,
+# tools/test_perf.py).
+_APP_VERSION = resolve_app_version()
+_APP_BUILD_TIME = resolve_build_time()
+
+
+def app_version() -> str:
+    """Версия консоли (в шаблонах: `{{ app_version() }}`)."""
+    return _APP_VERSION
+
+
+def app_build_time() -> str:
+    """Дата и время сборки (в шаблонах: `{{ app_build_time() }}`)."""
+    return _APP_BUILD_TIME
+
+
+app.jinja_env.globals["app_version"] = app_version
+app.jinja_env.globals["app_build_time"] = app_build_time
 
 
 def _self_url(*, exclude: tuple[str, ...] = ()) -> str:
@@ -2608,6 +2726,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <a href="#answer-coverage">Ответы</a>
     <a href="#recommendation-queue">Очередь</a>
     <a href="#lookups">Справочники</a>
+    <a href="#about">О консоли</a>
   </nav>
 
   <div class="stats stats-summary">
@@ -2926,6 +3045,19 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       </div>
     </div>
     {% endfor %}
+  </div>
+
+  <div class="card" id="about">
+    <h2>О консоли</h2>
+    <dl class="about-meta">
+      <div class="about-row"><dt>Версия</dt><dd>{{ app_version() or "—" }}</dd></div>
+      <div class="about-row"><dt>Сборка</dt><dd>{{ app_build_time() or "—" }}</dd></div>
+    </dl>
+    <div class="hint">
+      Версия — последний выпущенный релиз (git-тег). Сборка — дата и время
+      коммита, из которого запущена консоль; при запуске из архива без git —
+      время файла версии проекта.
+    </div>
   </div>
 
 <script>

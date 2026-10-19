@@ -22,6 +22,8 @@ test_export.py — статический слепок витрины: read-only
     live-контролов (линии/период, ссылки ячеек матрицы, разбивка по таскам
     только при 2+ активных); профиль — место/последний матч/покрытие, ссылки
     вердиктов, поиск и сортировка «Личных встреч» вырезаны вместе с aria-sort.
+  * Версия и сборка консоли: маркеры `.footer-version` (тег релиза) и
+    `.footer-build` (время коммита) в подвале слепка.
 
 Запуск: python tools/test_export.py
 """
@@ -344,6 +346,15 @@ def test_export_links_and_markers():
             assert 'href="../static/css/console.css"' in history
             model = (Path(out) / "model" / "alpha" / "index.html").read_text(encoding="utf-8")
             assert 'src="../../static/js/theme.js"' in model
+
+            # Версия и сборка запечены в подвал слепка (та же строка shell)
+            version = server.app_version()
+            build = server.app_build_time()
+            version_mark = f'<span class="footer-version" title="Версия консоли">{version}</span>'
+            build_mark = f'<span class="footer-build" title="Дата и время сборки">сборка {build}</span>'
+            for name, page in (("главной", html), ("истории", history), ("модели", model)):
+                assert version_mark in page, f"слепок {name} без версии в подвале"
+                assert build_mark in page, f"слепок {name} без сборки в подвале"
 
             # Волна 3: live-only элементы и мёртвые ссылки в слепок не попадают
             assert 'name="q"' not in html

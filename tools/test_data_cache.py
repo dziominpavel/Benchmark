@@ -42,6 +42,9 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     /stats A1–A8 (интервалы, динамика, активность, матрица, группы, ΔELO,
     оппозиция, исходы) и профиль модели (место/тренд, последний матч,
     покрытие по таскам, метаданные, поиск и сортировка «Личных встреч»).
+  * Версия и сборка консоли: подвал всех страниц и секция «О консоли»
+    настроек показывают тег последнего релиза (vX.Y.Z) и время коммита;
+    резолверы нормализуют источники и откатываются на файл версии.
 
 Запуск: python tools/test_data_cache.py
 """
@@ -51,12 +54,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -133,6 +138,13 @@ baseline_commit: ""
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _git(root: Path, *args: str) -> None:
+    """Команда git в тестовом репозитории (тихий вывод, ошибка — исключение)."""
+    subprocess.run(
+        ["git", *args], cwd=root, check=True, capture_output=True, text=True,
+    )
 
 
 @contextmanager
@@ -446,6 +458,95 @@ def test_routes_smoke():
         assert resp.status_code == 200
         assert paths["index"].exists()
     print("2.4 routes smoke: OK")
+
+
+def test_version_badge():
+    """Версия и сборка: подвал и «О консоли»; фолбэки резолверов."""
+    version = server.app_version()
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", version), (
+        f"версия консоли не в формате релизного тега: {version!r}"
+    )
+    build = server.app_build_time()
+    assert re.fullmatch(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}", build), (
+        f"сборка консоли не в формате даты-времени: {build!r}"
+    )
+    version_mark = f'<span class="footer-version" title="Версия консоли">{version}</span>'
+    build_mark = f'<span class="footer-build" title="Дата и время сборки">сборка {build}</span>'
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        for url in ("/", "/history", "/settings", "/model/alpha", "/add"):
+            html = client.get(url).get_data(as_text=True)
+            assert version_mark in html, f"{url}: в подвале нет версии {version}"
+            assert build_mark in html, f"{url}: в подвале нет сборки {build}"
+            assert 'class="brand-version"' not in html, (
+                f"{url}: бейдж версии остался в шапке"
+            )
+        settings = client.get("/settings").get_data(as_text=True)
+        assert f"<dt>Версия</dt><dd>{version}</dd>" in settings, (
+            "/settings: секция «О консоли» без версии"
+        )
+        assert f"<dt>Сборка</dt><dd>{build}</dd>" in settings, (
+            "/settings: секция «О консоли» без сборки"
+        )
+
+        # Слепок витрины (read-only) показывает те же метаданные
+        saved = bool(server.app.config.get("READ_ONLY"))
+        server.app.config["READ_ONLY"] = True
+        try:
+            html = client.get("/").get_data(as_text=True)
+            assert version_mark in html, "read-only слепок без версии в подвале"
+            assert build_mark in html, "read-only слепок без сборки в подвале"
+        finally:
+            server.app.config["READ_ONLY"] = saved
+
+    # Резолверы: без источников — пусто (блоки скрыты); фолбэки нормализуются
+    with tempfile.TemporaryDirectory(prefix="bench_version_") as tmp_str:
+        root = Path(tmp_str)
+        assert server.resolve_app_version(root) == "", (
+            "каталог без версии не должен давать строку"
+        )
+        assert server.resolve_build_time(root) == "", (
+            "каталог без git и файла версии не должен давать строку"
+        )
+        version_file = root / "pyproject.toml"
+        _write(version_file, '[project]\nversion = "1.2.3"\n')
+        assert server.resolve_app_version(root) == "v1.2.3", (
+            "файл версии не нормализован к vX.Y.Z"
+        )
+        moment = datetime(2024, 5, 6, 7, 8)  # локальное время без зоны
+        os.utime(version_file, (moment.timestamp(), moment.timestamp()))
+        assert server.resolve_build_time(root) == "06.05.2024 07:08", (
+            "фолбэк без git не взял время файла версии"
+        )
+
+        # Git-источники приоритетнее: версия — тег, сборка — время коммита
+        if shutil.which("git") is None:
+            print("    (git недоступен — проверки git-фолбэков пропущены)")
+        else:
+            _write(root / "readme.txt", "x\n")
+            _git(root, "init", "-q")
+            _git(root, "add", ".")
+            _git(root, "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                 "commit", "-q", "-m", "init")
+            assert server.resolve_app_version(root) == "v1.2.3", (
+                "без тегов версия должна браться из файла"
+            )
+            commit_iso = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", "HEAD"],
+                cwd=root, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            expected = datetime.fromisoformat(commit_iso).astimezone().strftime(
+                "%d.%m.%Y %H:%M"
+            )
+            assert server.resolve_build_time(root) == expected, (
+                "сборка из git-репозитория не совпала со временем HEAD"
+            )
+            _git(root, "tag", "v9.9.9")
+            assert server.resolve_app_version(root) == "v9.9.9", (
+                "тег релиза должен побеждать файл версии"
+            )
+    print("версия и сборка консоли: OK")
 
 
 def test_merge_history_feed_unit():
@@ -2095,6 +2196,7 @@ if __name__ == "__main__":
     test_parallel_cached_single_build()
     test_requests_do_not_reread_journal()
     test_routes_smoke()
+    test_version_badge()
     test_merge_history_feed_unit()
     test_void_route()
     test_history_voided_feed()
