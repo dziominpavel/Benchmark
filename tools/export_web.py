@@ -48,6 +48,12 @@ SIZE_WARN_BYTES = 200 * 1024 * 1024  # объём слепка
 
 HISTORY_PAGE_SIZE = 20               # размер страницы истории консоли
 
+# Подписи «Компания · Агент» в слепке: предрендерятся (это данные), а
+# показ ведёт клиентский слой зеркала — по параметру `captions` в адресе
+# (change caption-visibility-toggle). Поэтому страницы собираются с
+# `captions=show`, а в разметку подписи попадают всегда.
+CAPTIONS_QUERY = "captions=show"
+
 ROOT_MARKER = "__root__"
 CATALOG_MARKER = "__catalog__"
 
@@ -76,6 +82,12 @@ _ARCHIVED_FLAGS_ROW_RE = re.compile(
     r'<tr class="archived[^"]*">\s*<td class="model-cell">.*?</tr>', re.S)
 # Навигационный onchange фильтров: его роль в слепке исполняет mirror.js
 _FORM_SUBMIT_RE = re.compile(r'\s+onchange="this\.form\.submit\(\)"')
+
+# Тег body: в слепке на нём сразу ставится класс «подписи скрыты» (дефолт
+# живой консоли), чтобы предрендеренные подписи не «мигали» до запуска
+# клиентского слоя.
+_BODY_RE = re.compile(r"<body(?P<attrs>[^>]*)>")
+_CAPTIONS_OFF_CLASS = "captions-off"
 
 
 class ExportError(Exception):
@@ -136,7 +148,38 @@ def postprocess(html: str, out_file: str, urls: dict, catalog_depth: int) -> str
     html = html.replace(ROOT_MARKER, "../" * depth)
     html = html.replace(CATALOG_MARKER, "../" * (catalog_depth + depth))
     html = _FORM_SUBMIT_RE.sub("", html)
+    # Только первый <body>: острова данных вставляются перед </body>,
+    # то есть после тега, и их содержимое тегом body не является.
+    html = _BODY_RE.sub(_body_with_captions_off, html, count=1)
     return _rewrite_links(html, out_file, urls)
+
+
+def _body_with_captions_off(match: re.Match) -> str:
+    """Тег body слепка с классом «подписи скрыты».
+
+    Класс ставится в разметке, а не только клиентом: подписи в слепке
+    предрендерены, но по умолчанию не показываются — как в живой консоли.
+    """
+    attrs = match.group("attrs")
+    if "class=" in attrs:
+        return match.group(0)
+    return f'<body{attrs} class="{_CAPTIONS_OFF_CLASS}">'
+
+
+def _strip_captions(query: str) -> str:
+    """Убирает `captions=show` из query ссылки слепка.
+
+    Слепок открывается с выключенными подписями, поэтому в запечённых
+    ссылках параметра быть не должно: состояние подписей, как и остальных
+    настроек фильтра, ведёт клиентский слой зеркала.
+    """
+    if not query:
+        return query
+    parts = [
+        part for part in query.lstrip("?").split("&amp;")
+        if part and not part.startswith("captions=")
+    ]
+    return ("?" + "&amp;".join(parts)) if parts else ""
 
 
 def _rewrite_links(html: str, out_file: str, urls: dict) -> str:
@@ -158,6 +201,7 @@ def _rewrite_links(html: str, out_file: str, urls: dict) -> str:
             fragment = "#" + fragment
         path, sep, query = value.partition("?")
         query = "?" + query if sep else ""
+        query = _strip_captions(query)
         if path == "/settings" and query:
             keep: list[str] = []
             page_no: int | None = None
@@ -209,7 +253,7 @@ def _build_history(client, index_data: dict) -> str:
     консоли в порядке вывода, а к строке добавляются данные участников
     (data-a/data-b) — их использует mirror.js для фильтров.
     """
-    base = _fetch(client, "/history?include_voided=1")
+    base = _fetch(client, f"/history?include_voided=1&{CAPTIONS_QUERY}")
     # Слепок открывается с выключенным фильтром: аннулированные скрыты по
     # умолчанию (mirror.js), поэтому снимаем серверную отметку чекбокса.
     base = base.replace(
@@ -223,7 +267,8 @@ def _build_history(client, index_data: dict) -> str:
     pages = max(1, math.ceil(len(records) / HISTORY_PAGE_SIZE))
     rows: list[str] = []
     for k in range(1, pages + 1):
-        html = base if k == 1 else _fetch(client, f"/history?include_voided=1&page={k}")
+        html = base if k == 1 else _fetch(
+            client, f"/history?include_voided=1&{CAPTIONS_QUERY}&page={k}")
         found = _HISTORY_ROW_RE.findall(html)
         expected = max(0, min(HISTORY_PAGE_SIZE, len(records) - (k - 1) * HISTORY_PAGE_SIZE))
         if len(found) != expected:
@@ -269,7 +314,7 @@ def _build_stats(client, index_data: dict) -> str:
     (нужна история матчей), поэтому её строки собираются со всех
     страниц консоли в один документ — как строки истории.
     """
-    base = _fetch(client, "/stats")
+    base = _fetch(client, f"/stats?{CAPTIONS_QUERY}")
     span = _opposition_table_span(base)
     if span is None:
         return base
@@ -280,7 +325,7 @@ def _build_stats(client, index_data: dict) -> str:
     pages = max(1, math.ceil(active / server.RATING_PAGE_SIZE))
     rows: list[str] = []
     for k in range(1, pages + 1):
-        html = base if k == 1 else _fetch(client, f"/stats?opp_page={k}")
+        html = base if k == 1 else _fetch(client, f"/stats?{CAPTIONS_QUERY}&opp_page={k}")
         found = _OPPOSITION_ROW_RE.findall(html)
         expected = max(
             0, min(server.RATING_PAGE_SIZE, active - (k - 1) * server.RATING_PAGE_SIZE),
@@ -424,7 +469,7 @@ class MirrorData:
         base_has_table = _TABLE_WRAP_RE.search(base_html) is not None
         if not self.archived and base_has_table:
             return ""
-        all_wrap = _TABLE_WRAP_RE.search(_fetch(self.client, "/?filter=all"))
+        all_wrap = _TABLE_WRAP_RE.search(_fetch(self.client, f"/?filter=all&{CAPTIONS_QUERY}"))
         if all_wrap is None:
             raise ExportError("/?filter=all: не найдена таблица рейтинга")
         rows = _ARCHIVED_RATING_ROW_RE.findall(all_wrap.group(0))
@@ -463,7 +508,9 @@ class MirrorData:
         base_has_table = _flags_table_wrap(base_html) is not None
         if not self.archived and base_has_table:
             return ""
-        all_wrap = _flags_table_wrap(_fetch(self.client, "/settings?answer_filter=all"))
+        all_wrap = _flags_table_wrap(
+            _fetch(self.client, f"/settings?answer_filter=all&{CAPTIONS_QUERY}")
+        )
         if all_wrap is None:
             raise ExportError("/settings?answer_filter=all: не найдена таблица матрицы")
         rows = _ARCHIVED_FLAGS_ROW_RE.findall(all_wrap)
@@ -616,7 +663,7 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
         path.write_text(html, encoding="utf-8", newline="\n")
         written.append(out_file)
 
-    index_html = _fetch(client, "/")
+    index_html = _fetch(client, f"/?{CAPTIONS_QUERY}")
     mirror.validate_index_base(index_html)
     _write("index.html", index_html,
            island=mirror.models_island, fragment=mirror.index_fragment(index_html))
@@ -626,13 +673,14 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
     _write("stats/index.html", _build_stats(client, index_data),
            island=mirror.stats_island)
 
-    settings_html = _fetch(client, "/settings")
+    settings_html = _fetch(client, f"/settings?{CAPTIONS_QUERY}")
     mirror.validate_settings_base(settings_html)
     settings_fragment = mirror.settings_fragment(settings_html)
     _write("settings/index.html", settings_html,
            island=mirror.models_island, fragment=settings_fragment)
     for k in range(2, queue_pages + 1):
-        _write(urls["queue_files"][k], _fetch(client, f"/settings?queue_page={k}"),
+        _write(urls["queue_files"][k],
+               _fetch(client, f"/settings?{CAPTIONS_QUERY}&queue_page={k}"),
                island=mirror.models_island, fragment=settings_fragment)
     for mid in model_ids:
         _write(f"model/{mid}/index.html", _fetch(client, f"/model/{mid}"))

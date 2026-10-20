@@ -2,7 +2,8 @@
    filter-display-settings, filter-settings-trigger). filter_panel() — всегда
    развёрнутая карточка «Фильтр»: одна GET-форма страницы, контролы которой
    передаются телом {% call filter_panel() %}; в шапке — кнопка-раскрывашка
-   «Настройки фильтра» (режим отображения, сортировка чипов) и ссылка
+   «Настройки фильтра» (режим отображения, сортировка чипов, подпись модели)
+   и ссылка
    «Сбросить», ниже — ряды чипов «Агент»/«Компания». «Сбросить» видна,
    только когда что-то отфильтровано, и сохраняет настройки отображения.
    filter_hidden() — скрытые копии всех фильтров страницы для отдельных форм,
@@ -29,6 +30,15 @@
               <label><input type="radio" name="chips" value="alpha" {% if filter_chips == 'alpha' %}checked{% endif %} onchange="this.form.submit()"><span>По алфавиту</span></label>
               <label><input type="radio" name="chips" value="elo" {% if filter_chips == 'elo' %}checked{% endif %} onchange="this.form.submit()"><span>По ELO</span></label>
             </div>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Подпись модели</span>
+            {# Снятый флажок = «параметра нет» = подписи скрыты (дефолт);
+               скрытое поле-компаньон не нужно. #}
+            <label class="filter-check">
+              <input type="checkbox" name="captions" value="show"{% if not filter_captions_hidden %} checked{% endif %} onchange="this.form.submit()">
+              <span>Отражать агент-компанию</span>
+            </label>
           </div>
         </div>
       </details>

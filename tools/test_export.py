@@ -732,6 +732,46 @@ def test_export_profile():
     print("wave4 export profile: OK")
 
 
+def test_export_captions_toggle():
+    """Слепок повторяет переключатель «Отражать агент-компанию».
+
+    Подписи в статике предрендерены (это данные), но по умолчанию скрыты:
+    класс «captions-off» стоит в разметке, а показ ведёт клиентский слой
+    по `?captions=show` — как в живой консоли.
+    """
+    with _temp_storage():
+        with tempfile.TemporaryDirectory(prefix="bench_mirror_captions_") as out:
+            with _read_only():
+                assert export_web.main(["--out", out]) == 0
+            root = Path(out)
+            index = (root / "index.html").read_text(encoding="utf-8")
+            history = (root / "history" / "index.html").read_text(encoding="utf-8")
+
+            # Флажок «Отражать агент-компанию» есть в панели настроек.
+            assert 'name="captions" value="show"' in index, "в слепке нет флажка подписи"
+            assert 'name="captions" value="show"' in history, "в слепке истории нет флажка"
+
+            # Подписи предрендерены (данные), но по умолчанию скрыты.
+            assert "Prov · Agent" in index, "подписи не попали в статику"
+            assert 'class="captions-off"' in index, "нет класса «подписи скрыты»"
+            css = (root / "static" / "css" / "console.css").read_text(encoding="utf-8")
+            assert "body.captions-off .model-caption" in css, "нет правила гашения подписи"
+
+            # В запечённых ссылках параметра нет: состояние ведёт клиент.
+            assert "captions=show" not in index, "в ссылках слепка остался параметр подписей"
+
+            # Клиентский слой знает про параметр и умеет его применять.
+            script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
+            assert 'input[name="captions"]' in script, "mirror.js не знает про флажок"
+            assert 'params.get("captions")' in script, "mirror.js не читает параметр"
+            assert "applyCaptions" in script, "mirror.js не применяет состояние подписей"
+
+            # Остров реестра сохраняет подписи (это данные, а не вид).
+            island = _island_of(index, "mirror-models")
+            assert island["alpha"]["c"] == "Prov · Agent", "подпись не сохранена в острове"
+    print("export captions toggle: OK")
+
+
 if __name__ == "__main__":
     test_read_only_two_modes()
     test_read_only_inert_controls()
@@ -744,6 +784,7 @@ if __name__ == "__main__":
     test_export_task_pages()
     test_export_stats_analytics()
     test_export_profile()
+    test_export_captions_toggle()
     test_check_output_violations()
     test_export_history_threshold_warning()
     print("\nALL EXPORT TESTS PASSED")
