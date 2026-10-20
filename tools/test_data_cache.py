@@ -43,8 +43,9 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     оппозиция, исходы) и профиль модели (место/тренд, последний матч,
     покрытие по таскам, метаданные, поиск и сортировка «Личных встреч»).
   * Версия и сборка консоли: подвал всех страниц и секция «О консоли»
-    настроек показывают тег последнего релиза (vX.Y.Z) и время коммита;
-    резолверы нормализуют источники и откатываются на файл версии.
+    настроек показывают тег последнего релиза (vX.Y.Z) и время коммита
+    по Минску с меткой МСК; резолверы нормализуют источники и откатываются
+    на файл версии.
 
 Запуск: python tools/test_data_cache.py
 """
@@ -467,9 +468,16 @@ def test_version_badge():
         f"версия консоли не в формате релизного тега: {version!r}"
     )
     build = server.app_build_time()
-    assert re.fullmatch(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}", build), (
+    assert re.fullmatch(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2} МСК", build), (
         f"сборка консоли не в формате даты-времени: {build!r}"
     )
+    # Фиксированные моменты: результат не зависит от зоны тестовой машины
+    assert server._format_build_time(
+        datetime.fromisoformat("2026-10-19T18:23:54+00:00")
+    ) == "19.10.2026 21:23 МСК", "UTC-момент не приведён к минскому времени"
+    assert server._format_build_time(
+        datetime.fromisoformat("2026-10-19T21:23:54+03:00")
+    ) == "19.10.2026 21:23 МСК", "момент +03 не совпал с минским временем"
     version_mark = f'<span class="footer-version" title="Версия консоли">{version}</span>'
     build_mark = f'<span class="footer-build" title="Дата и время сборки">сборка {build}</span>'
     with _temp_storage():
@@ -488,6 +496,9 @@ def test_version_badge():
         )
         assert f"<dt>Сборка</dt><dd>{build}</dd>" in settings, (
             "/settings: секция «О консоли» без сборки"
+        )
+        assert "по минскому времени" in settings, (
+            "/settings: подсказка «О консоли» без минского времени"
         )
 
         # Слепок витрины (read-only) показывает те же метаданные
@@ -514,9 +525,11 @@ def test_version_badge():
         assert server.resolve_app_version(root) == "v1.2.3", (
             "файл версии не нормализован к vX.Y.Z"
         )
-        moment = datetime(2024, 5, 6, 7, 8)  # локальное время без зоны
+        # Фиксированный epoch: по Минску 06.05.2024 07:08 — тест не зависит
+        # от часового пояса машины.
+        moment = datetime(2024, 5, 6, 7, 8, tzinfo=server.MINSK_TZ)
         os.utime(version_file, (moment.timestamp(), moment.timestamp()))
-        assert server.resolve_build_time(root) == "06.05.2024 07:08", (
+        assert server.resolve_build_time(root) == "06.05.2024 07:08 МСК", (
             "фолбэк без git не взял время файла версии"
         )
 
@@ -536,9 +549,9 @@ def test_version_badge():
                 ["git", "show", "-s", "--format=%cI", "HEAD"],
                 cwd=root, check=True, capture_output=True, text=True,
             ).stdout.strip()
-            expected = datetime.fromisoformat(commit_iso).astimezone().strftime(
-                "%d.%m.%Y %H:%M"
-            )
+            expected = datetime.fromisoformat(commit_iso).astimezone(
+                server.MINSK_TZ
+            ).strftime("%d.%m.%Y %H:%M МСК")
             assert server.resolve_build_time(root) == expected, (
                 "сборка из git-репозитория не совпала со временем HEAD"
             )

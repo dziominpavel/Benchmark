@@ -25,7 +25,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -95,12 +95,18 @@ app.jinja_env.globals["read_only"] = read_only
 # `vX.Y.Z` (docs/versioning.md), промежуточных версий не существует,
 # поэтому на коммитах после релиза UI честно показывает последний
 # выпущенный релиз. Сборка — время коммита, из которого запущен код
-# (у запуска из архива без git — время файла версии проекта).
+# (у запуска из архива без git — время файла версии проекта); в UI оно
+# показывается по минскому времени с меткой `МСК`.
 
 APP_ROOT = Path(__file__).resolve().parent.parent  # корень репозитория
 
 _RELEASE_TAG = re.compile(r"^v?(\d+\.\d+\.\d+)$")
-_BUILD_TIME_FMT = "%d.%m.%Y %H:%M"
+_BUILD_TIME_FMT = "%d.%m.%Y %H:%M МСК"
+
+# Беларусь живёт в UTC+3 круглый год (без перехода на летнее время
+# с 2011 года), поэтому достаточно фиксированного смещения: zoneinfo
+# на Windows без пакета tzdata недоступен.
+MINSK_TZ = timezone(timedelta(hours=3), "MSK")
 
 # git вызывается один раз при импорте модуля (резолв версии и сборки
 # ниже); на Windows без консоли (launch.vbs) запуск не мигает окном.
@@ -154,8 +160,13 @@ def resolve_app_version(root: Path = APP_ROOT) -> str:
     return ""
 
 
+def _format_build_time(moment: datetime) -> str:
+    """Момент в минской зоне как `ДД.ММ.ГГГГ ЧЧ:ММ МСК`."""
+    return moment.astimezone(MINSK_TZ).strftime(_BUILD_TIME_FMT)
+
+
 def _git_build_time(root: Path) -> str | None:
-    """Время последнего коммита в локальной зоне или None без git."""
+    """Время последнего коммита по Минску или None без git."""
     raw = _run_git(root, "show", "-s", "--format=%cI", "HEAD")
     if not raw:
         return None
@@ -163,7 +174,7 @@ def _git_build_time(root: Path) -> str | None:
         moment = datetime.fromisoformat(raw)
     except ValueError:
         return None
-    return moment.astimezone().strftime(_BUILD_TIME_FMT)
+    return _format_build_time(moment)
 
 
 def _file_build_time(root: Path) -> str | None:
@@ -172,11 +183,11 @@ def _file_build_time(root: Path) -> str | None:
         mtime = (root / "pyproject.toml").stat().st_mtime
     except OSError:
         return None
-    return datetime.fromtimestamp(mtime).strftime(_BUILD_TIME_FMT)
+    return _format_build_time(datetime.fromtimestamp(mtime, tz=MINSK_TZ))
 
 
 def resolve_build_time(root: Path = APP_ROOT) -> str:
-    """Дата и время сборки для UI (локальная зона) или пустая строка.
+    """Дата и время сборки для UI (по Минску) или пустая строка.
 
     Приоритет у времени последнего коммита (`git show`); фолбэк — время
     файла версии проекта (git недоступен). Если нет и его, UI покажет
@@ -3055,8 +3066,8 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     </dl>
     <div class="hint">
       Версия — последний выпущенный релиз (git-тег). Сборка — дата и время
-      коммита, из которого запущена консоль; при запуске из архива без git —
-      время файла версии проекта.
+      коммита, из которого запущена консоль (по минскому времени); при запуске
+      из архива без git — время файла версии проекта.
     </div>
   </div>
 
