@@ -1092,6 +1092,100 @@ def test_caption_contrast_tokens():
     print("1.1 caption contrast tokens: OK")
 
 
+def test_filter_miss_opacity_tokens():
+    """Степень приглушения неотобранных строк: 0.30 / 0.25, hover 0.85."""
+    css_path = Path(__file__).resolve().parent / "static" / "css" / "console.css"
+    css = css_path.read_text(encoding="utf-8")
+    light_at = css.index('[data-theme="light"]')
+    base = css[:light_at]
+
+    def token(part: str, name: str) -> str:
+        m = re.search(rf"{name}:\s*([^;]+);", part)
+        assert m, f"токен {name} не найден"
+        return m.group(1).strip()
+
+    def rule(selector: str) -> str:
+        m = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+        assert m, f"правило {selector} не найдено"
+        return m.group(1)
+
+    def opacity(selector: str) -> str:
+        m = re.search(r"opacity:\s*([^;]+);", rule(selector))
+        assert m, f"в правиле {selector} нет opacity"
+        return m.group(1).strip()
+
+    # Токены — одно значение для обеих тем (светлая наследует базовый блок).
+    assert token(base, "--filter-miss-opacity") == "0.30"
+    assert token(base, "--filter-miss-archived-opacity") == "0.25"
+
+    # Правила приглушения ссылаются на токены, hover — 0.85.
+    assert opacity("tr.filter-miss td") == "var(--filter-miss-opacity)"
+    assert opacity("tr.archived.filter-miss td") == "var(--filter-miss-archived-opacity)"
+    assert opacity(".history-item.filter-miss") == "var(--filter-miss-opacity)"
+    assert opacity("tr.filter-miss:hover td") == "0.85"
+    assert opacity("tr.archived.filter-miss:hover td") == "0.85"
+    assert opacity(".history-item.filter-miss:hover") == "0.85"
+
+    # Соседние правила не тронуты: бары графика и отобранные архивные строки.
+    assert opacity("rect.dist-pt.filter-miss") == "0.5"
+    assert opacity("tr.archived.filter-hit td") == "0.8"
+
+    # Старых литералов в правилах приглушения не осталось.
+    for selector in ("tr.filter-miss td", "tr.archived.filter-miss td",
+                     ".history-item.filter-miss"):
+        body = rule(selector)
+        assert "0.55" not in body and "0.45" not in body, selector
+    print("filter-miss opacity tokens: OK")
+
+
+def test_main_highlight_dimming():
+    """Главная: строки приглушены только когда отобрана часть строк."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        def row_heads(html: str) -> dict[str, str]:
+            heads: dict[str, str] = {}
+            for row in _rating_rows(html):
+                mid = re.search(r"/model/([\w-]+)", row)
+                if mid:
+                    heads[mid.group(1)] = row.split(">", 1)[0]
+            return heads
+
+        # (а) Отобрана часть строк: отобранные — filter-hit, прочие — filter-miss.
+        html = client.get("/?view=highlight&filter=active").get_data(as_text=True)
+        heads = row_heads(html)
+        assert heads, "строки таблицы рейтинга не отрендерены"
+        assert "filter-hit" in heads["alpha"], "отобранная строка без filter-hit"
+        assert "filter-miss" not in heads["alpha"], "отобранная строка приглушена"
+        assert "filter-miss" in heads["gamma"], "неотобранная строка не приглушена"
+        assert "filter-hit" not in heads["gamma"], "неотобранная строка подсвечена"
+
+        # (б) Не отобрана ни одна строка — приглушения нет (спецификация).
+        models_yaml = ["models:"]
+        for mid in ("n01", "n02"):
+            models_yaml += [
+                f"  - id: {mid}",
+                f"    name: Model {mid}",
+                "    agent: Agent",
+                "    provider: Prov",
+                "    added: 2026-01-01",
+                "    status: active",
+            ]
+        _write(paths["models"], "\n".join(models_yaml) + "\n")
+        _write(paths["journal"], "")
+        data_cache.clear()
+        html = client.get("/?view=highlight&filter=inactive").get_data(as_text=True)
+        heads = row_heads(html)
+        assert heads, "строки таблицы рейтинга не отрендерены"
+        for mid, head in heads.items():
+            assert "filter-hit" not in head and "filter-miss" not in head, (
+                f"{mid}: строка приглушена без отобранных — {head}"
+            )
+        assert "Ничего не подсвечено" in html, "нет подсказки о пустом отборе"
+    print("main highlight dimming: OK")
+
+
 def test_tables_scope_col():
     """Все заголовки таблиц консоли имеют scope="col"."""
     with _temp_storage() as _paths:
@@ -2240,4 +2334,6 @@ if __name__ == "__main__":
     test_wave4_profile()
     test_wave5_history_title()
     test_wave5_chart_links()
+    test_filter_miss_opacity_tokens()
+    test_main_highlight_dimming()
     print("\nALL DATA CACHE TESTS PASSED")

@@ -25,6 +25,11 @@
   /* подписи моделей «Компания · Агент» — приглушённость по теме, AA ≥ 4.5:1 */
   --caption-opacity: 0.75;
 
+  /* приглушение неотобранных строк в режиме «Подсвечивать»: одно значение
+     для обеих тем; архивные неотобранные — тусклее прочих. */
+  --filter-miss-opacity: 0.30;
+  --filter-miss-archived-opacity: 0.25;
+
   /* акцент */
   --accent: #7aa5ff;
   --accent-strong: #1d4ed8;
@@ -684,11 +689,11 @@ tr.archived td { opacity: 0.6; }
 tr.filter-hit td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 tr.filter-hit td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 tr.filter-hit:hover td { background: var(--surface-2); }
-tr.filter-miss td { opacity: 0.55; }
+tr.filter-miss td { opacity: var(--filter-miss-opacity); }
 tr.filter-miss:hover td { opacity: 0.85; }
 tr.archived.filter-hit td { opacity: 0.8; }
-tr.archived.filter-miss td { opacity: 0.45; }
-tr.archived.filter-miss:hover td { opacity: 0.75; }
+tr.archived.filter-miss td { opacity: var(--filter-miss-archived-opacity); }
+tr.archived.filter-miss:hover td { opacity: 0.85; }
 
 .edit-link { color: var(--text); text-decoration: none; font-weight: 600; }
 .edit-link:hover { color: var(--accent); text-decoration: underline; }
@@ -1011,7 +1016,7 @@ tr.archived.filter-miss:hover td { opacity: 0.75; }
   box-shadow: inset 3px 0 0 var(--accent);
   padding-left: var(--sp-3);
 }
-.history-item.filter-miss { opacity: 0.55; }
+.history-item.filter-miss { opacity: var(--filter-miss-opacity); }
 .history-item.filter-miss:hover { opacity: 0.85; }
 .history-model { font-weight: 600; color: var(--text); min-width: 140px; }
 .history-elo {
