@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "updated": "2026-10-18",
-  "matchups_digest": "cc0d0f89cadbbdbcf8913ecadbf57724a5db551b9169434c0ad92f6f5182d69e",
+  "updated": "2026-10-20",
+  "matchups_digest": "44cd052f188ef5c91db297afe0752f8c69066532acc0895c333de09e7e14dd2a",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -9,10 +9,10 @@
       "provider": "OpenAI",
       "added": "2026-09-08",
       "status": "active",
-      "elo": 954,
-      "games": 34,
+      "elo": 951,
+      "games": 36,
       "wins": 4,
-      "losses": 30,
+      "losses": 32,
       "draws": 0
     },
     "cursor-composer-2-5": {
@@ -21,10 +21,10 @@
       "provider": "SpaceXAI",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 994,
-      "games": 34,
+      "elo": 989,
+      "games": 36,
       "wins": 6,
-      "losses": 28,
+      "losses": 30,
       "draws": 0
     },
     "cursor-fable-5-1-1m-max": {
@@ -33,11 +33,11 @@
       "provider": "Anthropic",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1432,
-      "games": 34,
-      "wins": 30,
+      "elo": 1441,
+      "games": 36,
+      "wins": 31,
       "losses": 4,
-      "draws": 0
+      "draws": 1
     },
     "cursor-gemini-3-8-flash-high": {
       "name": "Cursor Gemini 3.8 Flash High",
@@ -45,10 +45,10 @@
       "provider": "Google",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1150,
-      "games": 34,
+      "elo": 1140,
+      "games": 36,
       "wins": 14,
-      "losses": 19,
+      "losses": 21,
       "draws": 1
     },
     "cursor-grok-4-6": {
@@ -57,10 +57,10 @@
       "provider": "SpaceXAI",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1311,
-      "games": 34,
+      "elo": 1290,
+      "games": 36,
       "wins": 23,
-      "losses": 10,
+      "losses": 12,
       "draws": 1
     },
     "cursor-grok-4-6-low": {
@@ -69,10 +69,10 @@
       "provider": "SpaceXAI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1204,
-      "games": 34,
+      "elo": 1182,
+      "games": 36,
       "wins": 16,
-      "losses": 17,
+      "losses": 19,
       "draws": 1
     },
     "cursor-kimi-k3-max": {
@@ -81,10 +81,10 @@
       "provider": "Moonshot AI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1200,
-      "games": 34,
+      "elo": 1178,
+      "games": 36,
       "wins": 14,
-      "losses": 17,
+      "losses": 19,
       "draws": 3
     },
     "cursor-sonnet-5-5-1m-max": {
@@ -93,9 +93,9 @@
       "provider": "Anthropic",
       "added": "2026-10-06",
       "status": "active",
-      "elo": 1527,
-      "games": 34,
-      "wins": 34,
+      "elo": 1542,
+      "games": 36,
+      "wins": 36,
       "losses": 0,
       "draws": 0
     },
@@ -105,11 +105,11 @@
       "provider": "DeepSeek",
       "added": "2026-09-11",
       "status": "active",
-      "elo": 1376,
-      "games": 37,
+      "elo": 1364,
+      "games": 39,
       "wins": 26,
-      "losses": 7,
-      "draws": 4
+      "losses": 8,
+      "draws": 5
     },
     "devin-deepseek-v4-pro-max": {
       "name": "Devin DeepSeek V4 Pro Max",
@@ -117,10 +117,10 @@
       "provider": "DeepSeek",
       "added": "2026-09-10",
       "status": "active",
-      "elo": 1172,
-      "games": 34,
+      "elo": 1157,
+      "games": 36,
       "wins": 14,
-      "losses": 18,
+      "losses": 20,
       "draws": 2
     },
     "devin-glm-5-2-high": {
@@ -129,10 +129,10 @@
       "provider": "Z.ai",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 977,
-      "games": 35,
+      "elo": 973,
+      "games": 37,
       "wins": 5,
-      "losses": 30,
+      "losses": 32,
       "draws": 0
     },
     "devin-glm-5-3-flash-max": {
@@ -141,10 +141,10 @@
       "provider": "Z.ai",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1238,
-      "games": 34,
+      "elo": 1219,
+      "games": 36,
       "wins": 19,
-      "losses": 13,
+      "losses": 15,
       "draws": 2
     },
     "devin-gpt-5-6-sol-max": {
@@ -153,11 +153,11 @@
       "provider": "OpenAI",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1381,
-      "games": 34,
+      "elo": 1369,
+      "games": 36,
       "wins": 27,
-      "losses": 6,
-      "draws": 1
+      "losses": 7,
+      "draws": 2
     },
     "devin-gpt-6-astra-max": {
       "name": "Devin GPT-6 Astra Max",
@@ -165,9 +165,9 @@
       "provider": "OpenAI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1489,
-      "games": 34,
-      "wins": 33,
+      "elo": 1517,
+      "games": 37,
+      "wins": 36,
       "losses": 1,
       "draws": 0
     },
@@ -177,11 +177,11 @@
       "provider": "OpenAI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1400,
-      "games": 34,
+      "elo": 1388,
+      "games": 36,
       "wins": 27,
-      "losses": 5,
-      "draws": 2
+      "losses": 6,
+      "draws": 3
     },
     "devin-kimi-k3-max": {
       "name": "Devin Kimi K3 Max",
@@ -189,10 +189,10 @@
       "provider": "Moonshot AI",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1096,
-      "games": 34,
+      "elo": 1088,
+      "games": 36,
       "wins": 10,
-      "losses": 24,
+      "losses": 26,
       "draws": 0
     },
     "devin-swe-1-7-max": {
@@ -201,10 +201,10 @@
       "provider": "Cognition",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1118,
-      "games": 35,
+      "elo": 1109,
+      "games": 37,
       "wins": 12,
-      "losses": 21,
+      "losses": 23,
       "draws": 2
     },
     "devin-swe-2-max": {
@@ -213,10 +213,10 @@
       "provider": "Cognition",
       "added": "2026-09-10",
       "status": "active",
-      "elo": 1182,
-      "games": 34,
+      "elo": 1165,
+      "games": 36,
       "wins": 16,
-      "losses": 16,
+      "losses": 18,
       "draws": 2
     },
     "opencode-beam-free-max": {
@@ -225,11 +225,23 @@
       "provider": "Reflection AI",
       "added": "2026-10-16",
       "status": "active",
-      "elo": 1045,
-      "games": 34,
+      "elo": 1039,
+      "games": 36,
       "wins": 7,
-      "losses": 24,
+      "losses": 26,
       "draws": 3
+    },
+    "opencode-deepseek-v4-1-flash-1017-max": {
+      "name": "OpenCode DeepSeek V4.1 Flash 1017 Max",
+      "agent": "OpenCode",
+      "provider": "DeepSeek",
+      "added": "2026-10-20",
+      "status": "active",
+      "elo": 1431,
+      "games": 37,
+      "wins": 31,
+      "losses": 5,
+      "draws": 1
     },
     "opencode-deepseek-v4-1-flash-free-max": {
       "name": "OpenCode DeepSeek V4.1 Flash Free Max",
@@ -237,10 +249,10 @@
       "provider": "DeepSeek",
       "added": "2026-10-15",
       "status": "active",
-      "elo": 1380,
-      "games": 40,
+      "elo": 1355,
+      "games": 42,
       "wins": 26,
-      "losses": 5,
+      "losses": 7,
       "draws": 9
     },
     "opencode-fledge-alpha-free": {
@@ -249,10 +261,10 @@
       "provider": "Unknown",
       "added": "2026-10-02",
       "status": "active",
-      "elo": 1085,
-      "games": 34,
+      "elo": 1079,
+      "games": 36,
       "wins": 9,
-      "losses": 23,
+      "losses": 25,
       "draws": 2
     },
     "opencode-gemini-4-argon-high": {
@@ -261,11 +273,11 @@
       "provider": "Google",
       "added": "2026-10-15",
       "status": "active",
-      "elo": 1300,
-      "games": 34,
+      "elo": 1290,
+      "games": 36,
       "wins": 23,
-      "losses": 11,
-      "draws": 0
+      "losses": 12,
+      "draws": 1
     },
     "opencode-glm-5-3-flash-free": {
       "name": "OpenCode GLM-5.3 Flash Free",
@@ -273,10 +285,10 @@
       "provider": "Z.ai",
       "added": "2026-10-16",
       "status": "active",
-      "elo": 1184,
-      "games": 34,
+      "elo": 1166,
+      "games": 36,
       "wins": 13,
-      "losses": 15,
+      "losses": 17,
       "draws": 6
     },
     "opencode-grok-4-7-xhigh": {
@@ -285,10 +297,10 @@
       "provider": "SpaceXAI",
       "added": "2026-09-22",
       "status": "active",
-      "elo": 1476,
-      "games": 34,
-      "wins": 32,
-      "losses": 2,
+      "elo": 1470,
+      "games": 36,
+      "wins": 33,
+      "losses": 3,
       "draws": 0
     },
     "opencode-hy4-preview-high": {
@@ -297,10 +309,10 @@
       "provider": "Tencent",
       "added": "2026-10-17",
       "status": "active",
-      "elo": 1240,
-      "games": 34,
-      "wins": 17,
-      "losses": 12,
+      "elo": 1249,
+      "games": 36,
+      "wins": 18,
+      "losses": 13,
       "draws": 5
     },
     "opencode-ling-3-0-flash-fin-free": {
@@ -309,10 +321,10 @@
       "provider": "Ant Group",
       "added": "2026-09-22",
       "status": "active",
-      "elo": 903,
-      "games": 34,
+      "elo": 900,
+      "games": 36,
       "wins": 1,
-      "losses": 32,
+      "losses": 34,
       "draws": 1
     },
     "opencode-ling-3-1-flash-free": {
@@ -321,10 +333,10 @@
       "provider": "Ant Group",
       "added": "2026-10-02",
       "status": "active",
-      "elo": 1249,
-      "games": 34,
+      "elo": 1233,
+      "games": 36,
       "wins": 18,
-      "losses": 11,
+      "losses": 13,
       "draws": 5
     },
     "opencode-longcat-2-5-preview-free": {
@@ -333,10 +345,10 @@
       "provider": "Meituan",
       "added": "2026-09-30",
       "status": "active",
-      "elo": 933,
-      "games": 34,
+      "elo": 930,
+      "games": 36,
       "wins": 2,
-      "losses": 31,
+      "losses": 33,
       "draws": 1
     },
     "opencode-mimo-v2-5-free": {
@@ -345,10 +357,10 @@
       "provider": "Xiaomi",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 889,
-      "games": 34,
+      "elo": 887,
+      "games": 36,
       "wins": 0,
-      "losses": 34,
+      "losses": 36,
       "draws": 0
     },
     "opencode-mimo-v2-6-flash-free": {
@@ -357,10 +369,22 @@
       "provider": "Xiaomi",
       "added": "2026-09-22",
       "status": "active",
-      "elo": 1363,
-      "games": 37,
+      "elo": 1350,
+      "games": 39,
       "wins": 25,
-      "losses": 6,
+      "losses": 7,
+      "draws": 7
+    },
+    "opencode-minimax-m3-1-flash-free-max": {
+      "name": "OpenCode MiniMax M3.1 Flash Free Max",
+      "agent": "OpenCode",
+      "provider": "MiniMax",
+      "added": "2026-10-19",
+      "status": "active",
+      "elo": 1386,
+      "games": 36,
+      "wins": 25,
+      "losses": 5,
       "draws": 6
     },
     "opencode-muse-spark-1-3-free-xhigh": {
@@ -369,10 +393,10 @@
       "provider": "Meta",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1235,
-      "games": 34,
+      "elo": 1215,
+      "games": 36,
       "wins": 17,
-      "losses": 14,
+      "losses": 16,
       "draws": 3
     },
     "opencode-nemotron-3-5-super-vl-free-xhigh": {
@@ -381,10 +405,10 @@
       "provider": "NVIDIA",
       "added": "2026-10-15",
       "status": "active",
-      "elo": 943,
-      "games": 34,
+      "elo": 940,
+      "games": 36,
       "wins": 3,
-      "losses": 31,
+      "losses": 33,
       "draws": 0
     },
     "opencode-qwen3-8-max-xhigh": {
@@ -393,10 +417,10 @@
       "provider": "Alibaba",
       "added": "2026-10-17",
       "status": "active",
-      "elo": 1213,
-      "games": 34,
+      "elo": 1190,
+      "games": 36,
       "wins": 15,
-      "losses": 13,
+      "losses": 15,
       "draws": 6
     },
     "opencode-space-bunny-free-max": {
@@ -405,11 +429,11 @@
       "provider": "MiniMax",
       "added": "2026-09-26",
       "status": "active",
-      "elo": 1285,
-      "games": 34,
+      "elo": 1278,
+      "games": 36,
       "wins": 19,
-      "losses": 10,
-      "draws": 5
+      "losses": 11,
+      "draws": 6
     },
     "opencode-step-5-preview-free-high": {
       "name": "OpenCode Step 5 Preview Free High",
@@ -417,10 +441,10 @@
       "provider": "StepFun",
       "added": "2026-10-10",
       "status": "active",
-      "elo": 1061,
-      "games": 34,
-      "wins": 7,
-      "losses": 24,
+      "elo": 1079,
+      "games": 36,
+      "wins": 8,
+      "losses": 25,
       "draws": 3
     }
   },
@@ -428,14 +452,14 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "matchups_count": 602
+      "matchups_count": 676
     }
   },
   "matchups_summary": {
-    "total": 602,
-    "applied": 602,
-    "voided": 0,
-    "tombstone": 0,
+    "total": 676,
+    "applied": 674,
+    "voided": 1,
+    "tombstone": 1,
     "skipped": 0
   },
   "elo_history": [
@@ -11876,7 +11900,1402 @@
         "after": 1213,
         "delta": -3
       }
+    },
+    {
+      "matchup": "T-001/603",
+      "seq": 603,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:15+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1200,
+        "after": 1188,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1220,
+        "delta": 20
+      }
+    },
+    {
+      "matchup": "T-001/604",
+      "seq": 604,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:15+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1204,
+        "after": 1193,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1239,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "T-001/605",
+      "seq": 605,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "opencode-minimax-m3-1-flash-free-max",
+      "model_b_id": "opencode-qwen3-8-max-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1239,
+        "after": 1258,
+        "delta": 19
+      },
+      "elo_b": {
+        "before": 1213,
+        "after": 1202,
+        "delta": -11
+      }
+    },
+    {
+      "matchup": "T-001/606",
+      "seq": 606,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "opencode-glm-5-3-flash-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1184,
+        "after": 1175,
+        "delta": -9
+      },
+      "elo_b": {
+        "before": 1258,
+        "after": 1274,
+        "delta": 16
+      }
+    },
+    {
+      "matchup": "T-001/607",
+      "seq": 607,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1182,
+        "after": 1173,
+        "delta": -9
+      },
+      "elo_b": {
+        "before": 1274,
+        "after": 1289,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/608",
+      "seq": 608,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1172,
+        "after": 1164,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1289,
+        "after": 1303,
+        "delta": 14
+      }
+    },
+    {
+      "matchup": "T-001/609",
+      "seq": 609,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "opencode-minimax-m3-1-flash-free-max",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1303,
+        "after": 1319,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1235,
+        "after": 1225,
+        "delta": -10
+      }
+    },
+    {
+      "matchup": "T-001/610",
+      "seq": 610,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1238,
+        "after": 1229,
+        "delta": -9
+      },
+      "elo_b": {
+        "before": 1319,
+        "after": 1334,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/611",
+      "seq": 611,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "opencode-hy4-preview-high",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1240,
+        "after": 1255,
+        "delta": 15
+      },
+      "elo_b": {
+        "before": 1334,
+        "after": 1309,
+        "delta": -25
+      }
+    },
+    {
+      "matchup": "T-001/612",
+      "seq": 612,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:32:16+03:00",
+      "model_a_id": "opencode-ling-3-1-flash-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1249,
+        "after": 1239,
+        "delta": -10
+      },
+      "elo_b": {
+        "before": 1309,
+        "after": 1326,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/613",
+      "seq": 613,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:22+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1311,
+        "after": 1300,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1326,
+        "after": 1341,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/614",
+      "seq": 614,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:22+03:00",
+      "model_a_id": "opencode-gemini-4-argon-high",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1300,
+        "after": 1301,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 1341,
+        "after": 1339,
+        "delta": -2
+      }
+    },
+    {
+      "matchup": "T-001/615",
+      "seq": 615,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "opencode-mimo-v2-6-flash-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1363,
+        "after": 1362,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1339,
+        "after": 1340,
+        "delta": 1
+      }
+    },
+    {
+      "matchup": "T-001/616",
+      "seq": 616,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "opencode-minimax-m3-1-flash-free-max",
+      "model_b_id": "opencode-space-bunny-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1340,
+        "after": 1337,
+        "delta": -3
+      },
+      "elo_b": {
+        "before": 1285,
+        "after": 1287,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/617",
+      "seq": 617,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "devin-deepseek-v4-1-flash-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1376,
+        "after": 1375,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1337,
+        "after": 1339,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/618",
+      "seq": 618,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-free-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1380,
+        "after": 1367,
+        "delta": -13
+      },
+      "elo_b": {
+        "before": 1339,
+        "after": 1357,
+        "delta": 18
+      }
+    },
+    {
+      "matchup": "T-001/619",
+      "seq": 619,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1381,
+        "after": 1380,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1357,
+        "after": 1358,
+        "delta": 1
+      }
+    },
+    {
+      "matchup": "T-001/620",
+      "seq": 620,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "devin-gpt-6-astra-max-2",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1400,
+        "after": 1399,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1358,
+        "after": 1360,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/621",
+      "seq": 621,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1432,
+        "after": 1442,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1360,
+        "after": 1347,
+        "delta": -13
+      }
+    },
+    {
+      "matchup": "T-001/622",
+      "seq": 622,
+      "date": "2026-10-19",
+      "recorded_at": "2026-10-19T22:56:23+03:00",
+      "model_a_id": "opencode-grok-4-7-xhigh",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1476,
+        "after": 1484,
+        "delta": 8
+      },
+      "elo_b": {
+        "before": 1347,
+        "after": 1337,
+        "delta": -10
+      }
+    },
+    {
+      "matchup": "T-001/623",
+      "seq": 623,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:25+03:00",
+      "model_a_id": "devin-gpt-6-astra-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1489,
+        "after": 1496,
+        "delta": 7
+      },
+      "elo_b": {
+        "before": 1337,
+        "after": 1328,
+        "delta": -9
+      }
+    },
+    {
+      "matchup": "T-001/624",
+      "seq": 624,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1150,
+        "after": 1144,
+        "delta": -6
+      },
+      "elo_b": {
+        "before": 1328,
+        "after": 1336,
+        "delta": 8
+      }
+    },
+    {
+      "matchup": "T-001/625",
+      "seq": 625,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "cursor-sonnet-5-5-1m-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1527,
+        "after": 1533,
+        "delta": 6
+      },
+      "elo_b": {
+        "before": 1336,
+        "after": 1328,
+        "delta": -8
+      }
+    },
+    {
+      "matchup": "T-001/626",
+      "seq": 626,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "devin-swe-1-7-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1118,
+        "after": 1112,
+        "delta": -6
+      },
+      "elo_b": {
+        "before": 1328,
+        "after": 1335,
+        "delta": 7
+      }
+    },
+    {
+      "matchup": "T-001/627",
+      "seq": 627,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "devin-kimi-k3-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1096,
+        "after": 1091,
+        "delta": -5
+      },
+      "elo_b": {
+        "before": 1335,
+        "after": 1341,
+        "delta": 6
+      }
+    },
+    {
+      "matchup": "T-001/628",
+      "seq": 628,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "opencode-fledge-alpha-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1085,
+        "after": 1081,
+        "delta": -4
+      },
+      "elo_b": {
+        "before": 1341,
+        "after": 1347,
+        "delta": 6
+      }
+    },
+    {
+      "matchup": "T-001/629",
+      "seq": 629,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "opencode-minimax-m3-1-flash-free-max",
+      "model_b_id": "opencode-step-5-preview-free-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1347,
+        "after": 1352,
+        "delta": 5
+      },
+      "elo_b": {
+        "before": 1061,
+        "after": 1057,
+        "delta": -4
+      }
+    },
+    {
+      "matchup": "T-001/630",
+      "seq": 630,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "opencode-beam-free-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1045,
+        "after": 1041,
+        "delta": -4
+      },
+      "elo_b": {
+        "before": 1352,
+        "after": 1357,
+        "delta": 5
+      }
+    },
+    {
+      "matchup": "T-001/631",
+      "seq": 631,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 994,
+        "after": 991,
+        "delta": -3
+      },
+      "elo_b": {
+        "before": 1357,
+        "after": 1361,
+        "delta": 4
+      }
+    },
+    {
+      "matchup": "T-001/632",
+      "seq": 632,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T01:16:56+03:00",
+      "model_a_id": "devin-glm-5-2-high",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 977,
+        "after": 975,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1361,
+        "after": 1364,
+        "delta": 3
+      }
+    },
+    {
+      "matchup": "T-001/633",
+      "seq": 633,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:45+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-qwen3-8-max-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1200,
+        "after": 1220,
+        "delta": 20
+      },
+      "elo_b": {
+        "before": 1202,
+        "after": 1190,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/634",
+      "seq": 634,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:45+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1193,
+        "after": 1182,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1220,
+        "after": 1238,
+        "delta": 18
+      }
+    },
+    {
+      "matchup": "T-001/635",
+      "seq": 635,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:45+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1188,
+        "after": 1178,
+        "delta": -10
+      },
+      "elo_b": {
+        "before": 1238,
+        "after": 1255,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/636",
+      "seq": 636,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:45+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-glm-5-3-flash-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1255,
+        "after": 1270,
+        "delta": 15
+      },
+      "elo_b": {
+        "before": 1175,
+        "after": 1166,
+        "delta": -9
+      }
+    },
+    {
+      "matchup": "T-001/637",
+      "seq": 637,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:46+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1270,
+        "after": 1287,
+        "delta": 17
+      },
+      "elo_b": {
+        "before": 1225,
+        "after": 1215,
+        "delta": -10
+      }
+    },
+    {
+      "matchup": "T-001/638",
+      "seq": 638,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:46+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1173,
+        "after": 1165,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1287,
+        "after": 1301,
+        "delta": 14
+      }
+    },
+    {
+      "matchup": "T-001/639",
+      "seq": 639,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:46+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1229,
+        "after": 1219,
+        "delta": -10
+      },
+      "elo_b": {
+        "before": 1301,
+        "after": 1317,
+        "delta": 16
+      }
+    },
+    {
+      "matchup": "T-001/640",
+      "seq": 640,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:28:46+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1164,
+        "after": 1157,
+        "delta": -7
+      },
+      "elo_b": {
+        "before": 1317,
+        "after": 1329,
+        "delta": 12
+      }
+    },
+    {
+      "matchup": "T-001/641",
+      "seq": 641,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:30:32+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 954,
+        "after": 952,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1364,
+        "after": 1367,
+        "delta": 3
+      }
+    },
+    {
+      "matchup": "T-001/642",
+      "seq": 642,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:30:32+03:00",
+      "model_a_id": "opencode-minimax-m3-1-flash-free-max",
+      "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1367,
+        "after": 1369,
+        "delta": 2
+      },
+      "elo_b": {
+        "before": 943,
+        "after": 941,
+        "delta": -2
+      }
+    },
+    {
+      "matchup": "T-001/643",
+      "seq": 643,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:30:32+03:00",
+      "model_a_id": "opencode-longcat-2-5-preview-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 933,
+        "after": 931,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1369,
+        "after": 1371,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/644",
+      "seq": 644,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:30:32+03:00",
+      "model_a_id": "opencode-ling-3-0-flash-fin-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 903,
+        "after": 901,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1371,
+        "after": 1373,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/645",
+      "seq": 645,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:30:32+03:00",
+      "model_a_id": "opencode-mimo-v2-5-free",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 889,
+        "after": 888,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1373,
+        "after": 1374,
+        "delta": 1
+      }
+    },
+    {
+      "matchup": "T-001/646",
+      "seq": 646,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-gemini-4-argon-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1329,
+        "after": 1347,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1301,
+        "after": 1290,
+        "delta": -11
+      }
+    },
+    {
+      "matchup": "T-001/647",
+      "seq": 647,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "cursor-grok-4-6",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1300,
+        "after": 1290,
+        "delta": -10
+      },
+      "elo_b": {
+        "before": 1347,
+        "after": 1364,
+        "delta": 17
+      }
+    },
+    {
+      "matchup": "T-001/648",
+      "seq": 648,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-mimo-v2-6-flash-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1364,
+        "after": 1380,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1362,
+        "after": 1350,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/649",
+      "seq": 649,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1380,
+        "after": 1364,
+        "delta": -16
+      },
+      "elo_b": {
+        "before": 1374,
+        "after": 1386,
+        "delta": 12
+      }
+    },
+    {
+      "matchup": "T-001/650",
+      "seq": 650,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1364,
+        "after": 1380,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1367,
+        "after": 1355,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/651",
+      "seq": 651,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-space-bunny-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1380,
+        "after": 1392,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1287,
+        "after": 1278,
+        "delta": -9
+      }
+    },
+    {
+      "matchup": "T-001/652",
+      "seq": 652,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "devin-deepseek-v4-1-flash-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1375,
+        "after": 1364,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1392,
+        "after": 1407,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/653",
+      "seq": 653,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:36:40+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1380,
+        "after": 1369,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1407,
+        "after": 1422,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/656",
+      "seq": 656,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "cursor-fable-5-1-1m-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1442,
+        "after": 1441,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1422,
+        "after": 1423,
+        "delta": 1
+      }
+    },
+    {
+      "matchup": "T-001/657",
+      "seq": 657,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "devin-gpt-6-astra-max-2",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1399,
+        "after": 1388,
+        "delta": -11
+      },
+      "elo_b": {
+        "before": 1423,
+        "after": 1438,
+        "delta": 15
+      }
+    },
+    {
+      "matchup": "T-001/658",
+      "seq": 658,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-grok-4-7-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1438,
+        "after": 1456,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1484,
+        "after": 1470,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/659",
+      "seq": 659,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "devin-gpt-6-astra-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1496,
+        "after": 1507,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1456,
+        "after": 1442,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/660",
+      "seq": 660,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "cursor-sonnet-5-5-1m-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1533,
+        "after": 1542,
+        "delta": 9
+      },
+      "elo_b": {
+        "before": 1442,
+        "after": 1430,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/661",
+      "seq": 661,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-hy4-preview-high",
+      "winner": "a",
+      "elo_a": {
+        "before": 1430,
+        "after": 1439,
+        "delta": 9
+      },
+      "elo_b": {
+        "before": 1255,
+        "after": 1249,
+        "delta": -6
+      }
+    },
+    {
+      "matchup": "T-001/662",
+      "seq": 662,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-ling-3-1-flash-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1439,
+        "after": 1447,
+        "delta": 8
+      },
+      "elo_b": {
+        "before": 1239,
+        "after": 1233,
+        "delta": -6
+      }
+    },
+    {
+      "matchup": "T-001/663",
+      "seq": 663,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:46:02+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1144,
+        "after": 1140,
+        "delta": -4
+      },
+      "elo_b": {
+        "before": 1447,
+        "after": 1452,
+        "delta": 5
+      }
+    },
+    {
+      "matchup": "T-001/664",
+      "seq": 664,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "devin-swe-1-7-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1112,
+        "after": 1109,
+        "delta": -3
+      },
+      "elo_b": {
+        "before": 1452,
+        "after": 1456,
+        "delta": 4
+      }
+    },
+    {
+      "matchup": "T-001/665",
+      "seq": 665,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "devin-kimi-k3-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1091,
+        "after": 1088,
+        "delta": -3
+      },
+      "elo_b": {
+        "before": 1456,
+        "after": 1459,
+        "delta": 3
+      }
+    },
+    {
+      "matchup": "T-001/666",
+      "seq": 666,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-fledge-alpha-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1459,
+        "after": 1462,
+        "delta": 3
+      },
+      "elo_b": {
+        "before": 1081,
+        "after": 1079,
+        "delta": -2
+      }
+    },
+    {
+      "matchup": "T-001/667",
+      "seq": 667,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "devin-gpt-6-astra-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1507,
+        "after": 1517,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1462,
+        "after": 1448,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/668",
+      "seq": 668,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "opencode-beam-free-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1041,
+        "after": 1039,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1448,
+        "after": 1451,
+        "delta": 3
+      }
+    },
+    {
+      "matchup": "T-001/669",
+      "seq": 669,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-step-5-preview-free-high",
+      "winner": "b",
+      "elo_a": {
+        "before": 1451,
+        "after": 1422,
+        "delta": -29
+      },
+      "elo_b": {
+        "before": 1057,
+        "after": 1079,
+        "delta": 22
+      }
+    },
+    {
+      "matchup": "T-001/670",
+      "seq": 670,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "devin-glm-5-2-high",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 975,
+        "after": 973,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1422,
+        "after": 1424,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/671",
+      "seq": 671,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:52:38+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 952,
+        "after": 951,
+        "delta": -1
+      },
+      "elo_b": {
+        "before": 1424,
+        "after": 1425,
+        "delta": 1
+      }
+    },
+    {
+      "matchup": "T-001/672",
+      "seq": 672,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:57:37+03:00",
+      "model_a_id": "cursor-composer-2-5",
+      "model_b_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 991,
+        "after": 989,
+        "delta": -2
+      },
+      "elo_b": {
+        "before": 1425,
+        "after": 1427,
+        "delta": 2
+      }
+    },
+    {
+      "matchup": "T-001/673",
+      "seq": 673,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:57:37+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+      "winner": "a",
+      "elo_a": {
+        "before": 1427,
+        "after": 1428,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 941,
+        "after": 940,
+        "delta": -1
+      }
+    },
+    {
+      "matchup": "T-001/674",
+      "seq": 674,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:57:37+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-longcat-2-5-preview-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1428,
+        "after": 1429,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 931,
+        "after": 930,
+        "delta": -1
+      }
+    },
+    {
+      "matchup": "T-001/675",
+      "seq": 675,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:57:37+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-ling-3-0-flash-fin-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1429,
+        "after": 1430,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 901,
+        "after": 900,
+        "delta": -1
+      }
+    },
+    {
+      "matchup": "T-001/676",
+      "seq": 676,
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T20:01:14+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-mimo-v2-5-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1430,
+        "after": 1431,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 888,
+        "after": 887,
+        "delta": -1
+      }
     }
   ],
-  "voided_history": []
+  "voided_history": [
+    {
+      "matchup": "T-001/654",
+      "seq": 654,
+      "task": "T-001",
+      "date": "2026-10-20",
+      "recorded_at": "2026-10-20T19:42:39+03:00",
+      "model_a_id": "opencode-deepseek-v4-1-flash-1017-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1422,
+        "after": 1404,
+        "delta": -18
+      },
+      "elo_b": {
+        "before": 1386,
+        "after": 1399,
+        "delta": 13
+      },
+      "void": {
+        "reason": "дубликат пары T-001 (opencode-deepseek-v4-1-flash-1017-max vs opencode-minimax-m3-1-flash-free-max): пара уже закрыта вердиктом T-001/649, записанным параллельной сессией; оставлен один вердикт на пару",
+        "date": "2026-10-20",
+        "recorded_at": "2026-10-20T19:43:30+03:00",
+        "matchup": "T-001/655"
+      }
+    }
+  ]
 }

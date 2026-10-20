@@ -21,6 +21,7 @@ answer_flags:
     devin-swe-1-7-max: true
     devin-swe-2-max: true
     opencode-beam-free-max: true
+    opencode-deepseek-v4-1-flash-1017-max: true
     opencode-deepseek-v4-1-flash-free-max: true
     opencode-fledge-alpha-free: true
     opencode-gemini-4-argon-high: true
