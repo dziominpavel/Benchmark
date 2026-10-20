@@ -15,6 +15,8 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
 - В подвале консоли и в настройках показаны версия (тег релиза) и дата-время сборки — видно, какой код запущен.
 - Новичок в рейтинге добирает игры до 50 против ближайших по ELO соперников — его рейтинг стабилизируется быстрее.
 - Режим «Подсвечивать» приглушает неотобранные строки сильнее — отобранные видно сразу.
+- Поиск на главной, в истории и в личных встречах фильтрует список сразу, без Enter и перезагрузки страницы.
+- Поиск в истории обновляет счётчик найденного, заголовок вкладки и ссылки экспорта — лента остаётся согласованной с запросом.
 
 **Исправлено**
 
@@ -22,6 +24,21 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
 
 ### Добавлено
 
+- Живой поиск (change `live-search`): общий клиентский модуль
+  `tools/static/js/live-search.js` с двумя адаптерами — local (главная `q`,
+  «Личные встречи» `h2h_q`: строки уже в DOM, меняется `hidden`) и remote
+  (история `pair`: HTML-фрагмент `GET /history/results`); debounce 180 мс,
+  `AbortController` и монотонный номер запроса, `history.replaceState`,
+  синхронизация ссылок сортировки/экспорта, перехват `submit`, `aria-live` и
+  `aria-busy`, обработка ошибки с сохранением прежних строк; серверная часть —
+  `build_history_context()` и partial `tools/templates/_history_results.html`
+  в `tools/server.py`, `data-live-*` в `tools/templates/shell.html` и
+  `tools/templates/_tag_filter.html`, стили `[hidden]`/`.visually-hidden`/
+  `.is-loading` в `tools/static/css/console.css`; тесты
+  `test_live_search_main_contract`, `test_live_search_history_fragment`,
+  `test_live_search_history_pagination` в `tools/test_data_cache.py`, проверки
+  слепка в `tools/test_export.py`, замеры `GET /?q=...` и `/history/results` на
+  1000 моделях в `tools/test_perf.py`.
 - Квота новичка (change `pairing-newcomer-quota`): `NEWCOMER_SINCE` (`2026-10-19`),
   `NEWCOMER_TARGET_GAMES` (50), `NEWCOMER_REPEAT_CAP` (3) и `get_model_added_map()`
   в `tools/server.py`; в режиме рематчей `get_recommendations` сначала добирает

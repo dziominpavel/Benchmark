@@ -1,0 +1,48 @@
+{% from "_verdict_row.html" import verdict_row with context %}
+{% from "_pagination.html" import pagination %}
+{% from "_tag_filter.html" import filter_hidden with context %}
+<div class="history-results" id="history-results" data-live-results data-history-title="{{ history_title }}" data-history-found="{{ history_found }}">
+  <div class="stats" data-history-stats>
+    Всего записей: {{ history_total }}{% if include_voided or only_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if history_search_active %} · найдено: {{ history_found }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
+  </div>
+  {% if not read_only() %}
+  <div class="export-links" aria-label="Экспорт выборки">
+    <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.csv }}">Скачать CSV</a>
+    <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.json }}">Скачать JSON</a>
+  </div>
+  {% endif %}
+  <div class="card" id="history-list">
+    <h2 class="hidden">История</h2>
+    {% if history %}
+    {% for item in history %}
+    {{ verdict_row(item, True, ('filter-hit' if item.hit else 'filter-miss') if (filter_view == 'highlight' and history_hits) else '', void_next) }}
+    {% endfor %}
+    {% if filter_view == 'highlight' and not history_hits %}
+    <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
+    {% endif %}
+    {% if history_pages > 1 %}
+    <div class="history-pagination">
+      {{ pagination(history_page, history_pages, history_items, history_page_url) }}
+      {% if not read_only() %}
+      <form method="GET" action="/history" class="page-jump">
+        {{ filter_hidden() }}
+        {% for h in history_hidden_fields %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
+        <label class="page-jump-label" for="historyPageInput">Страница</label>
+        <input class="page-jump-input" type="number" id="historyPageInput" name="page" min="1" max="{{ history_pages }}" value="{{ history_page }}" inputmode="numeric">
+        <button type="submit" class="btn btn-secondary btn-sm">Перейти</button>
+        <a class="page-last" href="{{ history_page_url(history_pages) }}">в конец</a>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">
+      {% if history_search_active and history_total %}
+      По выбранным условиям записей не найдено.
+      {% else %}
+      Нет истории
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>

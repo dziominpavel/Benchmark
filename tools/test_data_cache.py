@@ -1283,13 +1283,16 @@ def test_summary_line():
         client = server.app.test_client()
 
         def segment(html: str) -> str:
-            marker = '<div class="stats stats-summary">'
+            marker = '<div class="stats stats-summary"'
             assert marker in html, "нет блока сводки"
-            return html.split(marker)[1].split("</div>")[0]
+            return html.split(marker, 1)[1].split(">", 1)[1].split("</div>")[0]
 
         html = client.get("/").get_data(as_text=True)
         seg = segment(html)
-        assert 'Моделей: <a href="/settings#models">2</a> из 3' in seg, seg
+        assert (
+            'Моделей: <a href="/settings#models" data-live-count-value>2</a> из 3'
+            in seg
+        ), seg
         assert 'Вердиктов: <a href="/history">1</a>' in seg, seg
         assert "рематчей" not in seg, "рематчи при нуле не должны показываться"
         assert 'Пары: <a href="/settings#recommendation-queue">1/1</a>' in seg, seg
@@ -1390,9 +1393,29 @@ def _history_rows(html: str) -> list[str]:
     )
 
 
+def _all_rating_rows(html: str) -> list[str]:
+    """Все строки таблицы рейтинга, включая скрытые live-поиском."""
+    return re.findall(
+        r'<tr\b[^>]*>\s*<td class="rank">.*?</tr>', html, re.S,
+    )
+
+
 def _rating_rows(html: str) -> list[str]:
-    """Строки таблицы рейтинга."""
-    return re.findall(r'<tr class="[^"]*">\s*<td class="rank">.*?</tr>', html, re.S)
+    """Видимые строки таблицы рейтинга (без hidden-атрибута)."""
+    rows = _all_rating_rows(html)
+    return [
+        row for row in rows
+        if not re.search(r'\bhidden\b', row.split(">", 1)[0])
+    ]
+
+
+def _h2h_visible(h2h_html: str) -> str:
+    """Текст видимых строк «Личных встреч» (без скрытых live-поиском)."""
+    rows = re.findall(r'<tr\b[^>]*>.*?</tr>', h2h_html, re.S)
+    return "".join(
+        row for row in rows
+        if not re.search(r'\bhidden\b', row.split(">", 1)[0])
+    )
 
 
 def test_wave3_history_filters():
@@ -1598,6 +1621,38 @@ def test_wave3_rating_search_sort():
         rows = _rating_rows(html)
         assert len(rows) == 1 and "model/alpha" in rows[0]
         assert 'name="q" value="alph"' in html
+        assert 'data-live-search="local"' in html
+        assert 'data-live-param="q"' in html
+        assert "data-live-input" in html
+        assert 'data-live-count-value>1</a> из 3' in html
+
+        # Полный пул с учётом фильтра «Все»: несовпавшие строки остаются
+        # в DOM с hidden и возвращаются после очистки поля.
+        html = client.get("/?q=alph&filter=all").get_data(as_text=True)
+        assert len(_rating_rows(html)) == 1
+        assert len(_all_rating_rows(html)) == 3
+        for model_id in ("beta", "gamma"):
+            row = next(r for r in _all_rating_rows(html) if f"model/{model_id}" in r)
+            assert re.search(r"<tr\b[^>]*\bhidden\b", row), model_id
+
+        # Пустой результат: таблица скрыта, пустое состояние видно.
+        html = client.get("/?q=zzz").get_data(as_text=True)
+        assert _rating_rows(html) == []
+        assert 'data-live-table hidden' in html
+        assert 'data-live-empty="search"' in html
+        assert 'data-live-empty="search" hidden' not in html
+
+        # «Сбросить» переключается без перезагрузки; data-other-active
+        # сохраняет её при активном фильтре после очистки поиска.
+        html = client.get("/?q=alpha").get_data(as_text=True)
+        reset = re.search(r'<a[^>]*class="filter-reset"[^>]*>', html).group(0)
+        assert "data-live-reset" in reset and " hidden" not in reset
+        html = client.get("/?q=alpha&filter=all").get_data(as_text=True)
+        reset = re.search(r'<a[^>]*class="filter-reset"[^>]*>', html).group(0)
+        assert 'data-other-active="1"' in reset and " hidden" not in reset
+        html = client.get("/").get_data(as_text=True)
+        reset = re.search(r'<a[^>]*class="filter-reset"[^>]*>', html).group(0)
+        assert " hidden" in reset
 
         _write(paths["models"], MODELS_YAML + """\
   - id: delta
@@ -1614,10 +1669,15 @@ def test_wave3_rating_search_sort():
         assert len(rows) == 1 and "model/delta" in rows[0]
         html = client.get("/?q=elta&agents=Agent").get_data(as_text=True)
         assert _rating_rows(html) == []
-        assert "Ничего не найдено по запросу «elta»" in html
+        assert "Ничего не найдено по запросу" in html and "elta" in html
+        assert 'data-live-table hidden' in html
+        assert 'data-live-empty="search" hidden' not in html
         # Подсветка: поиск сужает список, чипы только красят
         html = client.get("/?q=elta&view=highlight").get_data(as_text=True)
         assert len(_rating_rows(html)) == 1
+        assert 'data-live-count-value>1</a> · подсвечено' in html
+        # Все строки пула несут data-search; скрытые возвращает очистка.
+        assert all("data-search=" in r for r in _all_rating_rows(html))
 
         # Невалидный sort игнорируется
         html = client.get("/?sort=hack").get_data(as_text=True)
@@ -1649,6 +1709,158 @@ def test_wave3_rating_search_sort():
         assert 'src="/static/js/combobox.js"' in html
         assert "data-combobox" in html
     print("wave3 rating search and sort: OK")
+
+
+def test_live_search_main_contract():
+    """Живой поиск главной: контракт разметки, счётчики, ссылки, no-JS."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/").get_data(as_text=True)
+        # Контракт разметки live-поиска
+        assert 'data-live-search="local"' in html
+        assert 'data-live-param="q"' in html
+        assert "data-live-input" in html
+        assert "data-live-count" in html
+        assert "data-live-empty" in html
+        assert "data-live-reset" in html
+        assert "data-live-link" in html
+        assert 'data-live-status' in html and 'aria-live="polite"' in html
+        # Ссылка сортировки и экспорта помечены для синхронизации
+        assert 'class="sort-link" data-live-link' in html
+        assert 'href="/export/rating.csv' in html
+        # Серверный onchange сохранён для no-JS
+        assert 'name="q" value=""' in html
+        assert "this.form.submit()" in html
+
+        # Пустой результат: пустое состояние без таблицы
+        html = client.get("/?q=zzz").get_data(as_text=True)
+        assert "data-live-empty" in html
+        assert "Ничего не найдено по запросу «zzz»." in html
+
+        # Ссылки сортировки сохраняют запрос
+        html = client.get("/?q=alpha&sort=elo&dir=asc").get_data(as_text=True)
+        assert 'href="/?q=alpha&amp;sort=elo&amp;dir=desc"' in html
+
+        # Экспорт ссылки сохраняют запрос
+        html = client.get("/?q=alpha").get_data(as_text=True)
+        assert "/export/rating.csv?q=alpha" in html
+
+        # Read-only: поисковых полей и live-разметки нет
+        saved = bool(server.app.config.get("READ_ONLY"))
+        server.app.config["READ_ONLY"] = True
+        try:
+            html = client.get("/").get_data(as_text=True)
+            assert 'name="q"' not in html
+            assert "data-live-input" not in html
+            assert "data-live-search" not in html
+            assert "data-search=" not in html
+        finally:
+            server.app.config["READ_ONLY"] = saved
+    print("live-search main contract: OK")
+
+
+def test_live_search_history_fragment():
+    """Живой поиск истории: фрагмент /history/results (параметры, счётчики, no-store)."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _wave3_journal())
+        data_cache.clear()
+        client.post("/verdict/void", data={
+            "matchup_id": "T-002/001", "reason": "дубль матча", "next": "/history",
+        })
+
+        # Фрагмент: только результаты, без shell; заголовок no-store
+        resp = client.get("/history/results")
+        assert resp.status_code == 200
+        assert "no-store" in resp.headers.get("Cache-Control", "")
+        frag = resp.get_data(as_text=True)
+        assert "<html" not in frag and "<head" not in frag
+        assert "data-live-results" in frag
+        assert 'data-history-title="История — 2 записи — ELO Benchmark"' in frag
+        assert "Всего записей: 2" in frag
+
+        # Полная страница и фрагмент дают одинаковые строки и счётчики
+        page = client.get("/history").get_data(as_text=True)
+        assert len(_history_rows(page)) == len(_history_rows(frag)) == 2
+        assert "Всего записей: 2" in frag and "Всего записей: 2" in page
+
+        # Фильтр по паре: только совпавшие записи, счётчик и заголовок
+        frag = client.get("/history/results?pair=alpha").get_data(as_text=True)
+        assert len(_history_rows(frag)) == 2
+        assert "· найдено: 2" in frag
+        assert 'data-history-title="История — 2 записи — ELO Benchmark"' in frag
+
+        frag = client.get("/history/results?pair=zzz").get_data(as_text=True)
+        assert _history_rows(frag) == []
+        assert "По выбранным условиям записей не найдено." in frag
+        assert 'data-history-title="История — 0 записей — ELO Benchmark"' in frag
+
+        # Аннулированные и таск — фильтры фрагмента те же, что у страницы
+        frag = client.get("/history/results?include_voided=1").get_data(as_text=True)
+        assert len(_history_rows(frag)) == 3
+        assert "аннулированных: 1" in frag
+        frag = client.get("/history/results?task=T-002&include_voided=1").get_data(as_text=True)
+        assert len(_history_rows(frag)) == 2
+        assert "· найдено: 2" in frag
+
+        # Настройки отображения (view/chips) сохраняются в фильтре
+        frag = client.get("/history/results?view=highlight").get_data(as_text=True)
+        assert "подсвечено:" in frag
+        frag = client.get("/history/results?chips=elo").get_data(as_text=True)
+        assert len(_history_rows(frag)) == 2
+
+        # Страница игнорируется: фрагмент всегда первой страницы
+        resp = client.get("/history/results?page=3")
+        assert resp.status_code == 200
+        frag = resp.get_data(as_text=True)
+        assert 'name="page" value="1"' not in frag
+
+        # Ссылки экспорта фрагмента несут текущий фильтр
+        frag = client.get("/history/results?pair=alpha").get_data(as_text=True)
+        assert "pair=alpha" in frag
+
+        # Live-разметка страницы: атрибуты remote-режима и сохранённый onchange
+        page = client.get("/history").get_data(as_text=True)
+        assert 'data-live-search="remote"' in page
+        assert 'data-live-endpoint="/history/results"' in page
+        assert "data-live-input" in page
+        assert 'name="pair"' in page
+        assert "this.form.submit()" in page, "серверный onchange для no-JS убран"
+
+        # Read-only: поисковых полей нет
+        saved = bool(server.app.config.get("READ_ONLY"))
+        server.app.config["READ_ONLY"] = True
+        try:
+            page = client.get("/history").get_data(as_text=True)
+            assert 'name="pair"' not in page
+            assert "data-live-input" not in page
+        finally:
+            server.app.config["READ_ONLY"] = saved
+    print("live-search history fragment: OK")
+
+
+def test_live_search_history_pagination():
+    """Живой поиск истории: смена запроса сбрасывает страницу (page=2 → 1)."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+        _write(paths["journal"], _history_journal(30))
+        data_cache.clear()
+
+        page = client.get("/history?page=2").get_data(as_text=True)
+        assert len(_history_rows(page)) == 10
+        assert 'class="current" aria-current="page">2<' in page
+
+        # Фрагмент с фильтром всегда отдаёт первую страницу
+        frag = client.get("/history/results?pair=alpha&page=2").get_data(as_text=True)
+        assert len(_history_rows(frag)) == 20
+        assert 'class="current" aria-current="page">1<' in frag
+        # Ссылка «в конец» и переходы ведут на полную страницу, не на фрагмент
+        assert "page=2&amp;" in frag
+    print("live-search history pagination: OK")
 
 
 def test_wave3_export_routes():
@@ -2198,13 +2410,26 @@ def test_wave4_profile():
 
         found = client.get("/model/alpha?h2h_q=BETA").get_data(as_text=True)
         found_h2h = h2h_of(found)
-        assert ">Beta</a>" in found_h2h and ">Gamma</a>" not in found_h2h
+        assert ">Beta</a>" in found_h2h
+        assert ">Gamma</a>" not in _h2h_visible(found_h2h), "Gamma скрыта"
+        assert ">Gamma</a>" in found_h2h, "Gamma осталась в DOM пула"
+        assert re.search(r'<tr\b[^>]*\bhidden\b[^>]*>.*?>Gamma</a>', found_h2h, re.S)
         assert 'value="BETA"' in found, "строка поиска сохраняется"
         assert 'name="h2h_sort" value="games"' in found, "сортировка сохраняется"
+        assert 'data-live-search="local"' in found
+        assert 'data-live-param="h2h_q"' in found
+        assert "data-live-input" in found
+        assert "data-live-link" in found_h2h, "ссылки сортировки синхронизируются"
+        assert "data-live-reset" in found_h2h
+        # Ссылки сортировки сохраняют текущий запрос.
+        assert "h2h_q=BETA" in found_h2h
 
         none = client.get("/model/alpha?h2h_q=zzz").get_data(as_text=True)
         assert "Никого не найдено" in none
-        assert ">Beta</a>" not in h2h_of(none)
+        assert ">Beta</a>" not in _h2h_visible(h2h_of(none))
+        assert "data-live-table hidden" in h2h_of(none)
+        assert 'data-live-empty' in h2h_of(none)
+        assert 'data-live-empty hidden' not in h2h_of(none)
 
         dirty = client.get("/model/alpha?h2h_sort=bogus&h2h_dir=up").get_data(as_text=True)
         assert 'aria-sort="descending"' in h2h_of(dirty), "мусорные параметры → дефолт"
@@ -2296,6 +2521,8 @@ def test_wave5_chart_links():
     print("wave5 chart links: OK")
 
 
+
+
 if __name__ == "__main__":
     test_key_changes_per_file()
     test_builder_runs_once()
@@ -2323,6 +2550,9 @@ if __name__ == "__main__":
     test_wave3_history_row_anchor()
     test_wave3_history_controls()
     test_wave3_rating_search_sort()
+    test_live_search_main_contract()
+    test_live_search_history_fragment()
+    test_live_search_history_pagination()
     test_wave3_export_routes()
     test_wave3_read_only_degrade()
     test_wave4_task_page()

@@ -12,7 +12,7 @@
 <form method="GET" action="{{ filter_action }}" class="filter-card">
   <div class="filter-head">
     <span class="filter-title">Фильтр</span>
-    {% if filter_reset_visible %}<a href="{{ filter_reset_url }}" class="filter-reset">Сбросить</a>{% endif %}
+    {% if filter_reset_visible or (filter_live_reset and not read_only()) %}<a href="{{ filter_reset_url }}" class="filter-reset"{% if filter_live_reset and not read_only() %} data-live-reset{% if filter_reset_other_active %} data-other-active="1"{% endif %}{% endif %}{% if not filter_reset_visible %} hidden{% endif %}>Сбросить</a>{% endif %}
   </div>
   <details class="filter-settings">
     <summary>Настройки фильтра{% if filter_settings_badge %} — {{ filter_settings_badge }}{% endif %}</summary>

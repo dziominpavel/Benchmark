@@ -11,9 +11,10 @@
 {% endif %}<script src="/static/js/theme.js"></script>
 {% if read_only() %}<script src="/static/js/mirror.js" defer></script>
 {% else %}<script src="/static/js/combobox.js" defer></script>
+<script src="/static/js/live-search.js" defer></script>
 {% endif %}<link rel="stylesheet" href="/static/css/console.css">
 </head>
-<body>
+<body{% block body_attrs %}{% endblock %}>
 {% if read_only() %}
 <div class="mirror-banner">
   <span>демонстрационная копия консоли — только просмотр</span>

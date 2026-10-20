@@ -528,7 +528,9 @@ def _sort_tags_by_elo(values: list[str], models: dict, key: str) -> list[str]:
 
 def filter_panel_context(models: dict, action: str, reset_url: str,
                          hidden_fields: list[dict] | None = None,
-                         reset_extra: bool = False) -> dict:
+                         reset_extra: bool = False,
+                         reset_other_active: bool | None = None,
+                         live_reset: bool = False) -> dict:
     """Контекст блока «Фильтр» + выборки агента и компании из URL запроса.
 
     hidden_fields — дополнительные параметры страницы для filter_hidden();
@@ -537,6 +539,12 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
     reset_extra — применён ли на странице собственный фильтр («Показывать»,
     модель, «только долги»): ссылка «Сбросить» показывается, только когда
     отфильтровано хоть что-то.
+    reset_other_active — активен ли фильтр страницы помимо текстового поиска;
+    нужно live-search, чтобы после очистки поиска оставить «Сбросить» видимой
+    при активных чипах/режиме. Если не задан, роль other-active играет
+    reset_extra (для страниц без живого поиска).
+    live_reset — на странице есть живой поиск: ссылка «Сбросить» рендерится
+    всегда (скрытой, если фильтров нет), чтобы клиент мог её показать.
     Настройки отображения (`view`, `chips`) читаются из query и возвращаются
     как `filter_view`/`filter_chips`; в «Сбросить» и hidden-поля они попадают,
     только когда отличаются от значений по умолчанию.
@@ -574,12 +582,17 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         badge_parts.append("подсветка")
     if filter_chips == "elo":
         badge_parts.append("чипы по ELO")
+    other_active = bool(agent_sel or provider_sel) or bool(
+        reset_extra if reset_other_active is None else reset_other_active
+    )
     return {
         "filter_action": action,
         "filter_reset_url": reset,
         "filter_hidden_fields": hidden,
         "filter_active": bool(agent_sel or provider_sel),
-        "filter_reset_visible": bool(agent_sel or provider_sel) or bool(reset_extra),
+        "filter_reset_other_active": other_active,
+        "filter_reset_visible": other_active or bool(reset_extra),
+        "filter_live_reset": live_reset,
         "filter_agents": [
             {"value": v, "label": v, "checked": v in agent_sel} for v in agents
         ],
@@ -1363,15 +1376,25 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
     if highlight:
         for m in models_sorted:
             m["hit"] = status_matches(m) and model_passes_tags(m, agent_sel, provider_sel)
-        models_visible = [m for m in models_sorted if model_matches_query(m, query)]
+        models_pool = list(models_sorted)
+        models_visible = [m for m in models_pool if model_matches_query(m, query)]
         highlight_hits = sum(1 for m in models_visible if m["hit"])
     else:
-        models_visible = [
+        models_pool = [
             m for m in models_sorted
             if model_passes_tags(m, agent_sel, provider_sel)
-            and model_matches_query(m, query)
         ]
+        models_visible = [m for m in models_pool if model_matches_query(m, query)]
         highlight_hits = 0
+
+    # Живой поиск главной: сервер отдаёт весь пул (после нетекстовых
+    # фильтров), а не только совпавшие строки. Клиент переключает hidden по
+    # data-search и возвращает строки при очистке поля.
+    for m in models_pool:
+        m["search_text"] = (
+            f"{m.get('name', '')} {m.get('id', '')}".casefold()
+        )
+        m["matches_query"] = model_matches_query(m, query)
 
     # Тренды d5: пул детерминирован парой (highlight, filter_mode).
     pool_ids = [m.get("id", "") for m in models_sorted]
@@ -1392,6 +1415,7 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
 
     return {
         "models_sorted": models_sorted,
+        "models_pool": models_pool,
         "models_visible": models_visible,
         "highlight_hits": highlight_hits,
     }
@@ -1594,6 +1618,7 @@ def _csv_text(header: list[str], rows: list[list]) -> str:
 INDEX_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}ELO Benchmark{% endblock %}
+{% block body_attrs %}{% if not read_only() %} data-live-search="local" data-live-param="q"{% if filter_view == 'highlight' %} data-live-highlight="1"{% endif %}{% endif %}{% endblock %}
 {% block content %}
   {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
   {% if success %}
@@ -1641,9 +1666,12 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
   </div>
 
   <div class="controls">
-    <div class="stats stats-summary">
-      {% if filter_view == 'highlight' %}Моделей: <a href="/settings#models">{{ models_count }}</a> · подсвечено {{ highlight_hits }}{% else %}Моделей: <a href="/settings#models">{{ filtered_count }}</a> из {{ models_count }}{% endif %} · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="/settings#recommendation-queue">{{ coverage.filled }}/{{ coverage.total }}</a> · Таски: <a href="/settings#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a> · Обновлено: {{ updated }}
+    <div class="stats stats-summary"{% if not read_only() %} data-live-count{% endif %}>
+      {% if filter_view == 'highlight' %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> · подсвечено <span{% if not read_only() %} data-live-hits-value{% endif %}>{{ highlight_hits }}</span>{% else %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> из {{ models_count }}{% endif %} · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="/settings#recommendation-queue">{{ coverage.filled }}/{{ coverage.total }}</a> · Таски: <a href="/settings#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a> · Обновлено: {{ updated }}
     </div>
+    {% if not read_only() %}
+    <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
+    {% endif %}
     <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
     {% call filter_panel() %}
       <span class="filter-label">Показывать</span>
@@ -1654,7 +1682,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
       </div>
       {% if not read_only() %}
       <span class="filter-label">Поиск</span>
-      <input type="search" name="q" value="{{ search_query }}" class="filter-search" placeholder="имя или id" aria-label="Поиск по имени или id" onchange="this.form.submit()">
+      <input type="search" name="q" value="{{ search_query }}" class="filter-search" placeholder="имя или id" aria-label="Поиск по имени или id" data-live-input onchange="this.form.submit()">
       {% endif %}
     {% endcall %}
   </div>
@@ -1666,31 +1694,31 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <h2>Рейтинг</h2>
           {% if not read_only() and export_rating_urls %}
           <span class="export-links" aria-label="Экспорт выборки">
-            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.csv }}">Скачать CSV</a>
-            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.json }}">Скачать JSON</a>
+            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.csv }}" data-live-link>Скачать CSV</a>
+            <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.json }}" data-live-link>Скачать JSON</a>
           </span>
           {% endif %}
         </div>
-        {% if models_visible %}
-        <div class="table-wrap">
+        {% if models_pool %}
+        <div class="table-wrap"{% if not read_only() %} data-live-table{% if not filtered_count %} hidden{% endif %}{% endif %}>
           <table>
             <thead>
               <tr>
-                <th scope="col"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}#{% else %}<a class="sort-link" href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" href="{{ sort_url('trend') }}" title="Сортировать по тренду d5">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Модель{% else %}<a class="sort-link" href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}ELO{% else %}<a class="sort-link" href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}#{% else %}<a class="sort-link" data-live-link href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" data-live-link href="{{ sort_url('trend') }}" title="Сортировать по тренду d5">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Модель{% else %}<a class="sort-link" data-live-link href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}ELO{% else %}<a class="sort-link" data-live-link href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
                 <th scope="col">±</th>
                 <th scope="col">Побед</th>
                 <th scope="col">Поражений</th>
                 <th scope="col">Ничьих</th>
-                <th scope="col"{% if sort == 'games' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Всего{% else %}<a class="sort-link" href="{{ sort_url('games') }}" title="Сортировать по числу игр">Всего{% if sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'winrate' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт, %{% else %}<a class="sort-link" href="{{ sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт, %{% if sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'games' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Всего{% else %}<a class="sort-link" data-live-link href="{{ sort_url('games') }}" title="Сортировать по числу игр">Всего{% if sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'winrate' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт, %{% else %}<a class="sort-link" data-live-link href="{{ sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт, %{% if sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
               </tr>
             </thead>
             <tbody>
-              {% for m in models_visible %}
-              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}">
+              {% for m in models_pool %}
+              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}"{% if not read_only() %} data-search="{{ m.search_text }}"{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if not m.matches_query %} hidden{% endif %}{% endif %}>
                 <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span></td>
                 <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
                 <td class="model-cell">
@@ -1713,8 +1741,14 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             </tbody>
           </table>
         </div>
-        {% if filter_view == 'highlight' and not highlight_hits %}
-        <div class="hint">Ничего не подсвечено — ни одна модель не проходит выбранные условия.</div>
+        {% if filter_view == 'highlight' %}
+        <div class="hint" data-live-hit-hint{% if highlight_hits or not filtered_count %} hidden{% endif %}>Ничего не подсвечено — ни одна модель не проходит выбранные условия.</div>
+        {% endif %}
+        {% if not read_only() %}
+        <div class="empty-state" data-live-empty="search"{% if filtered_count %} hidden{% endif %}>
+          <span data-live-empty-text>{% if search_query %}Ничего не найдено по запросу «{{ search_query }}».{% else %}Ничего не найдено.{% endif %}</span>
+          Сбросьте поиск, чтобы увидеть список.
+        </div>
         {% endif %}
         {% elif models_sorted %}
         <div class="empty-state">
@@ -1954,10 +1988,9 @@ if (modelAEl) {
 # ─── HTML: History page ─────────────────────────────────────────────
 
 HISTORY_TEMPLATE = """{% extends "shell.html" %}
-{% from "_tag_filter.html" import filter_panel, filter_hidden with context %}
-{% from "_verdict_row.html" import verdict_row with context %}
-{% from "_pagination.html" import pagination %}
+{% from "_tag_filter.html" import filter_panel with context %}
 {% block title %}История — {{ history_found_label }} — ELO Benchmark{% endblock %}
+{% block body_attrs %}{% if not read_only() %} data-live-search="remote" data-live-param="pair" data-live-endpoint="/history/results"{% endif %}{% endblock %}
 {% block content %}
   <div class="header">
     <h1>История ELO</h1>
@@ -1967,15 +2000,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
   {% if success %}<div class="alert alert-success" role="status">{{ success }}</div>{% endif %}
 
   <div class="controls">
-    <div class="stats">
-      Всего записей: {{ history_total }}{% if include_voided or only_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if history_search_active %} · найдено: {{ history_found }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
-    </div>
-    {% if not read_only() %}
-    <div class="export-links" aria-label="Экспорт выборки">
-      <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.csv }}">Скачать CSV</a>
-      <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.json }}">Скачать JSON</a>
-    </div>
-    {% endif %}
+    <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
     {% call filter_panel() %}
       <span class="filter-label">Модель</span>
       <select name="model" id="model"{% if not read_only() %} data-combobox data-label="Модель"{% endif %} onchange="this.form.submit()">
@@ -2008,7 +2033,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <label><input type="radio" name="outcome" value="draw" {% if history_outcome == 'draw' %}checked{% endif %} onchange="this.form.submit()"><span>Ничья</span></label>
       </div>
       <span class="filter-label">Пара</span>
-      <input type="text" name="pair" value="{{ history_pair }}" class="filter-pair" placeholder="id или имя" aria-label="Поиск по паре моделей" onchange="this.form.submit()">
+      <input type="text" name="pair" value="{{ history_pair }}" class="filter-pair" placeholder="id или имя" aria-label="Поиск по паре моделей" data-live-input onchange="this.form.submit()">
       {% endif %}
       <label class="chip">
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
@@ -2027,40 +2052,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
     {% endcall %}
   </div>
 
-  <div class="card" id="history-list">
-    <h2 class="hidden">История</h2>
-    {% if history %}
-    {% for item in history %}
-    {{ verdict_row(item, True, ('filter-hit' if item.hit else 'filter-miss') if (filter_view == 'highlight' and history_hits) else '', void_next) }}
-    {% endfor %}
-    {% if filter_view == 'highlight' and not history_hits %}
-    <div class="hint">Ничего не подсвечено — ни одна запись не проходит выбранные условия.</div>
-    {% endif %}
-    {% if history_pages > 1 %}
-    <div class="history-pagination">
-      {{ pagination(history_page, history_pages, history_items, history_page_url) }}
-      {% if not read_only() %}
-      <form method="GET" action="/history" class="page-jump">
-        {{ filter_hidden() }}
-        {% for h in history_hidden_fields %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
-        <label class="page-jump-label" for="historyPageInput">Страница</label>
-        <input class="page-jump-input" type="number" id="historyPageInput" name="page" min="1" max="{{ history_pages }}" value="{{ history_page }}" inputmode="numeric">
-        <button type="submit" class="btn btn-secondary btn-sm">Перейти</button>
-        <a class="page-last" href="{{ history_page_url(history_pages) }}">в конец</a>
-      </form>
-      {% endif %}
-    </div>
-    {% endif %}
-    {% else %}
-    <div class="empty-state">
-      {% if history_search_active and history_total %}
-      По выбранным условиям записей не найдено.
-      {% else %}
-      Нет истории
-      {% endif %}
-    </div>
-    {% endif %}
-  </div>
+  {% include "_history_results.html" %}
 {% endblock %}
 """
 
@@ -2069,6 +2061,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
 
 MODEL_TEMPLATE = """{% extends "shell.html" %}
 {% block title %}{{ detail.name }} — ELO Benchmark{% endblock %}
+{% block body_attrs %}{% if not read_only() %} data-live-search="local" data-live-param="h2h_q"{% endif %}{% endblock %}
 {% block content %}
   <div class="detail-header">
     <span class="detail-title">
@@ -2131,29 +2124,30 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     <h2>Личные встречи</h2>
     {% if not read_only() %}
     <form method="GET" action="/model/{{ detail.id }}" class="h2h-controls">
-      <input class="h2h-input" type="search" name="h2h_q" value="{{ h2h_q }}" placeholder="Поиск соперника по имени или id" aria-label="Поиск соперника">
+      <input class="h2h-input" type="search" name="h2h_q" value="{{ h2h_q }}" placeholder="Поиск соперника по имени или id" aria-label="Поиск соперника" data-live-input>
       <input type="hidden" name="h2h_sort" value="{{ h2h_sort }}">
       <input type="hidden" name="h2h_dir" value="{{ h2h_dir }}">
       <button type="submit" class="btn btn-secondary btn-sm">Найти</button>
-      {% if h2h_q %}<a href="{{ h2h_reset_url }}" class="edit-link">сбросить</a>{% endif %}
+      <a href="{{ h2h_reset_url }}" class="edit-link" data-live-reset data-live-clear{% if not h2h_q %} hidden{% endif %}>сбросить</a>
+      <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
     </form>
     {% endif %}
     {% if h2h_rows %}
-    <div class="table-wrap">
+    <div class="table-wrap"{% if not read_only() %} data-live-table{% if not h2h_visible %} hidden{% endif %}{% endif %}>
       <table>
         <thead>
           <tr>
             <th scope="col">Соперник</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'games' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Встреч{% else %}<a class="sort-link" href="{{ h2h_sort_url('games') }}" title="Сортировать по числу встреч">Встреч{% if not read_only() and h2h_sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'w' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}W{% else %}<a class="sort-link" href="{{ h2h_sort_url('w') }}" title="Сортировать по победам">W{% if not read_only() and h2h_sort == 'w' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'l' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}L{% else %}<a class="sort-link" href="{{ h2h_sort_url('l') }}" title="Сортировать по поражениям">L{% if not read_only() and h2h_sort == 'l' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'd' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}D{% else %}<a class="sort-link" href="{{ h2h_sort_url('d') }}" title="Сортировать по ничьим">D{% if not read_only() and h2h_sort == 'd' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'winrate' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт{% else %}<a class="sort-link" href="{{ h2h_sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт{% if not read_only() and h2h_sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'games' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Встреч{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('games') }}" title="Сортировать по числу встреч">Встреч{% if not read_only() and h2h_sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'w' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}W{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('w') }}" title="Сортировать по победам">W{% if not read_only() and h2h_sort == 'w' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'l' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}L{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('l') }}" title="Сортировать по поражениям">L{% if not read_only() and h2h_sort == 'l' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'd' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}D{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('d') }}" title="Сортировать по ничьим">D{% if not read_only() and h2h_sort == 'd' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col"{% if not read_only() and h2h_sort == 'winrate' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт{% if not read_only() and h2h_sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
           </tr>
         </thead>
         <tbody>
           {% for r in h2h_rows %}
-          <tr>
+          <tr{% if not read_only() %} data-search="{{ r.search_text }}"{% if not r.matches_query %} hidden{% endif %}{% endif %}>
             <td><a href="/model/{{ r.id }}" class="edit-link">{{ r.name }}</a></td>
             <td>{{ r.games }}</td>
             <td class="wld w">{{ r.w }}</td>
@@ -2165,6 +2159,9 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
         </tbody>
       </table>
     </div>
+    {% if not read_only() %}
+    <div class="empty-state" data-live-empty{% if h2h_visible or not h2h_q %} hidden{% endif %}>Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link" data-live-clear>Сбросить поиск</a></div>
+    {% endif %}
     {% else %}
     <div class="empty-state">{% if h2h_q %}Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link">Сбросить поиск</a>{% else %}Пока нет встреч{% endif %}</div>
     {% endif %}
@@ -3189,10 +3186,13 @@ SETTINGS_TEMPLATE = app.jinja_env.from_string(SETTINGS_TEMPLATE)
 # ─── Routes ─────────────────────────────────────────────────────────
 
 
-@app.route("/history")
-def history_page():
-    index_data = ensure_index()
+def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
+    """Контекст истории: фильтры, лента, пагинация и ссылки.
 
+    Общий для полной страницы `/history` и fragment-запроса
+    `/history/results`. Fragment-режим игнорирует `v` и всегда отдаёт первую
+    страницу; `page` в него не передаётся вызывающим клиентом.
+    """
     models = index_data.get("models", {})
     for mid, info in models.items():
         info.setdefault("id", mid)
@@ -3206,14 +3206,21 @@ def history_page():
         ":".join(search["pair_ids"]) if search["pair_ids"] else ""
     )
 
+    # «Сбросить» видима, пока задан любой фильтр. Для live-поиска по `pair`
+    # «другие» фильтры (модель, даты, таск, исход, только аннулированные)
+    # должны оставлять ссылку видимой и после очистки поля `pair`.
+    history_other_active = (
+        bool(model_id) or include_inactive or include_voided
+        or search["only_voided"] or bool(search["task"]) or bool(search["from"])
+        or bool(search["to"]) or bool(search["outcome"])
+    )
     filter_ctx = filter_panel_context(
         models,
         action="/history",
         reset_url=url_for("history_page"),
-        reset_extra=(
-            bool(model_id) or include_inactive or include_voided
-            or search["active"] or search["only_voided"]
-        ),
+        reset_extra=history_other_active or bool(search["pair"]),
+        reset_other_active=history_other_active,
+        live_reset=True,
     )
     agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
     filter_view = filter_ctx["filter_view"]
@@ -3268,7 +3275,7 @@ def history_page():
     # текущем составе её нет — ищем по полной ленте (с аннулированными) и
     # ведём туда, сбросив поисковые фильтры; неизвестный seq — предупреждение.
     page_size = 20
-    v_value = (request.args.get("v") or "").strip()
+    v_value = "" if fragment else (request.args.get("v") or "").strip()
     v_error = ""
     if v_value.isdigit() and v_value != "0":
         position = next(
@@ -3281,7 +3288,7 @@ def history_page():
                 url_for("history_page", page=page, **history_params) if page > 1
                 else url_for("history_page", **history_params)
             )
-            return redirect(target + f"#v-{v_value}")
+            return {"redirect": target + f"#v-{v_value}"}
         full_feed = merge_history_feed(
             index_data.get("elo_history", []),
             index_data.get("voided_history", []),
@@ -3296,7 +3303,7 @@ def history_page():
                 url_for("history_page", page=page, include_voided="1") if page > 1
                 else url_for("history_page", include_voided="1")
             )
-            return redirect(target + f"#v-{v_value}")
+            return {"redirect": target + f"#v-{v_value}"}
         v_error = f"Вердикт v={v_value} не найден — список записей не изменён."
 
     total_history = feed["total"]
@@ -3309,12 +3316,15 @@ def history_page():
     history_voided = feed["voided"]
     history_hits = feed["hits"]
     history_pages = (history_found + page_size - 1) // page_size if history_found else 1
-    history_page_num = request.args.get("page", "1").strip()
-    try:
-        history_page_num = int(history_page_num)
-    except ValueError:
+    if fragment:
         history_page_num = 1
-    history_page_num = max(1, min(history_page_num, history_pages))
+    else:
+        history_page_num = request.args.get("page", "1").strip()
+        try:
+            history_page_num = int(history_page_num)
+        except ValueError:
+            history_page_num = 1
+        history_page_num = max(1, min(history_page_num, history_pages))
     start = (history_page_num - 1) * page_size
     end = start + page_size
     history = format_elo_history(records[start:end], name_map, caption_map,
@@ -3383,43 +3393,72 @@ def history_page():
         {"id": t, "selected": t == search["task"]} for t in sorted(task_ids) if t
     ]
 
-    return HISTORY_TEMPLATE.render(
-        history=history,
-        history_page=history_page_num,
-        history_pages=history_pages,
-        history_total=total_history,
-        history_found=history_found,
-        history_found_label=history_found_label,
-        history_search_active=search["active"],
-        history_voided=history_voided,
-        history_hits=history_hits,
-        history_items=pagination_items(history_page_num, history_pages),
-        history_page_url=_history_page_url,
-        history_hidden_fields=history_hidden_fields,
-        history_tasks=history_tasks,
-        history_task=search["task"],
-        history_from=search["from"],
-        history_to=search["to"],
-        history_outcome=search["outcome"],
-        history_pair=history_pair_value,
-        only_voided=search["only_voided"],
-        history_preset_urls=history_preset_urls,
-        history_preset_active=history_preset_active,
-        history_export_urls=history_export_urls(history_params),
-        models_dropdown=dropdown,
-        model=model_id,
-        model_name=model_name,
-        include_inactive=include_inactive,
-        include_voided=include_voided,
-        void_next=_self_url(exclude=("success", "error")),
-        error=request.args.get("error", "") or v_error,
-        success=request.args.get("success", ""),
+    return {
+        "history": history,
+        "history_title": f"История — {history_found_label} — ELO Benchmark",
+        "history_page": history_page_num,
+        "history_pages": history_pages,
+        "history_total": total_history,
+        "history_found": history_found,
+        "history_found_label": history_found_label,
+        "history_search_active": search["active"],
+        "history_voided": history_voided,
+        "history_hits": history_hits,
+        "history_items": pagination_items(history_page_num, history_pages),
+        "history_page_url": _history_page_url,
+        "history_hidden_fields": history_hidden_fields,
+        "history_tasks": history_tasks,
+        "history_task": search["task"],
+        "history_from": search["from"],
+        "history_to": search["to"],
+        "history_outcome": search["outcome"],
+        "history_pair": history_pair_value,
+        "only_voided": search["only_voided"],
+        "history_preset_urls": history_preset_urls,
+        "history_preset_active": history_preset_active,
+        "history_export_urls": history_export_urls(history_params),
+        "history_params": history_params,
+        "models_dropdown": dropdown,
+        "model": model_id,
+        "model_name": model_name,
+        "include_inactive": include_inactive,
+        "include_voided": include_voided,
+        "void_next": _self_url(exclude=("success", "error")),
+        "error": request.args.get("error", "") or v_error,
+        "success": request.args.get("success", ""),
         **filter_ctx,
-        crumbs=[
+        "crumbs": [
             {"label": "Рейтинг", "href": "/"},
             {"label": "История"},
         ],
+    }
+
+
+@app.route("/history")
+def history_page():
+    index_data = ensure_index()
+    context = build_history_context(index_data)
+    if "redirect" in context:
+        return redirect(context["redirect"])
+    return HISTORY_TEMPLATE.render(**context)
+
+
+@app.route("/history/results")
+def history_results():
+    index_data = ensure_index()
+    context = build_history_context(index_data, fragment=True)
+    context["history_page"] = 1
+    context["history_items"] = pagination_items(1, context["history_pages"])
+    context["void_next"] = url_for(
+        "history_page",
+        **{key: value for key, value in context["history_params"].items() if value},
     )
+    response = Response(
+        app.jinja_env.get_template("_history_results.html").render(**context),
+        content_type="text/html; charset=utf-8",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/task/<task_id>")
@@ -3545,12 +3584,13 @@ def model_page(model_id: str):
         h2h_dir = "desc"
 
     h2h_rows = list(detail["h2h"])
-    if h2h_q:
-        needle = h2h_q.lower()
-        h2h_rows = [
-            r for r in h2h_rows
-            if needle in r["name"].lower() or needle in r["id"].lower()
-        ]
+    h2h_needle = h2h_q.casefold()
+    for row in h2h_rows:
+        row["search_text"] = f"{row['name']} {row['id']}".casefold()
+        row["matches_query"] = (
+            not h2h_needle or h2h_needle in row["search_text"]
+        )
+    h2h_visible = sum(1 for row in h2h_rows if row["matches_query"])
 
     def _h2h_value(row: dict):
         if h2h_sort == "winrate":
@@ -3592,6 +3632,7 @@ def model_page(model_id: str):
         trend=trend,
         task_coverage=task_coverage,
         h2h_rows=h2h_rows,
+        h2h_visible=h2h_visible,
         h2h_q=h2h_q,
         h2h_sort=h2h_sort,
         h2h_dir=h2h_dir,
@@ -3826,6 +3867,8 @@ def leaderboard():
         action="/",
         reset_url=url_for("leaderboard"),
         reset_extra=filter_mode != "active" or bool(query),
+        reset_other_active=filter_mode != "active",
+        live_reset=True,
     )
     agent_sel, provider_sel = state["agent_sel"], state["provider_sel"]
     filter_view = filter_ctx["filter_view"]
@@ -3838,9 +3881,12 @@ def leaderboard():
         index_data, filter_mode, agent_sel, provider_sel, highlight, query,
     )
     models_sorted = selection["models_sorted"]
-    models_visible = sort_rating_rows(
-        selection["models_visible"], state["sort"], state["direction"],
+    models_pool = sort_rating_rows(
+        selection["models_pool"], state["sort"], state["direction"],
     )
+    # Видимые строки — подмножество отсортированного пула, поэтому порядок
+    # тот же, что при отдельной сортировке (сортировка стабильна).
+    models_visible = [m for m in models_pool if m["matches_query"]]
     highlight_hits = selection["highlight_hits"]
 
     # Для формы вердикта — только активные модели (id, имя, агент)
@@ -3936,6 +3982,7 @@ def leaderboard():
 
     return INDEX_TEMPLATE.render(
         models_sorted=models_sorted,
+        models_pool=models_pool,
         models_visible=models_visible,
         models_count=len(models),
         filtered_count=len(models_visible),

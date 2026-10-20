@@ -274,6 +274,19 @@ def test_perf_budgets() -> None:
         _, dt = _timed(lambda: client.get("/?filter=all"))
         _check("фильтр «Все», повторный клик", dt, BUDGET_TYPICAL)
 
+        # Живой поиск главной: сервер отдаёт полный пул строк (1000),
+        # поэтому рендер не должен зависеть от длины запроса.
+        resp, dt = _timed(lambda: client.get("/?q=perf-0001"))
+        assert resp.status_code == 200, f"GET /?q=... → {resp.status_code}"
+        html = resp.get_data(as_text=True)
+        assert html.count("data-search=") == N_MODELS, (
+            f"в разметке {html.count('data-search=')} строк пула вместо {N_MODELS}"
+        )
+        _check("главная, живой поиск (?q=...) — полный пул", dt, BUDGET_TYPICAL)
+
+        _, dt = _timed(lambda: client.get("/?q=perf-0001"))
+        _check("главная, живой поиск (?q=...), повторный", dt, BUDGET_TYPICAL)
+
         # B. Предельное состояние: отмечены все 1000 моделей на активную
         # задачу. Главная — ≤1 с, повтор — ≤0.5 с; /settings — ≤1 с.
         _write(paths["flags"], _flags_yaml(ids, N_MODELS))
@@ -312,6 +325,12 @@ def test_perf_budgets() -> None:
             "история не видит новую запись"
         )
         _check("/history (10 001 запись)", dt, BUDGET_PAGE)
+
+        # Фрагмент живого поиска истории: рендер первой страницы без оболочки.
+        resp, dt = _timed(lambda: client.get("/history/results?pair=perf-0001"))
+        assert resp.status_code == 200, f"GET /history/results → {resp.status_code}"
+        assert "no-store" in resp.headers.get("Cache-Control", "")
+        _check("/history/results (фрагмент живой поиска)", dt, BUDGET_PAGE)
 
         resp, dt = _timed(lambda: client.get("/stats"))
         assert resp.status_code == 200, f"GET /stats → {resp.status_code}"

@@ -367,6 +367,17 @@ def test_export_links_and_markers():
                 assert marker not in history, f"слепок истории: live-only {marker}"
             assert 'class="badge-task" href="../task/T-001/"' in history
             assert "matchup-chip" in history and "/history?v=" not in history
+
+            # Живой поиск: скрипт не подключён, поисковых полей нет,
+            # служебных data-атрибутов в разметке слепка нет.
+            for name, page in (("главной", html), ("истории", history),
+                               ("модели", model)):
+                assert "live-search.js" not in page, f"слепок {name}: подключён live-search.js"
+                for marker in ("data-live-search", "data-live-input",
+                               "data-live-count", "data-live-empty",
+                               "data-live-reset", "data-live-link",
+                               "data-search="):
+                    assert marker not in page, f"слепок {name}: live-only {marker}"
     print("2.2 links and markers: OK")
 
 

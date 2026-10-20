@@ -996,6 +996,31 @@ tr.archived.filter-miss:hover td { opacity: 0.85; }
 
 .hidden { display: none; }
 
+/* --- живой поиск (change live-search) ------------------------------------- */
+
+/* Авторские display у таблицы/строки/ссылок перебивают UA-правило [hidden]. */
+tr[data-search][hidden],
+[data-live-table][hidden],
+[data-live-empty][hidden],
+[data-live-reset][hidden] { display: none !important; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+[data-live-results].is-loading {
+  opacity: 0.72;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
 /* --- история -------------------------------------------------------------- */
 
 .history-item {
