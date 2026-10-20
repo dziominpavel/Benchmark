@@ -432,24 +432,28 @@ def valid_chips_order(value: str | None) -> str:
 
 
 def valid_captions_state(value: str | None) -> str:
-    """Валидирует состояние подписей «Компания · Агент»; невалидное → 'show'.
+    """Валидирует состояние подписей «Компания · Агент»; невалидное → 'hide'.
 
-    Форма блока «Фильтр» отправляет флажок `captions=show` и следом
-    скрытое поле-компаньон `captions=hide` (компаньон нужен, чтобы снятый
-    флажок тоже попал в адрес). Значит решает ПЕРВОЕ значение в адресе —
-    так же, как его читает `request.args.get()`: ссылки сортировки, экспорта и
-    скрытые поля страницы переносят состояние без потерь.
+    Параметр несёт только отклонение от дефолта: `captions=show` — подписи
+    видны, отсутствие или невалидное значение — скрыты (дефолт). Значит
+    решает ПЕРВОЕ значение в адресе — так же, как его читает
+    `request.args.get()`: ссылки сортировки, экспорта и скрытые поля
+    страницы переносят состояние без потерь.
+
+    Скрытое поле-компаньон не нужно: снятый флажок = «параметра нет» =
+    дефолт «подписи скрыты» (см. leaderboard-ui, «Состав блока «Фильтр»»).
     """
-    v = (value or "show").strip().lower()
-    return v if v in ("show", "hide") else "show"
+    v = (value or "hide").strip().lower()
+    return v if v == "show" else "hide"
 
 
 def captions_hidden_now() -> bool:
     """Скрыты ли подписи «Компания · Агент» текущим запросом.
 
-    Читается только на страницах с блоком «Фильтр»: на `/model/<id>` и
-    `/task/<id>` подписи выводятся всегда (см. leaderboard-ui, «Подпись
-    агента и фирмы у модели»).
+    Дефолт — скрыты (флажок «Отражать агент-компанию» снят), видимы они
+    только при `captions=show`. Читается только на страницах с блоком
+    «Фильтр»: на `/model/<id>` и `/task/<id>` подписи выводятся всегда
+    (см. leaderboard-ui, «Подпись агента и фирмы у модели»).
     """
     return valid_captions_state(request.args.get("captions")) == "hide"
 
@@ -570,7 +574,8 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
     Настройки отображения (`view`, `chips`, `captions`) читаются из query и
     возвращаются как `filter_view`/`filter_chips`/`filter_captions_hidden`;
     в «Сбросить» и hidden-поля они попадают, только когда отличаются от
-    значений по умолчанию.
+    значений по умолчанию. Для подписей дефолт — скрыты, поэтому
+    `captions=show` в адрес попадает только при включённом флажке.
     """
     filter_view = valid_filter_view(request.args.get("view"))
     filter_chips = valid_chips_order(request.args.get("chips"))
@@ -593,16 +598,16 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         hidden.append({"name": "view", "value": filter_view})
     if filter_chips != "alpha":
         hidden.append({"name": "chips", "value": filter_chips})
-    if filter_captions_hidden:
-        hidden.append({"name": "captions", "value": "hide"})
+    if not filter_captions_hidden:
+        hidden.append({"name": "captions", "value": "show"})
     reset = reset_url
     reset_extra_params = {}
     if filter_view != "hide":
         reset_extra_params["view"] = filter_view
     if filter_chips != "alpha":
         reset_extra_params["chips"] = filter_chips
-    if filter_captions_hidden:
-        reset_extra_params["captions"] = "hide"
+    if not filter_captions_hidden:
+        reset_extra_params["captions"] = "show"
     if reset_extra_params:
         reset = reset + ("&" if "?" in reset else "?") + urlencode(reset_extra_params)
     badge_parts = []
@@ -610,8 +615,8 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         badge_parts.append("подсветка")
     if filter_chips == "elo":
         badge_parts.append("чипы по ELO")
-    if filter_captions_hidden:
-        badge_parts.append("подписи скрыты")
+    if not filter_captions_hidden:
+        badge_parts.append("подписи видны")
     other_active = bool(agent_sel or provider_sel) or bool(
         reset_extra if reset_other_active is None else reset_other_active
     )
@@ -654,6 +659,19 @@ def format_model_caption(info: dict) -> str:
     if agent:
         parts.append(agent)
     return " · ".join(parts)
+
+
+def page_caption(info: dict) -> str:
+    """Подпись модели с учётом переключателя «Отражать агент-компанию».
+
+    На страницах с блоком «Фильтр» подпись гасится, пока флажок не включён
+    (дефолт — подписи скрыты, `captions=show` — видны; см. leaderboard-ui,
+    «Подпись агента и фирмы у модели»); на `/model/<id>` и `/task/<id>`
+    подпись выводится всегда — там блока «Фильтр» нет.
+    """
+    if captions_hidden_now():
+        return ""
+    return format_model_caption(info)
 
 
 def get_pair_task_verdicts() -> dict[frozenset[str], set[str]]:
@@ -1394,7 +1412,7 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
 
     for rank, m in enumerate(models_sorted, start=1):
         m["rank"] = rank
-        m["caption"] = format_model_caption(m)
+        m["caption"] = page_caption(m)
 
     def status_matches(info: dict) -> bool:
         """Статусный критерий «Показывать» (в подсветке — критерий hit)."""
@@ -3224,6 +3242,7 @@ def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
         "providers": filter_ctx["filter_providers_csv"] or None,
         "view": filter_view if filter_view != "hide" else None,
         "chips": filter_ctx["filter_chips"] if filter_ctx["filter_chips"] != "alpha" else None,
+        "captions": "show" if not filter_ctx["filter_captions_hidden"] else None,
     }
 
     # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
@@ -3247,7 +3266,7 @@ def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
         })
 
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
-    caption_map = {mid: format_model_caption(info) for mid, info in models.items()}
+    caption_map = {mid: page_caption(info) for mid, info in models.items()}
     feed = build_history_feed(
         index_data, models, search,
         model_id=model_id, agent_sel=agent_sel, provider_sel=provider_sel,
@@ -3686,7 +3705,7 @@ def stats_page():
             "elo": m.get("elo", DEFAULT_ELO),
             "name": m.get("name", m.get("id", "")),
             "games": m.get("games", 0),
-            "caption": format_model_caption(m),
+            "caption": page_caption(m),
         }
         if highlight:
             row["hit"] = (
@@ -3788,7 +3807,7 @@ def stats_page():
     def _stats_url(**overrides) -> str:
         """Адрес «Аналитики» с сохранением фильтров, линий и страниц блоков."""
         args: dict = {}
-        for name in ("filter", "agents", "providers", "view", "chips"):
+        for name in ("filter", "agents", "providers", "view", "chips", "captions"):
             values = request.args.getlist(name)
             if values:
                 args[name] = values
@@ -4023,8 +4042,12 @@ def leaderboard():
         info for info in archived_list
         if model_passes_tags(info, agent_sel, provider_sel)
     ]
+    # Копии строк: подпись зависит от запроса (переключатель «Отражать
+    # агент-компанию»), а мемо-индекс общий для всех запросов — правка
+    # оригинала залипла бы подписью до следующего перезапуска.
+    archived_list = [dict(info) for info in archived_list]
     for info in archived_list:
-        info["caption"] = format_model_caption(info)
+        info["caption"] = page_caption(info)
 
     # Тренды позиций d5 (пул детерминирован парой highlight/filter_mode)
     # проставлены rating_selection; здесь только представление.
@@ -4265,7 +4288,7 @@ def add_page():
             "status": info.get("status", "active"),
             "agent": info.get("agent", ""),
             "provider": info.get("provider", ""),
-            "caption": format_model_caption(info),
+            "caption": page_caption(info),
         })
     models_list.sort(key=lambda m: m["name"].lower())
 
@@ -4482,7 +4505,7 @@ def settings_page():
             "elo": info.get("elo", DEFAULT_ELO),
             "agent": info.get("agent", ""),
             "provider": info.get("provider", ""),
-            "caption": format_model_caption(info),
+            "caption": page_caption(info),
         }
         # В «Подсвечивать» фильтр не сужает раскрытые списки и счётчики.
         if not highlight and not model_passes_tags(entry, agent_sel, provider_sel):
@@ -4525,7 +4548,7 @@ def settings_page():
             answer_rows = [r for r in answer_rows if r.get("debt", 0) > 0]
         answer_hits = 0
     for r in answer_rows:
-        r["caption"] = format_model_caption(models.get(r["id"], {}))
+        r["caption"] = page_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     coverage = memo_coverage()
     active_task_ids = memo_active_tasks()
@@ -4701,7 +4724,7 @@ def _settings_filter_params(models: dict) -> dict:
     """Параметры блока «Фильтр» /settings из формы/query — для redirect.
 
     Возвращает answer_filter и непустые agents/providers/only_debts и
-    не-дефолтные настройки отображения view/chips, чтобы POST-действия
+    не-дефолтные настройки отображения view/chips/captions, чтобы POST-действия
     страницы не теряли состояние фильтров и режим.
     """
     params: dict = {
@@ -4725,6 +4748,10 @@ def _settings_filter_params(models: dict) -> dict:
     chips = valid_chips_order(request.values.get("chips"))
     if chips != "alpha":
         params["chips"] = chips
+    # Подписи: дефолт — скрыты, поэтому в redirect попадает только
+    # включённый флажок (`captions=show`).
+    if valid_captions_state(request.values.get("captions")) == "show":
+        params["captions"] = "show"
     return params
 
 

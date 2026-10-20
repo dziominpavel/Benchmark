@@ -5,37 +5,41 @@
    аннулирования. #}
 
 {% macro verdict_row(item, show_task=True, extra_class="", void_next=None) %}
-<div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %}>
-  {% if show_task and item.task %}
+{% set has_badge = show_task and item.task %}
+<div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}{% if not has_badge %} history-item-no-task{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %}>
+  {% if has_badge %}
   <a class="badge-task" href="{{ url_for('task_page', task_id=item.task) }}" title="Открыть страницу задачи {{ item.task }}">{{ item.task }}</a>
   {% endif %}
   <span class="history-model">
-    <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_a_id) }}">{{ item.model_a_name }}</a>{% if item.model_a_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
+    <span class="history-side" data-side="a"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_a_id) }}" title="{{ item.model_a_name }}">{{ item.model_a_name }}</a>{% if item.model_a_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_a_caption }}</span>{% endif %}</span>
     <span class="history-vs">vs</span>
-    <span class="history-side"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_b_id) }}">{{ item.model_b_name }}</a>{% if item.model_b_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
+    <span class="history-side" data-side="b"><a class="history-model-link" href="{{ url_for('model_page', model_id=item.model_b_id) }}" title="{{ item.model_b_name }}">{{ item.model_b_name }}</a>{% if item.model_b_caption %}<span class="history-divider" aria-hidden="true">·</span><span class="model-caption">{{ item.model_b_caption }}</span>{% endif %}</span>
   </span>
-  {% if item.winner_label %}<span class="outcome outcome-{{ item.winner }}" aria-label="{{ item.winner_aria }}">{{ item.winner_label }}</span>{% endif %}
-  <span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span>
-  <span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span>
-  <span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span>
-  <span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span>
-  <span class="history-date">{{ item.date_str }}</span>
-  {% if item.matchup %}
-  {% if read_only() %}<span class="matchup-chip">{{ item.matchup }}</span>
-  {% else %}<a class="matchup-chip" href="{{ url_for('history_page', v=item.seq) }}#v-{{ item.seq }}" title="Постоянная ссылка на вердикт">{{ item.matchup }}</a>{% endif %}
-  {% endif %}
+  <span class="history-elo-group" data-side="a"><span class="history-elo">{{ item.elo_a_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_a_after }}</span><span class="{{ item.elo_a_delta_class }}">{{ item.elo_a_delta_str }}</span></span>
+  <span class="history-elo-group" data-side="b"><span class="history-elo">{{ item.elo_b_before }} <span class="history-elo-arrow">&rarr;</span> {{ item.elo_b_after }}</span><span class="{{ item.elo_b_delta_class }}">{{ item.elo_b_delta_str }}</span></span>
+  <span class="history-meta">
+    {% if item.winner_label %}<span class="outcome outcome-{{ item.winner }}" aria-label="{{ item.winner_aria }}">{{ item.winner_label }}</span>{% endif %}
+    <span class="history-date">{{ item.date_str }}</span>
+    {% if item.matchup %}
+    {% if read_only() %}<span class="matchup-chip">{{ item.matchup }}</span>
+    {% else %}<a class="matchup-chip" href="{{ url_for('history_page', v=item.seq) }}#v-{{ item.seq }}" title="Постоянная ссылка на вердикт">{{ item.matchup }}</a>{% endif %}
+    {% endif %}
+    {% if not item.voided and not read_only() and item.matchup %}
+    <details class="void-form">
+      <summary class="void-form-open">Аннулировать</summary>
+      <form method="POST" action="/verdict/void" class="void-form-body">
+        <input type="hidden" name="matchup_id" value="{{ item.matchup }}">
+        <input type="hidden" name="next" value="{{ void_next }}">
+        <input type="text" name="reason" class="void-reason" placeholder="Причина аннулирования" required>
+        <button type="submit" class="btn btn-danger btn-sm">Аннулировать</button>
+      </form>
+    </details>
+    {% elif item.voided %}
+    <span class="void-form-slot" aria-hidden="true"></span>
+    {% endif %}
+  </span>
   {% if item.voided %}
   <span class="history-void-note">{{ item.void_str }}</span>
-  {% elif not read_only() and item.matchup %}
-  <details class="void-form">
-    <summary class="void-form-open">Аннулировать</summary>
-    <form method="POST" action="/verdict/void" class="void-form-body">
-      <input type="hidden" name="matchup_id" value="{{ item.matchup }}">
-      <input type="hidden" name="next" value="{{ void_next }}">
-      <input type="text" name="reason" class="void-reason" placeholder="Причина аннулирования" required>
-      <button type="submit" class="btn btn-danger btn-sm">Аннулировать</button>
-    </form>
-  </details>
   {% endif %}
 </div>
 {% endmacro %}

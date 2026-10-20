@@ -1030,14 +1030,40 @@ tr[data-search][hidden],
 
 /* --- история -------------------------------------------------------------- */
 
+/* Строка ленты: фиксированные колонки (бейдж | A | vs | B | метаданные).
+   Блок счёта каждой стороны стоит в колонке её модели, поэтому точка
+   переноса не зависит от длины названий (change history-row-grid). */
 .history-item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 10px 0;
+  display: grid;
+  grid-template-columns:
+    [badge] auto
+    [a] minmax(0, 1fr)
+    [vs] auto
+    [b] minmax(0, 1fr)
+    [meta] auto;
+  grid-template-areas:
+    "badge a    vs  b    meta"
+    "badge aelo .   belo meta";
+  column-gap: var(--sp-3);
+  row-gap: 4px;
+  align-items: start;
+  /* левый отступ постоянный: подсветка «Подсвечивать» и якорь-цель
+     рисуют полосу-акцент слева, но не сдвигают колонки ленты */
+  padding: 9px 0 9px var(--sp-3);
   border-bottom: 1px solid var(--border);
   font-size: var(--fs-sm);
-  flex-wrap: wrap;
+}
+
+/* строка без бейджа таска (страница задачи): колонка не резервируется */
+.history-item-no-task {
+  grid-template-columns:
+    [a] minmax(0, 1fr)
+    [vs] auto
+    [b] minmax(0, 1fr)
+    [meta] auto;
+  grid-template-areas:
+    "a    vs  b    meta"
+    "aelo .   belo meta";
 }
 
 .history-item:last-child { border-bottom: none; }
@@ -1046,11 +1072,38 @@ tr[data-search][hidden],
 .history-item.filter-hit {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--accent);
-  padding-left: var(--sp-3);
 }
 .history-item.filter-miss { opacity: var(--filter-miss-opacity); }
 .history-item.filter-miss:hover { opacity: 0.85; }
-.history-model { font-weight: 600; color: var(--text); min-width: 140px; }
+.history-model { font-weight: 600; color: var(--text); }
+
+/* размещение содержимого строки по колонкам сетки */
+.history-side[data-side="a"] { grid-area: a; }
+.history-side[data-side="b"] { grid-area: b; }
+.history-vs { grid-area: vs; }
+.history-elo-group[data-side="a"] { grid-area: aelo; }
+.history-elo-group[data-side="b"] { grid-area: belo; }
+
+/* блок счёта стороны: под именем, числа у правого края своей колонки */
+.history-elo-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.history-elo-group .history-elo { min-width: 84px; text-align: right; }
+.history-elo-group .history-delta-up,
+.history-elo-group .history-delta-down,
+.history-elo-group .history-delta-neutral { min-width: 34px; text-align: right; }
+
+/* кластер метаданных: исход, дата, чип пары, действие аннулирования */
+.history-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
 .history-elo {
   font-weight: 700;
   color: var(--text);
@@ -1064,16 +1117,22 @@ tr[data-search][hidden],
 .history-date {
   color: var(--muted);
   font-size: var(--fs-xs);
-  margin-left: auto;
   white-space: nowrap;
+  /* моноширинные цифры: ширина даты не зависит от цифр — колонки
+     метаданных не «прыгают» между строками ленты */
+  font-variant-numeric: tabular-nums;
 }
 
 /* аннулированные записи: приглушение и перечёркивание; маркер — поверх строки */
 .history-item-voided { opacity: 0.75; }
-.history-item-voided > span { text-decoration: line-through; }
+.history-item-voided .history-side a,
+.history-item-voided .history-side .model-caption,
+.history-item-voided .history-elo-group > span,
+.history-item-voided .outcome,
+.history-item-voided .history-date { text-decoration: line-through; }
 .history-item-voided > .history-void-note { text-decoration: none; }
 .history-void-note {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   color: var(--neg-text);
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -1081,7 +1140,10 @@ tr[data-search][hidden],
 
 /* форма аннулирования: раскрывашка в строке истории и в success-строке */
 .void-form { font-size: var(--fs-xs); }
-.history-item .void-form { flex-basis: 100%; }
+/* действие живёт в кластере метаданных, а не на отдельной строке; ширина
+   зарезервирована, чтобы колонки ленты не «прыгали» */
+.history-item .void-form { flex: 0 0 auto; min-width: 100px; }
+.void-form-slot { display: inline-block; width: 100px; }
 .void-form-open {
   cursor: pointer;
   color: var(--neg-text);
@@ -1481,6 +1543,12 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
   margin-top: 2px;
 }
 
+/* Подпись «Компания · Агент» и разделитель «·» перед ней гасятся вместе:
+   слепок статичен, состояние приходит из адреса (?captions=hide). */
+body.captions-off .model-caption,
+body.captions-off .dist-caption,
+body.captions-off .history-divider { display: none; }
+
 .filter-card {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -1593,6 +1661,48 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
 }
 
 .filter-settings-body .filter-label { min-width: 128px; }
+
+/* Флажок «Отражать агент-компанию» в панели настроек фильтра
+   (change caption-visibility-toggle). Тема одна — тёмная и светлая
+   берут свои токены, поэтому отдельных правил для тем не нужно. */
+.filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.filter-check > input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.filter-check > input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Отмеченное состояние: подпись флажка становится заметной, как у чипов. */
+.filter-check > input:checked + span {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Длинный бейдж настроек («подсветка · чипы по ELO · подписи видны»)
+   переносится по словам — кнопка не растягивает шапку блока «Фильтр»
+   и не ломает вёрстку на узком экране. */
+.filter-settings > summary {
+  overflow-wrap: anywhere;
+}
 
 @media (max-width: 639px) {
   .filter-head { position: relative; flex-wrap: wrap; }
@@ -1909,25 +2019,35 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
 
 .lookups-table .actions-col .form-inline { display: inline-flex; align-items: center; gap: 6px; }
 
+/* Блок моделей не имеет собственной коробки: его дети (.history-side,
+   .history-vs) становятся ячейками сетки строки. */
 .history-model {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: contents;
   font-weight: 600;
   color: var(--text);
-  min-width: 140px;
 }
 
+/* Сторона участника: имя — первой строкой (усекается многоточием),
+   подпись «Компания · Агент» — под именем; разделитель «·» остаётся
+   между именем и подписью. */
 .history-side {
   display: flex;
-  flex-direction: row;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 0 6px;
+  min-width: 0;
 }
 
-.history-side .model-caption { margin-top: 0; }
-.history-vs { color: var(--muted); font-weight: 400; }
+.history-side .model-caption {
+  flex: 0 0 100%;
+  margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-vs { grid-area: vs; color: var(--muted); font-weight: 400; }
 
 /* самодостаточная строка истории (change console-wave3-data-scale) */
 .history-item { scroll-margin-top: 84px; }
@@ -1935,10 +2055,17 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
 .history-item:target {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   box-shadow: inset 3px 0 0 var(--accent);
-  padding-left: var(--sp-3);
 }
 
 .history-side a {
+  flex: 0 1 auto;
+  min-width: 0;
+  /* место зарезервировано под разделитель «·»: flex считает перенос по
+     неусечённому имени, иначе разделитель уезжает на свою строку */
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
   font-weight: 600;
   text-decoration: none;
@@ -1949,7 +2076,7 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
   text-decoration: underline;
 }
 
-.history-divider { color: var(--muted); font-weight: 400; }
+.history-divider { flex: 0 0 auto; color: var(--muted); font-weight: 400; }
 
 .badge-task,
 .matchup-chip,
@@ -1977,6 +2104,8 @@ a.badge-task:hover { border-color: var(--accent); }
   border: 1px solid var(--border);
   color: var(--muted);
   text-decoration: none;
+  /* моноширинные цифры: ширина чипа пары не зависит от номера */
+  font-variant-numeric: tabular-nums;
 }
 
 a.matchup-chip:hover {
@@ -1984,7 +2113,12 @@ a.matchup-chip:hover {
   color: var(--text);
 }
 
-.outcome { border: 1px solid transparent; }
+/* одинаковая ширина метки исхода: колонка метаданных не «прыгает» */
+.outcome {
+  border: 1px solid transparent;
+  min-width: 86px;
+  text-align: center;
+}
 .outcome-a { background: var(--pos-tint); color: var(--pos-text); }
 .outcome-b { background: var(--neg-tint); color: var(--neg-text); }
 .outcome-draw { background: var(--surface-2); color: var(--muted); }

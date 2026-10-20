@@ -1519,7 +1519,9 @@ def test_wave3_history_row_anchor():
             "matchup_id": "T-002/001", "reason": "дубль матча", "next": "/history",
         })
 
-        html = client.get("/history?include_voided=1").get_data(as_text=True)
+        # Подписи включены явно: разделитель «·» выводится вместе с подписью
+        # модели, а её видимость — состояние настройки отображения.
+        html = client.get("/history?include_voided=1&captions=show").get_data(as_text=True)
         rows = _history_rows(html)
         assert len(rows) == 3
         applied = [r for r in rows if 'id="v-3"' in r][0]
@@ -2730,6 +2732,209 @@ def test_filter_settings_trigger():
     print("filter settings trigger: OK")
 
 
+def test_history_row_grid_markup():
+    """Строка ленты: колонки сетки, стороны помечены, вложенных div нет."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/history").get_data(as_text=True)
+        rows = re.findall(r'<div class="history-item[^"]*"[^>]*>.*?</div>', html, re.S)
+        assert rows, "строки ленты не отрендерены"
+        row = rows[0]
+
+        # Стороны участников и их блоки счёта помечены data-side.
+        assert 'class="history-side" data-side="a"' in row
+        assert 'class="history-side" data-side="b"' in row
+        assert 'class="history-elo-group" data-side="a"' in row
+        assert 'class="history-elo-group" data-side="b"' in row
+
+        # Кластер метаданных: исход, дата, чип пары, действие аннулирования.
+        assert 'class="history-meta"' in row
+        i_meta = row.index('class="history-meta"')
+        assert i_meta < row.index('class="outcome')
+        assert row.index('class="outcome') < row.index('class="history-date"')
+        assert row.index('class="history-date"') < row.index('class="matchup-chip"')
+
+        # Счёт каждой стороны стоит в разметке после своего блока моделей.
+        assert row.index('class="history-side" data-side="a"') < row.index(
+            'class="history-elo-group" data-side="a"')
+        assert row.index('class="history-elo-group" data-side="a"') < row.index(
+            'class="history-elo-group" data-side="b"')
+
+        # Полное имя модели — в подсказке ссылки (название усекается).
+        assert re.search(r'class="history-model-link" href="[^"]*" title="[^"]+"', row)
+
+        # Внутри строки нет вложенных div — по ней режет регулярка экспорта.
+        assert row.count("<div") == 1, "в строке ленты появился вложенный div"
+
+        # Страница задачи: бейджа таска нет, строка помечена модификатором.
+        task_html = client.get("/task/T-001").get_data(as_text=True)
+        task_rows = re.findall(r'<div class="history-item[^"]*"[^>]*>.*?</div>', task_html, re.S)
+        assert task_rows, "вердикты таска не отрендерены"
+        assert "history-item-no-task" in task_rows[0]
+        assert "badge-task" not in task_rows[0]
+    print("history row grid markup: OK")
+
+
+def test_history_row_grid_css():
+    """Строка ленты — сетка с областями; перечёркивание не задевает чип и действие."""
+    css_path = Path(__file__).resolve().parent / "static" / "css" / "console.css"
+    css = css_path.read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)  # комментарии не часть селектора
+
+    def rule_for(selector: str) -> str | None:
+        """Тело правила, в списке селекторов которого есть selector."""
+        for m in re.finditer(r"([^{}]+)\{([^}]*)\}", css):
+            selectors = [s.strip() for s in m.group(1).split(",")]
+            if selector in selectors:
+                return m.group(2)
+        return None
+
+    item = rule_for(".history-item")
+    assert item, "правило .history-item не найдено"
+    assert "display: grid" in item, "строка ленты не переведена на сетку"
+    assert "aelo" in item and "belo" in item, "нет областей для счёта сторон"
+    assert "flex-wrap" not in item, "строка осталась flex-потоком"
+
+    assert rule_for(".history-item-no-task"), "нет модификатора строки без бейджа"
+    assert rule_for('.history-side[data-side="a"]'), "сторона A не размещена по колонке"
+    assert rule_for('.history-elo-group[data-side="a"]'), "счёт A не размещён по колонке"
+    assert rule_for(".history-meta"), "нет кластера метаданных"
+
+    # Перечёркивание аннулированных — адресное: чип пары и действие не задеты.
+    strike = rule_for(".history-item-voided .history-side a")
+    assert strike and "line-through" in strike
+    for selector in (".history-item-voided .matchup-chip",
+                     ".history-item-voided .void-form",
+                     ".history-item-voided > span"):
+        assert rule_for(selector) is None, f"правило {selector} не должно быть"
+    print("history row grid css: OK")
+
+
+def test_history_caption_divider():
+    """Разделитель «·» выводится только вместе с подписью модели."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        def row_of(html: str) -> str:
+            found = re.findall(r'<div class="history-item[^"]*"[^>]*>.*?</div>', html, re.S)
+            assert found, "лента не отрендерена"
+            return found[0]
+
+        # Подпись и разделитель «·» появляются и исчезают вместе —
+        # независимо от того, какое значение у параметра подписей.
+        for url in ("/history", "/history?captions=show", "/history?captions=hide",
+                    "/history?captions=lol"):
+            row = row_of(client.get(url).get_data(as_text=True))
+            assert ("model-caption" in row) == ("history-divider" in row), \
+                f"{url}: разделитель и подпись разошлись"
+
+        # При включённых подписях на месте и подпись, и разделитель.
+        shown = row_of(client.get("/history?captions=show").get_data(as_text=True))
+        assert "model-caption" in shown and "history-divider" in shown
+
+        # Настройка не теряется при переходе на следующую страницу ленты.
+        _write(paths["journal"], _history_journal(540))
+        data_cache.clear()
+        paged = client.get("/history?captions=show").get_data(as_text=True)
+        assert re.search(r'href="/history\?page=2[^"]*captions=show"', paged), \
+            "пагинация сбрасывает показ подписей"
+    print("history caption divider: OK")
+
+
+def _caption_inputs(html: str) -> list[str]:
+    """Все поля с именем `captions` (флажок панели и скрытые копии)."""
+    return re.findall(r'<input[^>]*\bname="captions"[^>]*>', html)
+
+
+def test_caption_toggle_server():
+    """Переключатель «Отражать агент-компанию»: дефолт, `captions=show`,
+    невалидное значение; состояние переносится в бейдж, hidden-поля и
+    ссылку «Сбросить» (change caption-visibility-toggle)."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        def page(url: str) -> str:
+            return client.get(url).get_data(as_text=True)
+
+        # Дефолт: флажок снят, подписи скрыты, параметра в адресе нет.
+        default = page("/")
+        boxes = _caption_inputs(default)
+        assert len(boxes) == 1, f"флажок подписи должен быть один: {boxes}"
+        assert 'type="checkbox"' in boxes[0], "флажок подписи не чекбокс"
+        assert "checked" not in boxes[0], "флажок подписи отмечен по умолчанию"
+        assert "подписи видны" not in default, "бейдж показывает не-дефолтное состояние"
+        assert "captions=" not in default, "в дефолтном адресе лишний параметр"
+
+        # Включённый флажок: подписи видны, состояние живёт в URL.
+        shown = page("/?captions=show")
+        boxes = _caption_inputs(shown)
+        assert len(boxes) == 1, f"флажок подписи должен быть один: {boxes}"
+        assert "checked" in boxes[0], "флажок подписи не отмечен при captions=show"
+        assert "подписи видны" in shown, "бейдж не сообщает о подписях"
+
+        # Ссылка «Сбросить» сохраняет состояние флажка.
+        history = page("/history?captions=show")
+        assert 'href="/history?captions=show"' in history, "«Сбросить» сбросил подписи"
+
+        # Hidden-поля отдельных форм страницы сохраняют состояние.
+        settings = page("/settings?captions=show")
+        hidden = [i for i in _caption_inputs(settings) if 'type="hidden"' in i]
+        assert hidden, "hidden-поля не сохраняют показ подписей"
+        assert all('value="show"' in i for i in hidden), "hidden-поле с чужим значением"
+
+        # Невалидное значение — дефолт (флажок снят, подписи скрыты).
+        invalid = page("/?captions=lol")
+        boxes = _caption_inputs(invalid)
+        assert len(boxes) == 1 and "checked" not in boxes[0], \
+            "невалидное значение не дефолт"
+        assert "подписи видны" not in invalid, "невалидное значение не дефолт"
+    print("caption toggle server: OK")
+
+
+def test_caption_hidden_per_page():
+    """Подписи гаснут на страницах с блоком «Фильтр» и остаются на
+    страницах без него; экспорт данных подписи сохраняет (3.4, 3.5)."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        def page(url: str) -> str:
+            return client.get(url).get_data(as_text=True)
+
+        # Страницы с блоком «Фильтр»: подпись только при `captions=show`.
+        for url, marker in (
+            ("/", "model-caption"),
+            ("/add", "model-caption"),
+            ("/settings", "model-caption"),
+            ("/history", "model-caption"),
+            ("/stats", "dist-caption"),
+        ):
+            assert marker not in page(url), f"{url}: подпись выведена без флажка"
+            assert marker in page(f"{url}?captions=show"), f"{url}: подпись не вернулась"
+
+        # Страница задачи: блока «Фильтр» нет — подписи не гасятся.
+        task_page = page("/task/T-001")
+        assert "Проект: Benchmark" in task_page, "подпись проекта страницы задачи пропала"
+        assert '<span class="model-caption">T-001</span>' in task_page, \
+            "идентификатор таски не выведен"
+        assert "Prov · Agent" in task_page, "подпись модели на странице задачи пропала"
+
+        # Экспорт — это данные, а не вид: колонки подписи остаются.
+        csv = client.get("/export/rating.csv?captions=show").get_data(as_text=True)
+        assert "Компания" in csv and "Агент" in csv, "в CSV экспорта нет колонок подписи"
+        payload = json.loads(
+            client.get("/export/rating.json?captions=show").get_data(as_text=True)
+        )
+        assert payload["rows"], "экспорт рейтинга пуст"
+        assert payload["rows"][0]["provider"] == "Prov"
+        assert payload["rows"][0]["agent"] == "Agent"
+    print("caption hidden per page: OK")
+
+
 if __name__ == "__main__":
     test_key_changes_per_file()
     test_builder_runs_once()
@@ -2780,4 +2985,9 @@ if __name__ == "__main__":
     test_filter_settings_trigger()
     test_filter_miss_opacity_tokens()
     test_main_highlight_dimming()
+    test_history_row_grid_markup()
+    test_history_row_grid_css()
+    test_history_caption_divider()
+    test_caption_toggle_server()
+    test_caption_hidden_per_page()
     print("\nALL DATA CACHE TESTS PASSED")

@@ -244,6 +244,12 @@
         el.checked = params.get(name) === "1";
       });
     }
+    // Подписи: флажок «Отражать агент-компанию» — параметр `captions`
+    // (дефолт «скрыты», значит показ = `captions=show`).
+    const captionBox = form.querySelector('input[name="captions"]');
+    if (captionBox) {
+      captionBox.checked = (params.get("captions") || "").toLowerCase() === "show";
+    }
     for (const name of tagNames) {
       const tokens = new Set(splitCsv(params.getAll(name).join(",")));
       form.querySelectorAll('input[name="' + name + '"]').forEach((el) => {
@@ -297,12 +303,13 @@
     }
   }
 
-  function updateBadge(form, view, chips) {
+  function updateBadge(form, view, chips, captions) {
     const summary = form.querySelector("details.filter-settings > summary");
     if (!summary) return;
     const parts = [];
     if (view === "highlight") parts.push("подсветка");
     if (chips === "elo") parts.push("чипы по ELO");
+    if (captions) parts.push("подписи видны");
     summary.textContent = parts.length
       ? "Настройки фильтра — " + parts.join(" · ")
       : "Настройки фильтра";
@@ -368,6 +375,7 @@
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
+      captions: isChecked(form, "captions"),
     });
 
     const byRank = (a, b) => ALL_RANKS.get(a) - ALL_RANKS.get(b);
@@ -469,7 +477,8 @@
     const apply = () => {
       const st = state();
       chipsOrder(form, st.chips);
-      updateBadge(form, st.view, st.chips);
+      updateBadge(form, st.view, st.chips, st.captions);
+      applyCaptions(st.captions);
       render(st);
       writeUrl([
         ["filter", st.mode !== "active" ? st.mode : ""],
@@ -477,6 +486,7 @@
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
+        ["captions", st.captions ? "show" : ""],
       ]);
     };
 
@@ -526,6 +536,7 @@
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
+      captions: isChecked(form, "captions"),
     });
 
     function rebuildDropdown(st) {
@@ -661,7 +672,8 @@
       if (resetPage) currentPage = 1;
       const st = state();
       chipsOrder(form, st.chips);
-      updateBadge(form, st.view, st.chips);
+      updateBadge(form, st.view, st.chips, st.captions);
+      applyCaptions(st.captions);
       render(st);
       writeUrl([
         ["model", st.model],
@@ -671,6 +683,7 @@
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
+        ["captions", st.captions ? "show" : ""],
         ["page", currentPage > 1 ? String(currentPage) : ""],
       ]);
     };
@@ -980,6 +993,7 @@
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
+      captions: isChecked(form, "captions"),
     });
 
     function poolRows(st) {
@@ -1086,7 +1100,8 @@
     const apply = () => {
       const st = state();
       chipsOrder(form, st.chips);
-      updateBadge(form, st.view, st.chips);
+      updateBadge(form, st.view, st.chips, st.captions);
+      applyCaptions(st.captions);
       render(st);
       writeUrl([
         ["filter", st.mode === "all" ? "all" : ""],
@@ -1094,6 +1109,7 @@
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
+        ["captions", st.captions ? "show" : ""],
         ["rank_page", currentPage > 1 ? String(currentPage) : ""],
       ]);
     };
@@ -1143,6 +1159,7 @@
       onlyDebts: isChecked(form, "only_debts"),
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
+      captions: isChecked(form, "captions"),
     });
 
     function debtOf(row) {
@@ -1256,7 +1273,8 @@
     const apply = () => {
       const st = state();
       chipsOrder(form, st.chips);
-      updateBadge(form, st.view, st.chips);
+      updateBadge(form, st.view, st.chips, st.captions);
+      applyCaptions(st.captions);
       render(st);
       writeUrl([
         ["answer_filter", st.mode !== "active" ? st.mode : ""],
@@ -1265,6 +1283,7 @@
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
+        ["captions", st.captions ? "show" : ""],
       ]);
     };
 
@@ -1277,8 +1296,25 @@
     apply();
   }
 
+  /* Подписи «Компания · Агент» и разделитель «·» перед ними: слепок
+   * статичен, поэтому состояние берётся из адреса — подписи видны только
+   * при ?captions=show (change caption-visibility-toggle). Флажок панели
+   * работает как в живой консоли: состояние живёт в форме и в адресе.
+   * Скрытие применяется только к страницам с блоком «Фильтр»: у страницы
+   * модели и страницы задачи панели нет, там подпись видна всегда. */
+  function applyCaptions(shown) {
+    if (!panelForm()) return;
+    document.body.classList.toggle("captions-off", !shown);
+  }
+
+  function captionsFromUrl() {
+    const params = new URLSearchParams(location.search);
+    return (params.get("captions") || "").toLowerCase() === "show";
+  }
+
   /* ── Запуск: страница сама выбирает, что инициализировать ───────── */
 
+  applyCaptions(captionsFromUrl());
   initRating();
   initHistory();
   initStats();
