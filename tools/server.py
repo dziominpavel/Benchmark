@@ -60,6 +60,7 @@ from render_helpers import (
     merge_history_feed, history_task_id, plural_ru,
     interval_groups, rating_page, build_rating_svg, RATING_PAGE_SIZE,
     parse_lines_param, parse_period_param, default_line_ids,
+    resolve_lines, resolve_lines_default, lines_warnings,
     build_elo_series, build_elo_multiline_svg, ELO_LINE_COLORS,
     group_summary, delta_leaders, opposition_strength,
 )
@@ -2351,28 +2352,43 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
     <h2>Динамика ELO</h2>
     <div class="hint">Матчи выбранных моделей в порядке записи; пунктирная линия — старт 1200.</div>
     {% if not read_only() %}
-    <form method="GET" action="/stats" class="lines-form" data-lines-picker>
+    <form method="GET" action="/stats" class="lines-form" data-lines-picker data-lines-applied="{{ lines_applied }}">
       {% for h in lines_hidden %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
       <div class="lines-row">
         <span class="filter-label">Модели</span>
         <div class="lines-picker">
           <div class="lines-chips" data-lines-chips>
-            {% for m in lines_models %}
-            <span class="lines-chip" data-lines-id="{{ m.id }}" data-lines-name="{{ m.name }}">
-              <span class="lines-chip-name">{{ m.name }}</span>
-              <button type="button" class="lines-chip-remove" data-lines-remove="{{ m.id }}" aria-label="Убрать {{ m.name }}">×</button>
-            </span>
+            {% for c in lines_chips %}
+              {% if c.kind == 'model' %}
+              <span class="lines-chip" data-lines-id="{{ c.id }}" data-lines-raw="{{ c.raw }}" data-lines-name="{{ c.name }}">
+                <span class="lines-chip-name">{{ c.name }}</span>
+                <button type="button" class="lines-chip-remove" data-lines-remove="{{ c.raw }}" aria-label="Убрать {{ c.name }}">×</button>
+              </span>
+              {% else %}
+              <span class="lines-chip lines-chip-problem" data-lines-raw="{{ c.raw }}"{% if c.status == 'ambiguous' %} title="Подходит: {% for x in c.candidates %}{{ x.name }}{% if not loop.last %}, {% endif %}{% endfor %}"{% endif %}>
+                <span class="lines-chip-name">{% if c.status == 'ambiguous' %}неоднозначно: {{ c.raw }}{% else %}не найдено: {{ c.raw }}{% endif %}</span>
+              </span>
+              {% endif %}
             {% endfor %}
           </div>
           <label class="lines-field">
-            <span class="lines-field-label">id моделей через запятую</span>
-            <input type="text" name="lines" value="{{ lines_value }}" placeholder="например: gpt-5, claude-4" data-lines-input autocomplete="off" spellcheck="false">
-          </label>
-          <label class="lines-field">
-            <span class="lines-field-label">Поиск по реестру</span>
-            <input type="search" class="lines-search" placeholder="имя или id модели" data-lines-search autocomplete="off" spellcheck="false" aria-label="Поиск модели по реестру">
+            <span class="lines-field-label">Модели: имена или id через запятую</span>
+            <input type="text" name="lines" value="{{ lines_value }}" placeholder="например: Cursor Fable 5.1 1M Max, Devin GPT-6 Astra Max" data-lines-input autocomplete="off" spellcheck="false">
           </label>
           <ul class="lines-results" data-lines-results hidden></ul>
+          <div class="lines-warnings" data-lines-warnings{% if not lines_warnings %} hidden{% endif %}>
+            {% for w in lines_warnings %}<div class="lines-warning">{{ w }}</div>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="lines-row">
+        <span class="filter-label">Указатель</span>
+        <div class="lines-presets">
+          <span><a href="{{ top5_url }}" class="edit-link">Топ-5</a> · <a href="{{ top10_url }}" class="edit-link">Топ-10</a></span>
+          <div class="lines-preset-list">
+            <div><span class="lines-preset-name">Топ-5</span> {{ lines_preset_top5 }}</div>
+            <div><span class="lines-preset-name">Топ-10</span> {{ lines_preset_top10 }}</div>
+          </div>
         </div>
       </div>
       <div class="lines-row">
@@ -2385,14 +2401,14 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
       </div>
       <div class="card-actions">
         <button type="submit" class="btn btn-primary btn-sm">Показать</button>
-        <span class="lines-presets">Пресеты: <a href="{{ top5_url }}" class="edit-link">Топ-5</a> · <a href="{{ top10_url }}" class="edit-link">Топ-10</a></span>
+        <span class="lines-dirty" data-lines-dirty hidden>не применено</span>
       </div>
     </form>
     {% endif %}
     {% if dynamics_svg %}
     {{ dynamics_svg|safe }}
     {% else %}
-    <div class="empty-state">Нет матчей выбранных моделей в периоде.</div>
+    <div class="empty-state">{{ dynamics_empty }}</div>
     {% endif %}
     {% if line_legend %}
     <div class="line-legend">
@@ -3708,8 +3724,17 @@ def stats_page():
     )
 
     # «Динамика ELO»: выбор из URL, иначе топ-5 активных; период 30/90/all.
+    # `lines` разбирается сервером: `id`, имя или однозначная часть имени.
+    # Отсутствие параметра — топ-5 активных; присутствие, но неразбираемый
+    # список — пустое состояние без подмены (change
+    # fix-elo-dynamics-model-picker).
     lines_raw = ",".join(request.args.getlist("lines"))
-    selected = parse_lines_param(lines_raw, models) or default_line_ids(models)
+    lines_given = "lines" in request.args
+    lines_result = (
+        resolve_lines(lines_raw, models) if lines_given
+        else resolve_lines_default(models)
+    )
+    selected = lines_result["ids"]
     period = parse_period_param(request.args.get("period"))
     period_value = "all" if period is None else str(period)
     series_data = build_elo_series(
@@ -3781,6 +3806,27 @@ def stats_page():
     def _block_page_url(param: str, page: int) -> str:
         return _stats_url(**{param: page if page > 1 else None})
 
+    # Канонизация адреса: когда весь список разобран и ни одна модель не
+    # отброшена, `lines` в URL — это канонические `id`. С неразобранными
+    # токенами или отброшенными моделями редиректа нет: исходный текст
+    # должен остаться в адресе, иначе пропадут и он, и предупреждения.
+    if (lines_given and not lines_result["unresolved"]
+            and not lines_result["dropped"]):
+        canonical = ",".join(selected)
+        if canonical != lines_raw:
+            return redirect(_stats_url(lines=canonical))
+
+    # Указатели: топ активных по ELO. Состав подписан рядом со ссылками,
+    # чтобы состав набора был виден до применения.
+    top5_ids = default_line_ids(models, 5)
+    top10_ids = default_line_ids(models, 10)
+
+    def _composition(ids: list[str]) -> str:
+        names = [
+            str(models.get(mid, {}).get("name") or mid) for mid in ids
+        ]
+        return " · ".join(names) if names else "—"
+
     lines_hidden = [{"name": "filter", "value": stats_filter}]
     lines_hidden += filter_ctx["filter_hidden_fields"]
     for name in ("rank_page", "opp_page"):
@@ -3798,21 +3844,27 @@ def stats_page():
         rating_pages=rank["pages"],
         rating_items=pagination_items(rank["page"], rank["pages"]),
         rating_page_url=lambda page: _block_page_url("rank_page", page),
-        lines_models=[
-            {"id": mid, "name": models.get(mid, {}).get("name", mid)}
-            for mid in selected
-        ],
-        lines_value=",".join(selected),
+        lines_chips=lines_result["chips"],
+        lines_value=lines_result["field"],
+        lines_warnings=lines_warnings(lines_result),
+        lines_applied=",".join(selected),
         lines_hidden=lines_hidden,
         period_value=period_value,
         top5_url=_stats_url(
-            lines=",".join(default_line_ids(models, 5)), period=period_value,
+            lines=",".join(top5_ids), period=period_value,
         ),
         top10_url=_stats_url(
-            lines=",".join(default_line_ids(models, 10)), period=period_value,
+            lines=",".join(top10_ids), period=period_value,
         ),
+        lines_preset_top5=_composition(top5_ids),
+        lines_preset_top10=_composition(top10_ids),
         dynamics_svg=build_elo_multiline_svg(
             line_series, series_data["x_count"], series_data["dates"],
+        ),
+        dynamics_empty=(
+            "Не выбрано ни одной модели: список не разобран."
+            if lines_given and not selected
+            else "Нет матчей выбранных моделей в периоде."
         ),
         line_legend=line_legend,
         agents_summary=group_summary(active_models, "agent"),
@@ -3832,32 +3884,31 @@ def stats_page():
     )
 
 
-@app.route("/stats/models")
-def stats_models():
-    """Поиск моделей реестра для выбора линий «Динамики ELO».
+@app.route("/stats/models/resolve")
+def stats_models_resolve():
+    """Разбор списка моделей для выбора линий «Динамика ELO».
 
-    Отдаёт не более 20 совпадений по имени или id среди активных моделей:
-    реестр не перечисляется на странице целиком — выбор идёт через поиск.
+    `q` — список токенов через запятую (имена или `id`). Ответ — по
+    каждому токену статус (`ok` / `ambiguous` / `not-found`), разрешённая
+    модель и кандидаты; плюс выбранные id, ряд чипов и предупреждения.
+    Резолвер тот же, что и у рендера страницы: правила разбора не расходятся.
     """
-    query = request.args.get("q", "").strip().casefold()
-    limit = 20
+    raw = request.args.get("q", "")
     index_data = ensure_index()
     models = index_data.get("models", {})
-    found: list[dict] = []
-    for mid, info in models.items():
-        if info.get("status", "active") != "active":
-            continue
-        name = str(info.get("name", mid))
-        if query and query not in name.casefold() and query not in mid.casefold():
-            continue
-        found.append({
-            "id": mid,
-            "name": name,
-            "elo": int(info.get("elo", DEFAULT_ELO)),
-        })
-    found.sort(key=lambda row: (-row["elo"], row["id"]))
-    payload = json.dumps(found[:limit], ensure_ascii=False, separators=(",", ":"))
-    return Response(payload, mimetype="application/json; charset=utf-8")
+    result = resolve_lines(raw, models)
+    payload = {
+        "ids": result["ids"],
+        "chips": result["chips"],
+        "dropped": result["dropped"],
+        "warnings": lines_warnings(result),
+        "tokens": result["tokens"],
+        "field": result["field"],
+    }
+    return Response(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        mimetype="application/json; charset=utf-8",
+    )
 
 
 @app.route("/")

@@ -6,8 +6,9 @@
     разрыв, модель без игр; rating_page (страница, место во всём пуле,
     разрез группы); рендер build_rating_svg (место, интервал, градиент в
     одной строке; шкала — по всему пулу);
-  * «Динамика ELO» — разбор `lines` (CSV, кап 10, неизвестные id) и `period`
-    (30/90/all, дефолт 90), выбор по умолчанию, build_elo_series
+  * «Динамика ELO» — разбор списка моделей (`id`, имя, подстрока имени;
+    неоднозначность и промах видны, порядок ввода сохраняется, кап 10) и
+    `period` (30/90/all, дефолт 90), выбор по умолчанию, build_elo_series
     (период от последней даты истории) и build_elo_multiline_svg.
 
 Запуск: python tools/test_analytics.py
@@ -188,22 +189,109 @@ def test_rating_page_size():
     print("«Рейтинг» page size: OK")
 
 
+def _models_fixture() -> dict:
+    """Реестр для разбора списка: имена отличаются от id."""
+    models = {
+        "cursor-fable-5-1-1m-max": _row("cursor-fable-5-1-1m-max", 1441),
+        "devin-gpt-6-astra-max": _row("devin-gpt-6-astra-max", 1500),
+        "opencode-mimo-v2-5-free": _row("opencode-mimo-v2-5-free", 900),
+        "devin-fable-5": _row("devin-fable-5", 1300),
+    }
+    models["cursor-fable-5-1-1m-max"]["name"] = "Cursor Fable 5.1 1M Max"
+    models["devin-gpt-6-astra-max"]["name"] = "Devin GPT-6 Astra Max"
+    models["opencode-mimo-v2-5-free"]["name"] = "OpenCode MiMo V2.5 Free"
+    models["devin-fable-5"]["name"] = "Devin Fable 5"
+    return models
+
+
+def test_resolve_lines_tokens():
+    """A2: разбор списка — id, имя, подстрока; неоднозначность и промах видны."""
+    models = _models_fixture()
+
+    # Точное имя
+    by_name = rh.resolve_lines("Cursor Fable 5.1 1M Max", models)
+    assert by_name["ids"] == ["cursor-fable-5-1-1m-max"]
+    assert by_name["tokens"][0]["status"] == "ok"
+    assert by_name["unresolved"] == []
+
+    # Точный id
+    by_id = rh.resolve_lines("opencode-mimo-v2-5-free", models)
+    assert by_id["ids"] == ["opencode-mimo-v2-5-free"]
+
+    # Однозначная подстрока имени
+    part = rh.resolve_lines("mimo", models)
+    assert part["ids"] == ["opencode-mimo-v2-5-free"]
+
+    # Неоднозначная подстрока — статус и кандидаты, модель не выбрана
+    amb = rh.resolve_lines("fable", models)
+    assert amb["ids"] == []
+    assert amb["tokens"][0]["status"] == "ambiguous"
+    assert len(amb["tokens"][0]["candidates"]) == 2
+    assert [c["id"] for c in amb["tokens"][0]["candidates"]] == [
+        "cursor-fable-5-1-1m-max", "devin-fable-5",
+    ]
+    assert amb["unresolved"]
+
+    # Не найдено — токен виден, выбор не подменяется
+    miss = rh.resolve_lines("gpt-5", models)
+    assert miss["ids"] == []
+    assert miss["tokens"][0]["status"] == "not-found"
+    assert rh.lines_warnings(miss) == ["не найдено: «gpt-5»"]
+
+    # Повтор токена — модель одна, на позиции первого вхождения
+    dup = rh.resolve_lines("mimo, MiMo , devin-gpt-6-astra-max", models)
+    assert dup["ids"] == ["opencode-mimo-v2-5-free", "devin-gpt-6-astra-max"]
+
+    # Порядок токенов сохраняется
+    order = rh.resolve_lines(
+        "devin-gpt-6-astra-max, cursor-fable-5-1-1m-max", models)
+    assert order["ids"] == ["devin-gpt-6-astra-max", "cursor-fable-5-1-1m-max"]
+
+    # Поле выбора — имена; при неразобранном токене — исходный текст
+    assert order["field"] == "Devin GPT-6 Astra Max, Cursor Fable 5.1 1M Max"
+    assert miss["field"] == "gpt-5"
+
+    # Чипы: модельные и проблемный
+    kinds = [c["kind"] for c in amb["chips"]]
+    assert kinds == ["problem"]
+    assert [c["kind"] for c in order["chips"]] == ["model", "model"]
+    assert order["chips"][0]["raw"] == "Devin GPT-6 Astra Max"
+
+    # Предел: первые 10 в порядке ввода, не вошедшие — отдельным списком
+    many = rh.resolve_lines(",".join(f"m{i:02d}" for i in range(12)), {
+        **models, **{f"m{i:02d}": _row(f"m{i:02d}", 1200 + i)
+                     for i in range(12)},
+    })
+    assert many["ids"] == [f"m{i:02d}" for i in range(10)]
+    assert [d["id"] for d in many["dropped"]] == ["m10", "m11"]
+    assert any("не вошло" in w for w in rh.lines_warnings(many))
+
+    # Состояние по умолчанию — тот же формат разбора
+    default = rh.resolve_lines_default(models)
+    assert default["ids"] == ["devin-gpt-6-astra-max", "cursor-fable-5-1-1m-max",
+                               "devin-fable-5", "opencode-mimo-v2-5-free"]
+    assert default["field"].startswith("Devin GPT-6 Astra Max, ")
+    assert default["unresolved"] == []
+    print("A2 resolve lines tokens: OK")
+
+
 def test_lines_param_parse():
-    """A2: `lines` — только id реестра, дубликаты и лишние отброшены."""
+    """A2: `lines` — id и имена, дубликаты и лишние отброшены."""
     models = {f"m{i:02d}": _row(f"m{i:02d}", 1200 + i) for i in range(12)}
     models["arch"] = _row("arch", 1500)
 
     assert rh.parse_lines_param("", models) == []
     assert rh.parse_lines_param(None, models) == []
-    assert rh.parse_lines_param(" m00 , ,m01,m00,unknown ", models) == ["m00", "m01"]
+    assert rh.parse_lines_param(" m00 , ,m01,m00,unknown ", models) == [
+        "m00", "m01",
+    ]
 
-    # 13 перечисленных → 10 наибольших по ELO из перечисленных
+    # 13 перечисленных → первые 10 в порядке ввода, не по ELO
     raw = ",".join(["arch"] + [f"m{i:02d}" for i in range(12)])
     picked = rh.parse_lines_param(raw, models)
     assert len(picked) == rh.ELO_LINES_LIMIT
+    assert picked == ["arch"] + [f"m{i:02d}" for i in range(9)]
     assert picked[0] == "arch", "архивная модель реестра — допустимый выбор"
-    assert "m00" not in picked and "m02" not in picked
-    assert set(picked[1:]) == {f"m{i:02d}" for i in range(3, 12)}
     print("A2 lines param parse: OK")
 
 
@@ -453,6 +541,7 @@ if __name__ == "__main__":
     test_rating_svg_scale_from_pool()
     test_rating_page_places_and_groups()
     test_rating_page_size()
+    test_resolve_lines_tokens()
     test_lines_param_parse()
     test_period_param_parse()
     test_default_line_ids()

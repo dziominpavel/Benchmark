@@ -1,11 +1,15 @@
-/* lines-picker.js — выбор моделей для «Динамики ELO» без перечисления
- * всего реестра (change console-wave6-analytics-scale).
+/* lines-picker.js — выбор моделей для «Динамики ELO»: одно текстовое поле
+ * (источник правды), чипы и предупреждения — результат серверного разбора
+ * (change fix-elo-dynamics-model-picker).
  *
- * Источник правды — текстовое поле со списком id через запятую: с ним
- * работает и страница без JavaScript. Скрипт добавляет к нему поиск по
- * реестру (серверный поиск /stats/models?q=…) и чипы выбранных моделей
- * с кнопкой удаления. Поле не перечисляет модели: выбор идёт через поиск,
- * поэтому карточка остаётся лёгкой на пуле в сотни и тысячи моделей.
+ * Поле принимает список моделей через запятую: имя, `id` или однозначная
+ * часть имени. Разбор делает сервер (GET /stats/models/resolve) — те же
+ * правила, что у рендера страницы, поэтому скрипт только показывает ответ:
+ * чипы, предупреждения («не найдено», «неоднозначно», «не вошло») и
+ * подсказки по последнему токену.
+ *
+ * Без JavaScript выбор применяет та же GET-форма: поле — источник правды,
+ * кнопка «Показать» отправляет список на сервер.
  *
  * Скрипт подключается только в локальной консоли (shell.html); в слепке
  * контролы выбора линий не отображаются, и скрипт не грузится.
@@ -14,84 +18,120 @@
 (function () {
   "use strict";
 
-  const MAX_LINES = 10;
   const DEBOUNCE_MS = 180;
 
   function init(root) {
     const input = root.querySelector("[data-lines-input]");
     const chips = root.querySelector("[data-lines-chips]");
-    const search = root.querySelector("[data-lines-search]");
     const results = root.querySelector("[data-lines-results]");
-    if (!input || !chips || !search || !results) return;
+    const warnings = root.querySelector("[data-lines-warnings]");
+    const dirty = root.querySelector("[data-lines-dirty]");
+    if (!input || !chips || !results) return;
 
-    // Имена известных моделей: из серверных чипов и из результатов поиска.
-    const names = new Map();
-    chips.querySelectorAll("[data-lines-id]").forEach((chip) => {
-      names.set(chip.dataset.linesId, chip.dataset.linesName || chip.dataset.linesId);
-    });
+    // Применённый выбор — из адреса: с ним сверяется черновик поля.
+    const applied = (root.dataset.linesApplied || "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
 
-    function ids() {
+    function tokens() {
       return input.value
         .split(",")
         .map((part) => part.trim())
         .filter(Boolean);
     }
 
-    function label(mid) {
-      return names.get(mid) || mid;
+    function setTokens(list) {
+      input.value = list.join(", ");
+      refresh();
     }
 
-    function setIds(list) {
-      input.value = list.join(",");
-      renderChips();
+    function removeToken(raw) {
+      setTokens(tokens().filter((token) => token !== raw));
     }
 
-    function renderChips() {
-      const list = ids();
+    function replaceLast(token) {
+      const list = tokens();
+      if (list.length) {
+        list[list.length - 1] = token;
+      } else {
+        list.push(token);
+      }
+      setTokens(list);
+    }
+
+    function renderChips(list) {
       chips.textContent = "";
-      list.forEach((mid) => {
-        const chip = document.createElement("span");
-        chip.className = "lines-chip";
-        chip.dataset.linesId = mid;
-        chip.dataset.linesName = label(mid);
+      list.forEach((chip) => {
+        const span = document.createElement("span");
         const name = document.createElement("span");
         name.className = "lines-chip-name";
-        name.textContent = label(mid);
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "lines-chip-remove";
-        remove.dataset.linesRemove = mid;
-        remove.setAttribute("aria-label", "Убрать " + label(mid));
-        remove.textContent = "×";
-        chip.appendChild(name);
-        chip.appendChild(remove);
-        chips.appendChild(chip);
+        if (chip.kind === "model") {
+          span.className = "lines-chip";
+          span.dataset.linesId = chip.id;
+          span.dataset.linesRaw = chip.raw;
+          span.dataset.linesName = chip.name;
+          name.textContent = chip.name;
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "lines-chip-remove";
+          remove.dataset.linesRemove = chip.raw;
+          remove.setAttribute("aria-label", "Убрать " + chip.name);
+          remove.textContent = "×";
+          span.appendChild(name);
+          span.appendChild(remove);
+        } else {
+          span.className = "lines-chip lines-chip-problem";
+          span.dataset.linesRaw = chip.raw;
+          name.textContent =
+            (chip.status === "ambiguous" ? "неоднозначно: " : "не найдено: ") +
+            chip.raw;
+          if (chip.candidates && chip.candidates.length) {
+            span.title =
+              "Подходит: " + chip.candidates.map((c) => c.name).join(", ");
+          }
+          span.appendChild(name);
+        }
+        chips.appendChild(span);
       });
     }
 
-    function clearResults() {
-      results.textContent = "";
-      results.hidden = true;
+    function renderWarnings(list) {
+      if (!warnings) return;
+      warnings.textContent = "";
+      list.forEach((text) => {
+        const row = document.createElement("div");
+        row.className = "lines-warning";
+        row.textContent = text;
+        warnings.appendChild(row);
+      });
+      warnings.hidden = !list.length;
     }
 
-    function showResults(found) {
+    function renderDirty(ids) {
+      if (!dirty) return;
+      const same =
+        ids.length === applied.length &&
+        ids.every((id, index) => id === applied[index]);
+      dirty.hidden = same;
+    }
+
+    function showCandidates(list) {
       results.textContent = "";
-      if (!found.length) {
+      if (!list.length) {
         results.hidden = true;
         return;
       }
-      const chosen = new Set(ids());
-      found.forEach((item) => {
+      list.forEach((item) => {
         const li = document.createElement("li");
         const button = document.createElement("button");
         button.type = "button";
-        button.dataset.linesAdd = item.id;
+        button.dataset.linesAdd = item.token || item.id;
         const name = document.createElement("span");
         name.textContent = item.name;
         const elo = document.createElement("span");
         elo.className = "lines-result-elo";
-        elo.textContent = chosen.has(item.id) ? "уже выбрана" : String(item.elo);
-        if (chosen.has(item.id)) elo.className = "lines-result-added";
+        elo.textContent = String(item.elo);
         button.appendChild(name);
         button.appendChild(elo);
         li.appendChild(button);
@@ -100,56 +140,54 @@
       results.hidden = false;
     }
 
+    function applyResult(data) {
+      renderChips(data.chips || []);
+      renderWarnings(data.warnings || []);
+      renderDirty(data.ids || []);
+      const list = data.tokens || [];
+      const last = list.length ? list[list.length - 1] : null;
+      showCandidates(last && last.candidates ? last.candidates : []);
+    }
+
     let timer = null;
     let controller = null;
 
-    function searchNow() {
-      const query = search.value.trim();
-      if (!query) {
-        clearResults();
-        return;
-      }
+    function load() {
       if (controller) controller.abort();
       controller = new AbortController();
-      fetch("/stats/models?q=" + encodeURIComponent(query), {
+      fetch("/stats/models/resolve?q=" + encodeURIComponent(input.value), {
         signal: controller.signal,
       })
-        .then((response) => (response.ok ? response.json() : []))
+        .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
-          (data || []).forEach((item) => names.set(item.id, item.name));
-          showResults(Array.isArray(data) ? data : []);
+          if (data) applyResult(data);
         })
         .catch(() => {});
     }
 
-    search.addEventListener("input", () => {
+    function refresh() {
       window.clearTimeout(timer);
-      timer = window.setTimeout(searchNow, DEBOUNCE_MS);
+      timer = window.setTimeout(load, DEBOUNCE_MS);
+    }
+
+    input.addEventListener("input", refresh);
+
+    chips.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-lines-remove]");
+      if (!button) return;
+      removeToken(button.dataset.linesRemove);
     });
 
     results.addEventListener("click", (event) => {
       const button = event.target.closest("[data-lines-add]");
       if (!button) return;
-      const mid = button.dataset.linesAdd;
-      const list = ids();
-      if (list.includes(mid)) {
-        setIds(list.filter((item) => item !== mid));
-      } else if (list.length < MAX_LINES) {
-        setIds(list.concat([mid]));
-      }
-      searchNow();
+      replaceLast(button.dataset.linesAdd);
+      input.focus();
     });
 
-    chips.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-lines-remove]");
-      if (!button) return;
-      const mid = button.dataset.linesRemove;
-      setIds(ids().filter((item) => item !== mid));
-    });
-
-    input.addEventListener("input", renderChips);
-
-    renderChips();
+    // Подсказки закрыты до первого ввода: на странице уже стоит разбор
+    // сервера, дублировать его при загрузке незачем.
+    results.hidden = true;
   }
 
   function initAll() {

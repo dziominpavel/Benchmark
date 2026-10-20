@@ -2213,7 +2213,7 @@ def test_wave6_stats_pagination():
 
 
 def test_wave6_stats_lines_picker():
-    """Волна 6: выбор линий — чипы и текстовое поле, без контрола на модель."""
+    """Волна 6: выбор линий — одно поле и чипы, без контрола на модель."""
     with _temp_storage() as paths:
         server.app.config["TESTING"] = True
         client = server.app.test_client()
@@ -2223,9 +2223,12 @@ def test_wave6_stats_lines_picker():
         assert 'type="checkbox" name="lines"' not in html, "чекбокс на модель"
         assert 'data-lines-input' in html
         assert 'data-lines-chips' in html
-        assert 'data-lines-search' in html
+        assert 'data-lines-search' not in html, "отдельное поле поиска по реестру"
         assert 'class="lines-chip"' in html, "нет чипов выбранных моделей"
-        assert 'name="lines" value="alpha,beta"' in html, "поле не заполнено выбором"
+        assert 'name="lines" value="Alpha, Beta"' in html, (
+            "поле не заполнено выбором именами"
+        )
+        assert 'data-lines-applied="alpha,beta"' in html, "применённый выбор не передан"
 
         # Пресеты и период на месте
         assert 'name="period" value="90" checked' in html
@@ -2234,7 +2237,7 @@ def test_wave6_stats_lines_picker():
 
         # Выбор из URL — тот же результат, что и чипы
         one = client.get("/stats?lines=beta").get_data(as_text=True)
-        assert 'name="lines" value="beta"' in one
+        assert 'name="lines" value="Beta"' in one
         assert 'aria-label="Динамика ELO: линий 1, матчей 1"' in one
         legend_one = one.split('class="line-legend"', 1)[1].split("</div>", 1)[0]
         assert legend_one.count('class="line-legend-item') == 1
@@ -2247,7 +2250,7 @@ def test_wave6_stats_lines_picker():
         bad = client.get("/stats?period=zzz").get_data(as_text=True)
         assert 'name="period" value="90" checked' in bad
 
-        # Лимит линий: 12 перечисленных id — 10 линий
+        # Лимит линий: 12 перечисленных id — 10 линий, первые по порядку
         ids = [f"m{i:02d}" for i in range(12)]
         models_yaml = ["models:"]
         for mid in ids:
@@ -2265,9 +2268,12 @@ def test_wave6_stats_lines_picker():
 
         twelve = client.get("/stats").get_data(as_text=True)
         assert twelve.count('class="line-legend-item') == 5, "дефолт — топ-5"
-        all12 = client.get("/stats?lines=" + ",".join(ids)).get_data(as_text=True)
+        all12 = client.get(
+            "/stats?lines=" + ",".join(ids), follow_redirects=True,
+        ).get_data(as_text=True)
         assert all12.count('class="line-legend-item') == 10, "кап 10 линий"
         assert "Нет матчей выбранных моделей в периоде" in all12
+        assert "не вошло (предел 10 моделей)" in all12, "не сказано, кто не вошёл"
 
         # Пусто: все модели архивные — блоки показывают заглушки
         _write(paths["models"], (
@@ -2282,28 +2288,141 @@ def test_wave6_stats_lines_picker():
     print("wave6 stats lines picker: OK")
 
 
-def test_wave6_stats_model_search():
-    """Волна 6: поиск моделей реестра для выбора линий."""
-    with _temp_storage() as paths:
+def test_stats_lines_unresolved_empty_state():
+    """Параметр `lines`, который не разбирается, — пустое состояние без подмены."""
+    with _temp_storage():
         server.app.config["TESTING"] = True
         client = server.app.test_client()
 
-        resp = client.get("/stats/models?q=alp")
-        assert resp.status_code == 200
-        payload = json.loads(resp.get_data(as_text=True))
-        assert [row["id"] for row in payload] == ["alpha"]
-        assert payload[0]["name"] == "Alpha"
+        # Несуществующая модель: топ-5 не подставляется
+        html = client.get("/stats?lines=nosuchmodel").get_data(as_text=True)
+        assert "Не выбрано ни одной модели" in html, "нет пустого состояния разбора"
+        assert 'class="line-legend"' not in html, "легенда без выбранных линий"
+        assert "не найдено: «nosuchmodel»" in html, "нет предупреждения о промахе"
+        assert 'name="lines" value="nosuchmodel"' in html, "текст ввода потерян"
 
-        by_name = json.loads(
-            client.get("/stats/models?q=Beta").get_data(as_text=True)
+        # Пустой параметр — тоже пустое состояние, не дефолт
+        empty = client.get("/stats?lines=").get_data(as_text=True)
+        assert "Не выбрано ни одной модели" in empty
+        assert 'class="line-legend"' not in empty
+
+        # Без параметра — дефолт топ-5 активных
+        default = client.get("/stats").get_data(as_text=True)
+        assert default.count('class="line-legend-item') == 2, "дефолт не топ-5"
+        assert "Нет матчей выбранных моделей в периоде" not in default
+    print("stats lines unresolved empty state: OK")
+
+
+def test_stats_lines_picker_rewrite():
+    """Выбор моделей: одно поле, чипы разбора, предупреждения, без поиска по реестру."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Имя модели в списке — модель выбрана, поле показывает имя
+        html = client.get(
+            "/stats?lines=Beta", follow_redirects=True,
+        ).get_data(as_text=True)
+        assert 'name="lines" value="Beta"' in html, "поле показывает не имя"
+        assert 'data-lines-id="beta"' in html, "нет чипа выбранной модели"
+        assert 'data-lines-applied="beta"' in html, "применённый выбор не передан"
+        assert "неоднозначно" not in html and "не найдено" not in html
+
+        # Неоднозначный токен — предупреждение с кандидатами, модель не выбрана
+        amb = client.get("/stats?lines=a", follow_redirects=True).get_data(
+            as_text=True)
+        assert "неоднозначно: «a»" in amb, "нет предупреждения о неоднозначности"
+        assert "подходит 3 модели" in amb, "не назван счётчик кандидатов"
+        assert 'class="line-legend"' not in amb, "неоднозначный токен выбрал модель"
+        assert 'class="lines-chip lines-chip-problem"' in amb, "нет чипа проблемы"
+
+        # Ненайденный токен — предупреждение, текст ввода сохранён
+        miss = client.get("/stats?lines=zzz", follow_redirects=True).get_data(
+            as_text=True)
+        assert "не найдено: «zzz»" in miss
+        assert 'name="lines" value="zzz"' in miss
+    print("stats lines picker rewrite: OK")
+
+
+def test_stats_lines_canonical_url():
+    """Все токены разобрались — адрес канонический (id); с промахом — текст остаётся."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Имя в адресе → редирект на id
+        resp = client.get("/stats?lines=Beta")
+        assert resp.status_code == 302, "нет канонизации адреса"
+        assert "lines=beta" in resp.headers["Location"], resp.headers["Location"]
+
+        # Прочие параметры страницы сохраняются
+        keep = client.get("/stats?lines=Beta&period=30&filter=all")
+        assert "period=30" in keep.headers["Location"]
+        assert "filter=all" in keep.headers["Location"]
+
+        # Канонический адрес редиректа не вызывает
+        stable = client.get("/stats?lines=beta")
+        assert stable.status_code == 200, "редирект зациклился"
+
+        # Неразобранный токен — редиректа нет, текст пользователя не теряется
+        raw = client.get("/stats?lines=zzz")
+        assert raw.status_code == 200, "редирект снёс бы текст пользователя"
+        assert 'name="lines" value="zzz"' in raw.get_data(as_text=True)
+    print("stats lines canonical url: OK")
+
+
+def test_stats_lines_preset_composition():
+    """Указатели «Топ-5»/«Топ-10» подписаны составом набора."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        assert "lines-preset-list" in html, "нет списка состава указателей"
+        assert 'class="lines-preset-name">Топ-5</span> Alpha · Beta' in html, (
+            "состав «Топ-5» не подписан"
         )
-        assert [row["id"] for row in by_name] == ["beta"]
+        assert 'class="lines-preset-name">Топ-10</span> Alpha · Beta' in html, (
+            "состав «Топ-10» не подписан"
+        )
+    print("stats lines preset composition: OK")
 
-        # Архивные не выдаются; пустой запрос — все активные
-        assert client.get("/stats/models?q=gam").get_data(as_text=True) == "[]"
-        every = json.loads(client.get("/stats/models?q=").get_data(as_text=True))
-        assert [row["id"] for row in every] == ["alpha", "beta"]
-    print("wave6 stats model search: OK")
+
+def test_stats_models_resolve():
+    """Эндпоинт разбора: статус по каждому токену, кандидаты, чипы, предупреждения."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        resp = client.get("/stats/models/resolve?q=Beta")
+        assert resp.status_code == 200
+        data = json.loads(resp.get_data(as_text=True))
+        assert data["ids"] == ["beta"]
+        assert data["chips"][0]["kind"] == "model"
+        assert data["chips"][0]["name"] == "Beta"
+        assert data["warnings"] == []
+
+        amb = json.loads(
+            client.get("/stats/models/resolve?q=a").get_data(as_text=True)
+        )
+        assert amb["ids"] == []
+        assert amb["tokens"][0]["status"] == "ambiguous"
+        assert len(amb["tokens"][0]["candidates"]) == 3
+        assert amb["chips"][0]["kind"] == "problem"
+        assert any("неоднозначно" in w for w in amb["warnings"])
+
+        miss = json.loads(
+            client.get("/stats/models/resolve?q=zzz").get_data(as_text=True)
+        )
+        assert miss["tokens"][0]["status"] == "not-found"
+        assert miss["warnings"] == ["не найдено: «zzz»"]
+
+        # Кандидаты последнего токена — для подсказок в поле
+        cand = json.loads(
+            client.get("/stats/models/resolve?q=zzz,Al").get_data(as_text=True)
+        )
+        assert cand["tokens"][-1]["candidates"][0]["name"] == "Alpha"
+    print("stats models resolve: OK")
 
 
 def test_wave6_stats_deltas_and_opposition():
@@ -2649,7 +2768,11 @@ if __name__ == "__main__":
     test_wave6_stats_rating()
     test_wave6_stats_pagination()
     test_wave6_stats_lines_picker()
-    test_wave6_stats_model_search()
+    test_stats_lines_unresolved_empty_state()
+    test_stats_lines_picker_rewrite()
+    test_stats_lines_canonical_url()
+    test_stats_lines_preset_composition()
+    test_stats_models_resolve()
     test_wave6_stats_deltas_and_opposition()
     test_wave4_profile()
     test_wave5_history_title()

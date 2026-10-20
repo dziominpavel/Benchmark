@@ -1099,33 +1099,226 @@ def build_rating_svg(
 ELO_LINES_LIMIT = 10
 ELO_LINES_DEFAULT = 5
 ELO_PERIOD_DEFAULT = 90
+ELO_LINE_CANDIDATES = 20
 ELO_LINE_COLORS = (
     "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7",
     "#ec4899", "#14b8a6", "#f97316", "#8b949e", "#84cc16",
 )
 
 
-def parse_lines_param(raw: str | None, models: dict) -> list[str]:
-    """Разбор `lines` блока A2: CSV id моделей реестра.
+def _model_card(mid: str, info: dict) -> dict:
+    """Карточка модели для списка выбора: id, имя, ELO, текст для поля."""
+    name = str((info or {}).get("name") or mid)
+    return {
+        "id": mid,
+        "name": name,
+        "elo": int((info or {}).get("elo") or DEFAULT_ELO),
+        # Список разделён запятыми — имя с запятой в список не годится.
+        "token": name if "," not in name else mid,
+    }
 
-    Пустые токены, дубликаты и неизвестные id отбрасываются; при более
-    чем ELO_LINES_LIMIT моделях остаются наибольшие по текущему ELO.
-    Пустой результат — вызывающий подставляет топ по умолчанию.
+
+def _token_ok(token: str, mid: str, info: dict) -> dict:
+    card = _model_card(mid, info)
+    return {
+        "raw": token,
+        "status": "ok",
+        "id": mid,
+        "name": card["name"],
+        "elo": card["elo"],
+        "candidates": [card],
+    }
+
+
+def resolve_lines_token(token: str, models: dict) -> dict:
+    """Разбор одного токена списка моделей.
+
+    Правила в порядке строгости: `id` реестра → точное имя → однозначная
+    подстрока имени → однозначная подстрока `id`. Совпадений несколько —
+    статус `ambiguous` и список кандидатов; совпадений нет — `not-found`.
+    Молчаливых отбрасываний нет: статус несёт вызывающий.
     """
-    ids: list[str] = []
-    seen: set[str] = set()
-    for token in str(raw or "").split(","):
-        mid = token.strip()
-        if not mid or mid in seen or mid not in models:
+    needle = token.casefold()
+    for mid, info in models.items():
+        if mid.casefold() == needle:
+            return _token_ok(token, mid, info)
+    for mid, info in models.items():
+        if str(info.get("name") or "").casefold() == needle:
+            return _token_ok(token, mid, info)
+    pools = (
+        [mid for mid, info in models.items()
+         if needle in str(info.get("name") or "").casefold()],
+        [mid for mid in models if needle in mid.casefold()],
+    )
+    for pool in pools:
+        if not pool:
             continue
-        seen.add(mid)
-        ids.append(mid)
-    if len(ids) > ELO_LINES_LIMIT:
-        ids.sort(key=lambda mid: (
-            -int(models[mid].get("elo", DEFAULT_ELO)), mid,
-        ))
-        ids = ids[:ELO_LINES_LIMIT]
-    return ids
+        if len(pool) == 1:
+            return _token_ok(token, pool[0], models[pool[0]])
+        ordered = sorted(pool, key=lambda m: (
+            -int(models[m].get("elo") or DEFAULT_ELO), m,
+        ))[:ELO_LINE_CANDIDATES]
+        return {
+            "raw": token,
+            "status": "ambiguous",
+            "id": "",
+            "name": "",
+            "elo": None,
+            "candidates": [_model_card(mid, models[mid]) for mid in ordered],
+        }
+    return {
+        "raw": token,
+        "status": "not-found",
+        "id": "",
+        "name": "",
+        "elo": None,
+        "candidates": [],
+    }
+
+
+def resolve_lines(raw: str | None, models: dict) -> dict:
+    """Разбор списка моделей карточки «Динамика ELO».
+
+    Список — токены через запятую. Каждый токен получает статус (`ok`,
+    `ambiguous`, `not-found`). Выбранные модели идут в порядке токенов,
+    повторы схлопываются, лишние сверх ELO_LINES_LIMIT возвращаются
+    отдельным списком `dropped`.
+
+    Возвращает:
+      raw        — исходный текст списка;
+      ids        — выбранные id (не более ELO_LINES_LIMIT);
+      tokens     — по записи на токен: {raw, status, id, name, elo,
+                   candidates};
+      chips      — ряд для карточки: model (выбранные модели) и problem
+                   (неразобранные токены);
+      dropped    — модели, не вошедшие в предел: [{id, name}];
+      unresolved — неразобранные токены;
+      field      — текст поля выбора.
+    """
+    text = str(raw or "")
+    tokens = [
+        resolve_lines_token(part.strip(), models)
+        for part in text.split(",") if part.strip()
+    ]
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for tok in tokens:
+        if tok["status"] == "ok" and tok["id"] not in seen:
+            seen.add(tok["id"])
+            ordered.append(tok["id"])
+
+    ids = ordered[:ELO_LINES_LIMIT]
+    dropped = [
+        {"id": mid, "name": str(models.get(mid, {}).get("name") or mid)}
+        for mid in ordered[ELO_LINES_LIMIT:]
+    ]
+    unresolved = [tok for tok in tokens if tok["status"] != "ok"]
+    selected = set(ids)
+
+    # Поле выбора показывает имена выбранных моделей; если часть токенов не
+    # разобралась — исходный текст: пользователь должен его поправить.
+    names_mode = not unresolved
+    chips: list[dict] = []
+    used: set[str] = set()
+    for tok in tokens:
+        if tok["status"] == "ok":
+            if tok["id"] in used or tok["id"] not in selected:
+                continue
+            used.add(tok["id"])
+            chips.append({
+                "kind": "model",
+                "id": tok["id"],
+                "name": tok["name"],
+                "elo": tok["elo"],
+                "raw": tok["name"] if names_mode else tok["raw"],
+            })
+        else:
+            chips.append({
+                "kind": "problem",
+                "raw": tok["raw"],
+                "status": tok["status"],
+                "candidates": tok["candidates"],
+            })
+
+    if names_mode:
+        field = ", ".join(
+            _model_card(mid, models.get(mid, {}))["token"] for mid in ids
+        )
+    else:
+        field = text
+
+    return {
+        "raw": text,
+        "ids": ids,
+        "tokens": tokens,
+        "chips": chips,
+        "dropped": dropped,
+        "unresolved": unresolved,
+        "field": field,
+    }
+
+
+def resolve_lines_default(models: dict,
+                          limit: int = ELO_LINES_DEFAULT) -> dict:
+    """Разбор для состояния по умолчанию: топ активных по ELO.
+
+    Формат тот же, что у `resolve_lines`, — чтобы карточка рендерилась
+    одним кодом в обоих режимах.
+    """
+    ids = default_line_ids(models, limit)
+    chips = [
+        {
+            "kind": "model",
+            "id": mid,
+            "name": str(models.get(mid, {}).get("name") or mid),
+            "elo": int(models.get(mid, {}).get("elo") or DEFAULT_ELO),
+            "raw": _model_card(mid, models.get(mid, {}))["token"],
+        }
+        for mid in ids
+    ]
+    return {
+        "raw": "",
+        "ids": ids,
+        "tokens": [],
+        "chips": chips,
+        "dropped": [],
+        "unresolved": [],
+        "field": ", ".join(chip["raw"] for chip in chips),
+    }
+
+
+def lines_warnings(result: dict) -> list[str]:
+    """Предупреждения разбора списка моделей — для вывода под полем."""
+    warnings: list[str] = []
+    for tok in result.get("unresolved", []):
+        if tok["status"] == "not-found":
+            warnings.append(f"не найдено: «{tok['raw']}»")
+            continue
+        candidates = tok.get("candidates") or []
+        names = ", ".join(c["name"] for c in candidates[:5])
+        tail = "…" if len(candidates) > 5 else ""
+        warnings.append(
+            f"неоднозначно: «{tok['raw']}» — подходит {len(candidates)} "
+            f"{plural_ru(len(candidates), 'модель', 'модели', 'моделей')}: "
+            f"{names}{tail}"
+        )
+    dropped = result.get("dropped") or []
+    if dropped:
+        names = ", ".join(m["name"] for m in dropped)
+        warnings.append(
+            f"не вошло (предел {ELO_LINES_LIMIT} моделей): {names}"
+        )
+    return warnings
+
+
+def parse_lines_param(raw: str | None, models: dict) -> list[str]:
+    """Разбор `lines` блока A2: выбранные id в порядке токенов.
+
+    Порядок ввода сохраняется; лишние сверх ELO_LINES_LIMIT отбрасываются
+    (их перечень — в `resolve_lines(...)["dropped"]`).
+    """
+    return resolve_lines(raw, models)["ids"]
 
 
 def parse_period_param(raw: str | None) -> int | None:

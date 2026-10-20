@@ -45,6 +45,10 @@
   --neg-text: #f87171;
   --neg-tint: rgba(248, 113, 113, 0.14);
 
+  /* предупреждения разбора (выбор моделей «Динамики ELO») */
+  --warn: #fbbf24;
+  --warn-text: #fbbf24;
+
   /* графики */
   --chart-line: #818cf8;
   --chart-grid: rgba(255, 255, 255, 0.10);
@@ -121,6 +125,9 @@
   --neg: #b91c1c;
   --neg-text: #b91c1c;
   --neg-tint: rgba(185, 28, 28, 0.10);
+
+  --warn: #92400e;
+  --warn-text: #92400e;
 
   --chart-line: #4338ca;
   --chart-grid: rgba(15, 23, 42, 0.10);
@@ -2058,9 +2065,21 @@ a.dist-name:hover { fill: var(--accent); }
   align-items: flex-start;
 }
 
-.lines-presets { margin-left: auto; font-size: var(--fs-sm); color: var(--muted); }
+.lines-presets { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 
-/* --- выбор линий «Динамики ELO»: чипы + поиск по реестру (волна 6) ------ */
+.lines-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  max-width: 720px;
+}
+
+.lines-preset-name { color: var(--text); }
+
+/* --- выбор линий «Динамики ELO»: одно поле, чипы и разбор (change
+   fix-elo-dynamics-model-picker) ------------------------------------- */
 .lines-picker {
   display: flex;
   flex-direction: column;
@@ -2090,6 +2109,12 @@ a.dist-name:hover { fill: var(--accent); }
 
 .lines-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.lines-chip-problem {
+  border-style: dashed;
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
 .lines-chip-remove {
   border: none;
   background: none;
@@ -2114,8 +2139,7 @@ a.dist-name:hover { fill: var(--accent); }
   color: var(--muted);
 }
 
-.lines-field input,
-.lines-search {
+.lines-field input {
   width: 100%;
   padding: var(--sp-2);
   border: 1px solid var(--border-strong);
@@ -2125,6 +2149,24 @@ a.dist-name:hover { fill: var(--accent); }
   font-size: var(--fs-sm);
   font-family: inherit;
 }
+
+.lines-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  color: var(--warn);
+}
+
+.lines-warnings[hidden] { display: none; }
+
+.lines-dirty {
+  font-size: var(--fs-xs);
+  color: var(--warn);
+  font-style: italic;
+}
+
+.lines-dirty[hidden] { display: none; }
 
 .lines-results {
   list-style: none;
