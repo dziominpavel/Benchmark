@@ -42,10 +42,13 @@ test_data_cache.py — memo-слой консоли и роуты на tmp-фи�
     /stats A1–A8 (интервалы, динамика, активность, матрица, группы, ΔELO,
     оппозиция, исходы) и профиль модели (место/тренд, последний матч,
     покрытие по таскам, метаданные, поиск и сортировка «Личных встреч»).
-  * Версия и сборка консоли: подвал всех страниц и секция «О консоли»
-    настроек показывают тег последнего релиза (vX.Y.Z) и время коммита
-    по Минску с меткой МСК; резолверы нормализуют источники и откатываются
-    на файл версии.
+  * Версия и сборка консоли: подвал всех страниц показывает тег последнего
+    релиза (vX.Y.Z) и время коммита по Минску с меткой МСК; на странице
+    настроек секции «О консоли» нет — метаданные не дублируются; резолверы
+    нормализуют источники и откатываются на файл версии.
+  * Настройки фильтра: кнопка-раскрывашка в шапке блока «Фильтр»,
+    подписи «Режим отображения»/«Сортировка чипов», бейдж не-дефолтных
+    настроек.
 
 Запуск: python tools/test_data_cache.py
 """
@@ -462,7 +465,7 @@ def test_routes_smoke():
 
 
 def test_version_badge():
-    """Версия и сборка: подвал и «О консоли»; фолбэки резолверов."""
+    """Версия и сборка: подвал и отсутствие дубля в настройках; фолбэки."""
     version = server.app_version()
     assert re.fullmatch(r"v\d+\.\d+\.\d+", version), (
         f"версия консоли не в формате релизного тега: {version!r}"
@@ -491,14 +494,17 @@ def test_version_badge():
                 f"{url}: бейдж версии остался в шапке"
             )
         settings = client.get("/settings").get_data(as_text=True)
-        assert f"<dt>Версия</dt><dd>{version}</dd>" in settings, (
-            "/settings: секция «О консоли» без версии"
+        assert 'id="about"' not in settings, (
+            "/settings: секция «О консоли» вернулась в шаблон"
         )
-        assert f"<dt>Сборка</dt><dd>{build}</dd>" in settings, (
-            "/settings: секция «О консоли» без сборки"
+        assert 'href="#about"' not in settings, (
+            "/settings: пункт «О консоли» вернулся в локальную навигацию"
         )
-        assert "по минскому времени" in settings, (
-            "/settings: подсказка «О консоли» без минского времени"
+        assert "<dt>Версия</dt>" not in settings, (
+            "/settings: пары «Версия»/«Сборка» вернулись в страницу"
+        )
+        assert "последний выпущенный релиз" not in settings, (
+            "/settings: пояснение происхождения значений вернулось в страницу"
         )
 
         # Слепок витрины (read-only) показывает те же метаданные
@@ -2521,6 +2527,31 @@ def test_wave5_chart_links():
     print("wave5 chart links: OK")
 
 
+def test_filter_settings_trigger():
+    """Триггер «Настройки фильтра» — кнопка в шапке, подписи и бейдж."""
+    with _temp_storage():
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/").get_data(as_text=True)
+        actions = html.index('<span class="filter-head-actions">')
+        rows = html.index('<div class="filter-rows">')
+        assert actions < html.index('<details class="filter-settings">') < rows
+        assert "Режим отображения" in html
+        assert "Сортировка чипов" in html
+        assert ">Режим<" not in html and ">Чипы<" not in html
+        assert "Порядок чипов" not in html, "старый aria-label не остался"
+
+        # «Сбросить» живёт в той же обёртке шапки, что и кнопка настроек
+        filtered = client.get("/?agents=Agent").get_data(as_text=True)
+        actions = filtered.index('<span class="filter-head-actions">')
+        rows = filtered.index('<div class="filter-rows">')
+        assert actions < filtered.index('class="filter-reset"') < rows
+
+        # Подпись-бейдж не-дефолтных настроек не изменилась
+        state = client.get("/?view=highlight&chips=elo").get_data(as_text=True)
+        assert "Настройки фильтра — подсветка · чипы по ELO" in state
+    print("filter settings trigger: OK")
 
 
 if __name__ == "__main__":
@@ -2564,6 +2595,7 @@ if __name__ == "__main__":
     test_wave4_profile()
     test_wave5_history_title()
     test_wave5_chart_links()
+    test_filter_settings_trigger()
     test_filter_miss_opacity_tokens()
     test_main_highlight_dimming()
     print("\nALL DATA CACHE TESTS PASSED")

@@ -326,7 +326,8 @@ def test_export_output_and_determinism():
                 "settings/index.html", "model/alpha/index.html",
                 "model/gamma/index.html", "task/T-001/index.html",
                 "static/css/console.css",
-                "static/js/theme.js", "static/js/mirror.js", "icon.svg",
+                "static/js/theme.js", "static/js/mirror.js",
+                "static/js/filter-panel.js", "icon.svg",
             ):
                 assert expected in files_a, f"нет файла вывода: {expected}"
     print("2.1 export output and determinism: OK")
@@ -346,6 +347,14 @@ def test_export_links_and_markers():
             assert 'href="../static/css/console.css"' in history
             model = (Path(out) / "model" / "alpha" / "index.html").read_text(encoding="utf-8")
             assert 'src="../../static/js/theme.js"' in model
+
+            # Кнопка «Настройки фильтра» и её скрипт есть на всех уровнях слепка
+            for name, page, src in (
+                ("главной", html, "static/js/filter-panel.js"),
+                ("истории", history, "../static/js/filter-panel.js"),
+                ("модели", model, "../../static/js/filter-panel.js"),
+            ):
+                assert f'src="{src}"' in page, f"слепок {name}: нет filter-panel.js"
 
             # Версия и сборка запечены в подвал слепка (та же строка shell)
             version = server.app_version()
@@ -449,6 +458,8 @@ def test_export_mirror_layer():
             # Скрипт зеркала подключён относительной ссылкой, файл в сборке
             assert 'src="static/js/mirror.js"' in index
             assert 'src="../static/js/mirror.js"' in settings
+            assert 'src="../static/js/filter-panel.js"' in stats
+            assert 'src="../static/js/filter-panel.js"' in settings
             script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
             for marker in ("mirror-archived-rows", "mirror-table-wrap",
                            "mirror-stats-data", "HISTORY_PAGE_SIZE"):

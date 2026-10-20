@@ -90,13 +90,12 @@ app.jinja_env.globals["read_only"] = read_only
 
 
 # ─── Версия и сборка консоли ────────────────────────────────────────
-# Показываются в подвале (shell.html) и в разделе «О консоли» страницы
-# настроек. Версия — тег последнего релиза: релиз фиксируется тегом
-# `vX.Y.Z` (docs/versioning.md), промежуточных версий не существует,
-# поэтому на коммитах после релиза UI честно показывает последний
-# выпущенный релиз. Сборка — время коммита, из которого запущен код
-# (у запуска из архива без git — время файла версии проекта); в UI оно
-# показывается по минскому времени с меткой `МСК`.
+# Показываются в подвале (shell.html) на каждой странице. Версия — тег
+# последнего релиза: релиз фиксируется тегом `vX.Y.Z` (docs/versioning.md),
+# промежуточных версий не существует, поэтому на коммитах после релиза UI
+# честно показывает последний выпущенный релиз. Сборка — время коммита, из
+# которого запущен код (у запуска из архива без git — время файла версии
+# проекта); в UI оно показывается по минскому времени с меткой `МСК`.
 
 APP_ROOT = Path(__file__).resolve().parent.parent  # корень репозитория
 
@@ -432,6 +431,29 @@ def valid_chips_order(value: str | None) -> str:
     return v if v in ("alpha", "elo") else "alpha"
 
 
+def valid_captions_state(value: str | None) -> str:
+    """Валидирует состояние подписей «Компания · Агент»; невалидное → 'show'.
+
+    Форма блока «Фильтр» отправляет флажок `captions=show` и следом
+    скрытое поле-компаньон `captions=hide` (компаньон нужен, чтобы снятый
+    флажок тоже попал в адрес). Значит решает ПЕРВОЕ значение в адресе —
+    так же, как его читает `request.args.get()`: ссылки сортировки, экспорта и
+    скрытые поля страницы переносят состояние без потерь.
+    """
+    v = (value or "show").strip().lower()
+    return v if v in ("show", "hide") else "show"
+
+
+def captions_hidden_now() -> bool:
+    """Скрыты ли подписи «Компания · Агент» текущим запросом.
+
+    Читается только на страницах с блоком «Фильтр»: на `/model/<id>` и
+    `/task/<id>` подписи выводятся всегда (см. leaderboard-ui, «Подпись
+    агента и фирмы у модели»).
+    """
+    return valid_captions_state(request.args.get("captions")) == "hide"
+
+
 QUEUE_PAGE_SIZE = 100
 
 
@@ -545,12 +567,14 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
     reset_extra (для страниц без живого поиска).
     live_reset — на странице есть живой поиск: ссылка «Сбросить» рендерится
     всегда (скрытой, если фильтров нет), чтобы клиент мог её показать.
-    Настройки отображения (`view`, `chips`) читаются из query и возвращаются
-    как `filter_view`/`filter_chips`; в «Сбросить» и hidden-поля они попадают,
-    только когда отличаются от значений по умолчанию.
+    Настройки отображения (`view`, `chips`, `captions`) читаются из query и
+    возвращаются как `filter_view`/`filter_chips`/`filter_captions_hidden`;
+    в «Сбросить» и hidden-поля они попадают, только когда отличаются от
+    значений по умолчанию.
     """
     filter_view = valid_filter_view(request.args.get("view"))
     filter_chips = valid_chips_order(request.args.get("chips"))
+    filter_captions_hidden = captions_hidden_now()
     agents, agents_none = _tag_values(models, "agent")
     providers, providers_none = _tag_values(models, "provider")
     if filter_chips == "elo":
@@ -569,12 +593,16 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         hidden.append({"name": "view", "value": filter_view})
     if filter_chips != "alpha":
         hidden.append({"name": "chips", "value": filter_chips})
+    if filter_captions_hidden:
+        hidden.append({"name": "captions", "value": "hide"})
     reset = reset_url
     reset_extra_params = {}
     if filter_view != "hide":
         reset_extra_params["view"] = filter_view
     if filter_chips != "alpha":
         reset_extra_params["chips"] = filter_chips
+    if filter_captions_hidden:
+        reset_extra_params["captions"] = "hide"
     if reset_extra_params:
         reset = reset + ("&" if "?" in reset else "?") + urlencode(reset_extra_params)
     badge_parts = []
@@ -582,6 +610,8 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         badge_parts.append("подсветка")
     if filter_chips == "elo":
         badge_parts.append("чипы по ELO")
+    if filter_captions_hidden:
+        badge_parts.append("подписи скрыты")
     other_active = bool(agent_sel or provider_sel) or bool(
         reset_extra if reset_other_active is None else reset_other_active
     )
@@ -609,6 +639,7 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         "filter_provider_sel": provider_sel,
         "filter_view": filter_view,
         "filter_chips": filter_chips,
+        "filter_captions_hidden": filter_captions_hidden,
         "filter_settings_badge": " · ".join(badge_parts),
     }
 
@@ -2811,7 +2842,6 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
     <a href="#answer-coverage">Ответы</a>
     <a href="#recommendation-queue">Очередь</a>
     <a href="#lookups">Справочники</a>
-    <a href="#about">О консоли</a>
   </nav>
 
   <div class="stats stats-summary">
@@ -3130,19 +3160,6 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
       </div>
     </div>
     {% endfor %}
-  </div>
-
-  <div class="card" id="about">
-    <h2>О консоли</h2>
-    <dl class="about-meta">
-      <div class="about-row"><dt>Версия</dt><dd>{{ app_version() or "—" }}</dd></div>
-      <div class="about-row"><dt>Сборка</dt><dd>{{ app_build_time() or "—" }}</dd></div>
-    </dl>
-    <div class="hint">
-      Версия — последний выпущенный релиз (git-тег). Сборка — дата и время
-      коммита, из которого запущена консоль (по минскому времени); при запуске
-      из архива без git — время файла версии проекта.
-    </div>
   </div>
 
 <script>

@@ -1533,26 +1533,56 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
   border-bottom-color: var(--border-strong);
 }
 
-/* свёрнутая раскрывашка «Настройки фильтра» */
+/* Кнопка-раскрывашка «Настройки фильтра» в шапке блока (change
+   filter-settings-trigger): поповер с настройками отображения. */
+.filter-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
 .filter-settings {
-  margin-bottom: var(--sp-3);
+  position: relative;
+  min-width: 0;
 }
 
 .filter-settings > summary {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  cursor: pointer;
-  color: var(--muted);
+  max-width: 100%;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
   font-size: var(--fs-sm);
   font-weight: 600;
+  line-height: 1.45;
+  cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  list-style: none;
+  transition: background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
 }
+
+.filter-settings > summary::-webkit-details-marker { display: none; }
+
+.filter-settings > summary::after {
+  content: "\25B8";
+  color: var(--muted);
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.filter-settings[open] > summary::after { content: "\25BE"; }
 
 .filter-settings > summary:hover,
 .filter-settings[open] > summary {
-  color: var(--text);
+  background: var(--elevated);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
 }
 
 .filter-settings-body {
@@ -1560,6 +1590,33 @@ a.dist-link:hover .dist-name { fill: var(--accent); }
   flex-direction: column;
   gap: var(--sp-3);
   margin-top: var(--sp-3);
+}
+
+.filter-settings[open] > .filter-settings-body {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(460px, calc(100vw - 64px));
+  margin-top: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--elevated);
+  box-shadow: var(--shadow-2);
+}
+
+.filter-settings-body .filter-label { min-width: 128px; }
+
+@media (max-width: 639px) {
+  .filter-head { position: relative; flex-wrap: wrap; }
+  .filter-head-actions { width: 100%; justify-content: flex-end; }
+  .filter-settings { position: static; }
+  .filter-settings[open] > .filter-settings-body {
+    left: 0;
+    right: 0;
+    width: auto;
+  }
 }
 
 .filter-rows {

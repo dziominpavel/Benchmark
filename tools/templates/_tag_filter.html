@@ -1,10 +1,10 @@
 {# Общие макросы единого блока «Фильтр» (changes agent-provider-lookups,
-   filter-display-settings). filter_panel() — всегда развёрнутая карточка
-   «Фильтр»: одна GET-форма страницы, контролы которой передаются телом
-   {% call filter_panel() %}; раскрывашка «Настройки фильтра» (режим
-   отображения, порядок чипов), ряды чипов «Агент»/«Компания» и ссылка
-   «Сбросить» рендерятся самим макросом. «Сбросить» видна, только когда
-   что-то отфильтровано, и сохраняет настройки отображения.
+   filter-display-settings, filter-settings-trigger). filter_panel() — всегда
+   развёрнутая карточка «Фильтр»: одна GET-форма страницы, контролы которой
+   передаются телом {% call filter_panel() %}; в шапке — кнопка-раскрывашка
+   «Настройки фильтра» (режим отображения, сортировка чипов) и ссылка
+   «Сбросить», ниже — ряды чипов «Агент»/«Компания». «Сбросить» видна,
+   только когда что-то отфильтровано, и сохраняет настройки отображения.
    filter_hidden() — скрытые копии всех фильтров страницы для отдельных форм,
    чтобы фильтр не терялся при отправке. #}
 
@@ -12,27 +12,29 @@
 <form method="GET" action="{{ filter_action }}" class="filter-card">
   <div class="filter-head">
     <span class="filter-title">Фильтр</span>
-    {% if filter_reset_visible or (filter_live_reset and not read_only()) %}<a href="{{ filter_reset_url }}" class="filter-reset"{% if filter_live_reset and not read_only() %} data-live-reset{% if filter_reset_other_active %} data-other-active="1"{% endif %}{% endif %}{% if not filter_reset_visible %} hidden{% endif %}>Сбросить</a>{% endif %}
+    <span class="filter-head-actions">
+      <details class="filter-settings">
+        <summary>Настройки фильтра{% if filter_settings_badge %} — {{ filter_settings_badge }}{% endif %}</summary>
+        <div class="filter-settings-body">
+          <div class="filter-row">
+            <span class="filter-label">Режим отображения</span>
+            <div class="segmented" role="radiogroup" aria-label="Режим отображения">
+              <label><input type="radio" name="view" value="hide" {% if filter_view == 'hide' %}checked{% endif %} onchange="this.form.submit()"><span>Скрывать лишние</span></label>
+              <label><input type="radio" name="view" value="highlight" {% if filter_view == 'highlight' %}checked{% endif %} onchange="this.form.submit()"><span>Подсвечивать</span></label>
+            </div>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Сортировка чипов</span>
+            <div class="segmented" role="radiogroup" aria-label="Сортировка чипов">
+              <label><input type="radio" name="chips" value="alpha" {% if filter_chips == 'alpha' %}checked{% endif %} onchange="this.form.submit()"><span>По алфавиту</span></label>
+              <label><input type="radio" name="chips" value="elo" {% if filter_chips == 'elo' %}checked{% endif %} onchange="this.form.submit()"><span>По ELO</span></label>
+            </div>
+          </div>
+        </div>
+      </details>
+      {% if filter_reset_visible or (filter_live_reset and not read_only()) %}<a href="{{ filter_reset_url }}" class="filter-reset"{% if filter_live_reset and not read_only() %} data-live-reset{% if filter_reset_other_active %} data-other-active="1"{% endif %}{% endif %}{% if not filter_reset_visible %} hidden{% endif %}>Сбросить</a>{% endif %}
+    </span>
   </div>
-  <details class="filter-settings">
-    <summary>Настройки фильтра{% if filter_settings_badge %} — {{ filter_settings_badge }}{% endif %}</summary>
-    <div class="filter-settings-body">
-      <div class="filter-row">
-        <span class="filter-label">Режим</span>
-        <div class="segmented" role="radiogroup" aria-label="Режим отображения">
-          <label><input type="radio" name="view" value="hide" {% if filter_view == 'hide' %}checked{% endif %} onchange="this.form.submit()"><span>Скрывать лишние</span></label>
-          <label><input type="radio" name="view" value="highlight" {% if filter_view == 'highlight' %}checked{% endif %} onchange="this.form.submit()"><span>Подсвечивать</span></label>
-        </div>
-      </div>
-      <div class="filter-row">
-        <span class="filter-label">Чипы</span>
-        <div class="segmented" role="radiogroup" aria-label="Порядок чипов">
-          <label><input type="radio" name="chips" value="alpha" {% if filter_chips == 'alpha' %}checked{% endif %} onchange="this.form.submit()"><span>По алфавиту</span></label>
-          <label><input type="radio" name="chips" value="elo" {% if filter_chips == 'elo' %}checked{% endif %} onchange="this.form.submit()"><span>По ELO</span></label>
-        </div>
-      </div>
-    </div>
-  </details>
   <div class="filter-rows">
     {% set page_controls = caller() %}
     {% if page_controls.strip() %}

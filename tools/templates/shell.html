@@ -12,7 +12,8 @@
 {% if read_only() %}<script src="/static/js/mirror.js" defer></script>
 {% else %}<script src="/static/js/combobox.js" defer></script>
 <script src="/static/js/live-search.js" defer></script>
-{% endif %}<link rel="stylesheet" href="/static/css/console.css">
+{% endif %}<script src="/static/js/filter-panel.js" defer></script>
+<link rel="stylesheet" href="/static/css/console.css">
 </head>
 <body{% block body_attrs %}{% endblock %}>
 {% if read_only() %}
