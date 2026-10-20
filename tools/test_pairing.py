@@ -22,7 +22,8 @@ import server
 from server import get_recommendations
 
 
-def _run_case(index_models, settings, flags, stats, verdict_tasks, top_n=1):
+def _run_case(index_models, settings, flags, stats, verdict_tasks, top_n=1,
+              added_map=None):
     """Вызывает get_recommendations на фикстурах с подменой источников.
 
     index_models: [(id, elo, games, status)].
@@ -30,7 +31,10 @@ def _run_case(index_models, settings, flags, stats, verdict_tasks, top_n=1):
     flags: {task: {model: bool}}.
     stats: {(a, b): (games, wins_a, wins_b)}.
     verdict_tasks: {(a, b): {task, ...}}.
+    added_map: {id: added}; None — все модели старые (квота не действует).
     """
+    if added_map is None:
+        added_map = {m[0]: "2026-01-01" for m in index_models}
     index_data = {
         "models": {
             mid: {"elo": elo, "games": games, "status": status}
@@ -49,20 +53,23 @@ def _run_case(index_models, settings, flags, stats, verdict_tasks, top_n=1):
     saved = (
         server.get_pair_stats, server.get_pair_task_verdicts,
         server.load_settings, server.load_answer_flags,
-        server.get_model_name_map, server.active_tasks,
+        server.get_model_name_map, server.get_model_added_map,
+        server.active_tasks,
     )
     server.get_pair_stats = lambda: fake_stats
     server.get_pair_task_verdicts = lambda: fake_verdicts
     server.load_settings = lambda: settings
     server.load_answer_flags = lambda: flags
     server.get_model_name_map = lambda: {m[0]: m[0] for m in index_models}
+    server.get_model_added_map = lambda: dict(added_map)
     server.active_tasks = lambda _s=None, _j=None: active
     try:
         return get_recommendations(index_data, top_n=top_n)
     finally:
         (server.get_pair_stats, server.get_pair_task_verdicts,
          server.load_settings, server.load_answer_flags,
-         server.get_model_name_map, server.active_tasks) = saved
+         server.get_model_name_map, server.get_model_added_map,
+         server.active_tasks) = saved
 
 
 SETTINGS_2 = {"current_task": "T-001",
@@ -154,6 +161,118 @@ def test_rematch_fallback_all_blocked():
     print("rematch fallback (all blocked): OK")
 
 
+# ─── Квота калибровки новичка ───────────────────────────────────────
+# D не имеет ответов: его пары BLOCKED и имеют pair_games=0, поэтому
+# обычный рематч выбрал бы именно D. Квота же должна добирать игры
+# новичка A против ближайших сыгранных соперников.
+
+QUOTA_SETTINGS = {"current_task": "T-001", "tasks": {"T-001": "active"}}
+QUOTA_MODELS = [
+    ("A", 1200, 35, "active"),
+    ("B", 1210, 35, "active"),
+    ("C", 1500, 35, "active"),
+    ("D", 1190, 0, "active"),
+]
+QUOTA_FLAGS = {"T-001": {"A": True, "B": True, "C": True}}
+QUOTA_STATS = {("A", "B"): (1, 1, 0), ("A", "C"): (1, 1, 0),
+               ("B", "C"): (1, 1, 0)}
+QUOTA_VERDICTS = {("A", "B"): {"T-001"}, ("A", "C"): {"T-001"},
+                  ("B", "C"): {"T-001"}}
+QUOTA_ADDED = {"A": server.NEWCOMER_SINCE, "B": "2026-01-01",
+               "C": "2026-01-01", "D": "2026-01-01"}
+
+
+def test_newcomer_quota_nearest_repeat():
+    """READY пуст, у новичка <50 игр → повтор ближайшей сыгранной пары
+    важнее обычного рематча с несыгранной BLOCKED-парой."""
+    recs = _run_case(QUOTA_MODELS, QUOTA_SETTINGS, QUOTA_FLAGS,
+                     QUOTA_STATS, QUOTA_VERDICTS, added_map=QUOTA_ADDED)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert rec["is_rematch"] is True, rec
+    assert frozenset((rec["model_a"], rec["model_b"])) == {"A", "B"}, rec
+    assert rec["pair_games"] == 1, rec
+    assert rec["recommended_task"] == "T-001", rec
+    print("newcomer quota nearest repeat: OK")
+
+
+def test_newcomer_quota_repeat_cap():
+    """Пара на капе (3 игры) пропускается — берётся следующая ближайшая."""
+    stats = {("A", "B"): (server.NEWCOMER_REPEAT_CAP, 2, 1),
+             ("A", "C"): (2, 1, 1), ("B", "C"): (1, 1, 0)}
+    recs = _run_case(QUOTA_MODELS, QUOTA_SETTINGS, QUOTA_FLAGS,
+                     stats, QUOTA_VERDICTS, added_map=QUOTA_ADDED)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert rec["is_rematch"] is True, rec
+    assert frozenset((rec["model_a"], rec["model_b"])) == {"A", "C"}, rec
+    assert rec["pair_games"] == 2, rec
+    print("newcomer quota repeat cap: OK")
+
+
+def test_newcomer_quota_waits_for_ready():
+    """Пока есть READY-ячейки, квота не включается: покрытие первее."""
+    flags = {"T-001": {"A": True, "B": True, "C": True}}
+    verdicts = {("A", "B"): {"T-001"}}
+    recs = _run_case(QUOTA_MODELS, QUOTA_SETTINGS, flags, {}, verdicts,
+                     added_map=QUOTA_ADDED)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert rec["is_rematch"] is False, rec
+    assert frozenset((rec["model_a"], rec["model_b"])) != {"A", "B"}, rec
+    print("newcomer quota waits for READY: OK")
+
+
+def test_newcomer_quota_stops_at_target():
+    """Новичок с 50 играми квоту не получает — работает обычный рематч."""
+    models = [
+        ("A", 1200, server.NEWCOMER_TARGET_GAMES, "active"),
+        ("B", 1210, 35, "active"),
+        ("C", 1500, 35, "active"),
+        ("D", 1190, 0, "active"),
+    ]
+    recs = _run_case(models, QUOTA_SETTINGS, QUOTA_FLAGS, QUOTA_STATS,
+                     QUOTA_VERDICTS, added_map=QUOTA_ADDED)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert frozenset((rec["model_a"], rec["model_b"])) == {"A", "D"}, rec
+    assert rec["pair_games"] == 0, rec
+    print("newcomer quota stops at target: OK")
+
+
+def test_old_model_not_topped_up():
+    """Модель, добавленная до NEWCOMER_SINCE, квоту не получает."""
+    old = {"A": "2026-01-01", "B": "2026-01-01",
+           "C": "2026-01-01", "D": "2026-01-01"}
+    recs = _run_case(QUOTA_MODELS, QUOTA_SETTINGS, QUOTA_FLAGS,
+                     QUOTA_STATS, QUOTA_VERDICTS, added_map=old)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert frozenset((rec["model_a"], rec["model_b"])) == {"A", "D"}, rec
+    assert rec["pair_games"] == 0, rec
+    print("old model not topped up: OK")
+
+
+def test_newcomer_quota_prefers_pair_of_two_newcomers():
+    """Пара из двух новичков приоритетна по менее игранному из них:
+    A (30 игр) — B (5 игр) ближе и полезнее, чем B — C (5 игр, старый)."""
+    models = [
+        ("A", 1200, 30, "active"),
+        ("B", 1205, 5, "active"),
+        ("C", 1500, 35, "active"),
+        ("D", 1190, 0, "active"),
+    ]
+    added = {"A": server.NEWCOMER_SINCE, "B": server.NEWCOMER_SINCE,
+             "C": "2026-01-01", "D": "2026-01-01"}
+    recs = _run_case(models, QUOTA_SETTINGS, QUOTA_FLAGS,
+                     QUOTA_STATS, QUOTA_VERDICTS, added_map=added)
+    assert len(recs) == 1, recs
+    rec = recs[0]
+    assert frozenset((rec["model_a"], rec["model_b"])) == {"A", "B"}, rec
+    assert rec["pair_games"] == 1, rec
+    print("newcomer quota prefers pair of two newcomers: OK")
+
+
 def test_archived_excluded():
     """Архивная модель не попадает ни в обычный режим, ни в рематчи."""
     models = [("A", 1200, 10, "active"), ("B", 1200, 10, "active"),
@@ -214,9 +333,11 @@ def _recs_signature(recs):
 
 
 def _naive_reference(index_models, settings, flags, stats, verdict_tasks,
-                     top_n=1):
+                     top_n=1, added_map=None):
     """Эталон: прежняя реализация — материализация кандидатов и стабильная
     сортировка полного списка (до потокового heapq.nsmallest)."""
+    if added_map is None:
+        added_map = {m[0]: "2026-01-01" for m in index_models}
     index_data = {
         "models": {
             mid: {"elo": elo, "games": games, "status": status}
@@ -280,6 +401,42 @@ def _naive_reference(index_models, settings, flags, stats, verdict_tasks,
         return [c[4] for c in ready[:top_n]]
 
     default_task = active[0] if active else ""
+
+    # Квота новичка: повторяем ближайшие сыгранные пары, пока у модели
+    # меньше NEWCOMER_TARGET_GAMES игр; кап на пару — NEWCOMER_REPEAT_CAP.
+    newcomers = [
+        mid for mid in model_ids
+        if added_map.get(mid, "") >= server.NEWCOMER_SINCE
+        and games_map[mid] < server.NEWCOMER_TARGET_GAMES
+    ]
+    newcomer_set = set(newcomers)
+    quota = []
+    seen = set()
+    for newcomer in newcomers:
+        for opponent in model_ids:
+            if opponent == newcomer:
+                continue
+            a, b = ((newcomer, opponent) if newcomer < opponent
+                    else (opponent, newcomer))
+            if (a, b) in seen:
+                continue
+            st = fake_stats.get(frozenset({a, b}))
+            pair_games = st["games"] if st is not None else 0
+            if pair_games >= server.NEWCOMER_REPEAT_CAP:
+                continue
+            if default_task not in fake_verdicts.get(frozenset({a, b}), set()):
+                continue
+            seen.add((a, b))
+            need = min(games_map[x] for x in (a, b) if x in newcomer_set)
+            quota.append((need, pair_games,
+                          abs(elo_map[a] - elo_map[b]), a, b))
+    if quota:
+        quota.sort()
+        return [
+            build(a, b, default_task, True)
+            for (_games, _pair_games, _diff, a, b) in quota[:top_n]
+        ]
+
     rematches = []
     for i in range(len(model_ids)):
         for j in range(i + 1, len(model_ids)):
@@ -335,10 +492,15 @@ def test_streaming_matches_naive_reference():
                         rng.sample(active, rng.randint(1, len(active)))
                     )
         for top_n in (1, 5, 10_000):
+            added_map = {
+                mid: (server.NEWCOMER_SINCE if rng.random() < 0.35
+                      else "2026-01-01")
+                for mid in ids
+            }
             new = _run_case(models, settings, flags, stats, verdicts,
-                            top_n=top_n)
+                            top_n=top_n, added_map=added_map)
             old = _naive_reference(models, settings, flags, stats, verdicts,
-                                   top_n=top_n)
+                                   top_n=top_n, added_map=added_map)
             sig_new, sig_old = _recs_signature(new), _recs_signature(old)
             assert sig_new == sig_old, (
                 f"случай {case_idx}, top_n={top_n}: потоковый отбор "
@@ -353,6 +515,12 @@ def main() -> int:
     test_t002_waits_for_t001()
     test_rematch_fallback_full()
     test_rematch_fallback_all_blocked()
+    test_newcomer_quota_nearest_repeat()
+    test_newcomer_quota_repeat_cap()
+    test_newcomer_quota_waits_for_ready()
+    test_newcomer_quota_stops_at_target()
+    test_old_model_not_topped_up()
+    test_newcomer_quota_prefers_pair_of_two_newcomers()
     test_archived_excluded()
     test_single_model_empty()
     test_record_fields()

@@ -309,6 +309,19 @@ def get_model_name_map() -> dict[str, str]:
     )
 
 
+def get_model_added_map() -> dict[str, str]:
+    """Возвращает {id: added} из models.yaml (memo).
+
+    `added` — дата регистрации модели в реестре (ISO `YYYY-MM-DD`);
+    отсутствующая или пустая дата даёт пустую строку (модель считается
+    старой и не получает квоту калибровки).
+    """
+    return data_cache.cached(
+        "model_added_map",
+        lambda: {m["id"]: (m.get("added") or "") for m in memo_models()},
+    )
+
+
 def get_pair_stats() -> dict[frozenset[str], dict]:
     """Статистика пар (memo): {frozenset{id_a, id_b}: {"games": int, "wins": {id: int}}}.
 
@@ -939,6 +952,17 @@ def update_model(model_id: str, name: str, status: str,
     return True
 
 
+# ─── Квота калибровки новичка ───────────────────────────────────────
+# Модель, зарегистрированная в реестре не раньше этой даты, в режиме
+# рематчей добирает игры до NEWCOMER_TARGET_GAMES против ближайших по
+# ELO соперников. Пока пул мал (n−1 < 50), покрытие пар остаётся полным:
+# квота включается только после исчерпания READY-ячеек. Кап на пару —
+# суммарный (по всем таскам), чтобы повторы не вытесняли новые пары.
+NEWCOMER_SINCE = "2026-10-19"
+NEWCOMER_TARGET_GAMES = 50
+NEWCOMER_REPEAT_CAP = 3
+
+
 def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
     """Рекомендует пару моделей для следующего прогона (топ-1).
 
@@ -962,6 +986,14 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
     затем тир, затем близость ELO; recommended_task — первый активный
     таск. Запись помечается is_rematch=True.
 
+    Квота новичка (change pairing-newcomer-quota): в режиме рематчей,
+    если есть активная модель с датой `added` не раньше NEWCOMER_SINCE
+    и числом игр меньше NEWCOMER_TARGET_GAMES, рекомендация сначала
+    добирает игры такой модели против ближайших соперников. Повтор
+    допускается только для пары с вердиктом в recommended_task и
+    суммарным числом игр меньше NEWCOMER_REPEAT_CAP. Покрытие пар не
+    ломается: квота включается только после исчерпания READY-ячеек.
+
     Возвращает список dict: {model_a, model_b, name_a, name_b, elo_a,
     elo_b, elo_diff, pair_games, pair_wins_a, pair_wins_b, h2h_label,
     tier, score, recommended_task, is_rematch}
@@ -979,6 +1011,7 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
     # ELO и игры из index
     elo_map = {mid: models[mid].get("elo", DEFAULT_ELO) for mid in model_ids}
     games_map = {mid: models[mid].get("games", 0) for mid in model_ids}
+    added_map = get_model_added_map()
 
     pair_stats = get_pair_stats()
     pair_task_verdicts = get_pair_task_verdicts()
@@ -1097,6 +1130,50 @@ def get_recommendations(index_data: dict, top_n: int = 1) -> list[dict]:
     # Режим рематчей: READY пуст — все активные пары без учёта флагов.
     # Те же ключи (pair_games, тир, ΔELO) при том же порядке перебора.
     default_task = active_task_ids[0] if active_task_ids else ""
+
+    # Квота новичка: пока у модели меньше NEWCOMER_TARGET_GAMES игр,
+    # повторяем её ближайшие уже сыгранные пары (не более
+    # NEWCOMER_REPEAT_CAP игр на пару). Приоритет — у модели с наименьшим
+    # числом игр, затем у пары с меньшим числом встреч, затем у более
+    # близкой по ELO. Квота действует только в режиме рематчей, поэтому
+    # невыясненные READY-ячейки (покрытие) всегда идут первыми.
+    newcomer_ids = [
+        mid for mid in model_ids
+        if added_map.get(mid, "") >= NEWCOMER_SINCE
+        and games_map[mid] < NEWCOMER_TARGET_GAMES
+    ]
+    newcomer_set = set(newcomer_ids)
+
+    def _quota_candidates():
+        seen: set[tuple[str, str]] = set()
+        for newcomer in newcomer_ids:
+            for opponent in model_ids:
+                if opponent == newcomer:
+                    continue
+                a, b = ((newcomer, opponent) if newcomer < opponent
+                        else (opponent, newcomer))
+                if (a, b) in seen:
+                    continue
+                st = stats_by_pair.get((a, b))
+                pair_games = st["games"] if st is not None else 0
+                if pair_games >= NEWCOMER_REPEAT_CAP:
+                    continue
+                verdicts = verdicts_by_pair.get((a, b))
+                if verdicts is None or default_task not in verdicts:
+                    continue
+                seen.add((a, b))
+                # Если обе модели пары — новички, ключ — минимум их игр:
+                # пара полезна обеим и не должна зависеть от порядка id.
+                need = min(games_map[x] for x in (a, b)
+                           if x in newcomer_set)
+                yield need, pair_games, abs(elo_map[a] - elo_map[b]), a, b
+
+    quota = heapq.nsmallest(top_n, _quota_candidates())
+    if quota:
+        return [
+            _build_rec(a, b, default_task, True)
+            for (_games, _pair_games, _diff, a, b) in quota
+        ]
 
     def _rematch_candidates():
         for i in range(len(model_ids)):
