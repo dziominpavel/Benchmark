@@ -58,6 +58,9 @@ _ATTR_RE = re.compile(r'(?P<attr>href|src|action)="(?P<value>/[^"]*)"')
 # после class допускаются атрибуты (якорь id="v-<seq>" для постоянных ссылок).
 _HISTORY_ROW_RE = re.compile(r'<div class="history-item[^"]*"[^>]*>.*?</div>', re.S)
 
+# Строка таблицы «Силы оппозиции»: первая ячейка — модель.
+_OPPOSITION_ROW_RE = re.compile(r'<tr>\s*<td><a href="/model/[^"]*">.*?</tr>', re.S)
+
 # ─── Разметка клиентского слоя зеркала ──────────────────────────────
 
 # Обёртка таблицы целиком: срез кончается концом таблицы (внутри обёртки
@@ -243,6 +246,65 @@ def _build_history(client, index_data: dict) -> str:
         return base
     matches = list(_HISTORY_ROW_RE.finditer(base))
     return base[:matches[0].start()] + "\n".join(rows) + base[matches[-1].end():]
+
+
+def _opposition_table_span(html: str) -> tuple[int, int] | None:
+    """Границы таблицы «Силы оппозиции» в HTML (None — таблицы нет)."""
+    marker = html.find('id="opposition"')
+    if marker < 0:
+        return None
+    start = html.find("<table", marker)
+    end = html.find("</table>", start)
+    if start < 0 or end < 0:
+        return None
+    return start, end
+
+
+def _build_stats(client, index_data: dict) -> str:
+    """«Аналитика»: таблица «Силы оппозиции» — строки всех страниц.
+
+    Карточка «Рейтинг» в слепке перестраивается клиентом из острова
+    реестра (mirror.js), поэтому в статику попадает только первая
+    страница. Таблицу «Силы оппозиции» клиент перестроить не может
+    (нужна история матчей), поэтому её строки собираются со всех
+    страниц консоли в один документ — как строки истории.
+    """
+    base = _fetch(client, "/stats")
+    span = _opposition_table_span(base)
+    if span is None:
+        return base
+    active = sum(
+        1 for info in index_data.get("models", {}).values()
+        if info.get("status", "active") != "archived"
+    )
+    pages = max(1, math.ceil(active / server.RATING_PAGE_SIZE))
+    rows: list[str] = []
+    for k in range(1, pages + 1):
+        html = base if k == 1 else _fetch(client, f"/stats?opp_page={k}")
+        found = _OPPOSITION_ROW_RE.findall(html)
+        expected = max(
+            0, min(server.RATING_PAGE_SIZE, active - (k - 1) * server.RATING_PAGE_SIZE),
+        )
+        if len(found) != expected:
+            raise ExportError(
+                f"/stats?opp_page={k}: извлечено {len(found)} строк вместо {expected} — "
+                "разметка «Силы оппозиции» изменилась, требуется правка экспорта"
+            )
+        rows.extend(found)
+    if not rows:
+        return base
+    start, end = span
+    table = base[start:end]
+    body_open = table.find("<tbody>")
+    body_close = table.rfind("</tbody>")
+    if body_open < 0 or body_close < 0:
+        raise ExportError("в таблице «Силы оппозиции» нет <tbody>")
+    merged = (
+        table[:body_open + len("<tbody>")] + "\n"
+        + "\n".join(rows) + "\n"
+        + table[body_close:]
+    )
+    return base[:start] + merged + base[end:]
 
 
 # ─── Данные клиентского слоя зеркала ────────────────────────────────
@@ -561,7 +623,8 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
 
     _write("history/index.html", _build_history(client, index_data),
            island=mirror.models_island)
-    _write("stats/index.html", _fetch(client, "/stats"), island=mirror.stats_island)
+    _write("stats/index.html", _build_stats(client, index_data),
+           island=mirror.stats_island)
 
     settings_html = _fetch(client, "/settings")
     mirror.validate_settings_base(settings_html)

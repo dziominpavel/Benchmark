@@ -558,134 +558,6 @@ def scale_segment(elo: float, anchors: list[tuple[float, int]]) -> tuple[int, fl
     return len(anchors) - 2, 1.0
 
 
-def build_elo_distribution_svg(entries: list[dict], width: int = 860,
-                               highlight: bool = False) -> str:
-    """Строит SVG bar-chart распределения ELO пула моделей.
-
-    entries: список {elo: int, id: str = "", name: str = "", games: int = 0,
-    caption: str = "", hit: bool = True}; сортировка
-    по убыванию Elo — внутри. У каждого бара имя модели и значение.
-    Бар и имя модели с непустым id — ссылки на профиль `/model/<id>`.
-    Бары окрашены непрерывным градиентом по Elo (см. build_elo_scale):
-    минимум пула — тёмно-красный, 1200 — жёлтый, максимум — тёмно-зелёный;
-    пара опор и доля смешивания передаются в inline --a/--b/--p.
-    Вертикальные линии: старт 1200
-    и среднее. Ось начинается около минимума (не от нуля).
-    Пустой список → заглушка «Нет данных».
-    highlight: режим «Подсвечивать» — барам с hit=True добавляется класс
-    filter-hit (акцентный контур), остальным — filter-miss (приглушение);
-    если отобранных нет, классы не навешиваются (без приглушения).
-    """
-    if not entries:
-        return '<div class="chart-empty">Нет данных</div>'
-
-    pts = sorted(entries, key=lambda e: e.get("elo", DEFAULT_ELO), reverse=True)
-    any_hits = highlight and any(p.get("hit") for p in pts)
-    elos = [p.get("elo", DEFAULT_ELO) for p in pts]
-    n = len(elos)
-    mean = sum(elos) / n
-    scale = build_elo_scale(elos)
-
-    lo, hi = min(elos), max(elos)
-    if lo == hi:
-        lo, hi = lo - 10, hi + 10
-    pad = max(15.0, (hi - lo) * 0.08)
-    lo, hi = lo - pad, hi + pad
-
-    row_h, bar_h = 30, 18
-    # поле слева — под самое длинное имя (без обрезки на 30 символах)
-    max_name = max(
-        (max(len(str(p.get("name", ""))), len(str(p.get("caption", "")))) for p in pts),
-        default=0,
-    )
-    left = max(220, min(420, int(max_name * 7.2) + 24))
-    right, top, bottom = 56, 44, 34
-    height = top + n * row_h + bottom
-    plot_w = width - left - right
-    rows_bottom = top + n * row_h
-
-    def x(v: float) -> float:
-        return left + plot_w * (v - lo) / (hi - lo)
-
-    bars = ""
-    for i, p in enumerate(pts):
-        v = p.get("elo", DEFAULT_ELO)
-        seg, frac = scale_segment(v, scale)
-        cls = "dist-pt"
-        if any_hits:
-            cls += " filter-hit" if p.get("hit") else " filter-miss"
-        style = (
-            f"--a:var(--dist-s{scale[seg][1]});"
-            f"--b:var(--dist-s{scale[seg + 1][1]});"
-            f"--p:{frac * 100:.1f}%"
-        )
-        cy = top + i * row_h + row_h / 2
-        caption = str(p.get("caption", ""))
-        tip_name = (
-            f'{p.get("name", "")} ({caption})' if caption else f'{p.get("name", "")}'
-        )
-        tip = html.escape(f'{tip_name} · {v} · игр: {p.get("games", 0)}')
-        label = html.escape(str(p.get("name", "")))
-        mid = str(p.get("id", ""))
-        row_svg = (
-            f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
-            f'width="{max(1.0, x(v) - x(lo)):.1f}" height="{bar_h}" rx="4" '
-            f'class="{cls}" style="{style}">'
-            f"<title>{tip}</title></rect>"
-            f'<text x="{left - 8}" y="{cy + 4:.1f}" text-anchor="end" '
-            f'class="dist-name">{label}<title>{tip}</title></text>'
-        )
-        if caption:
-            row_svg += (
-                f'<text x="{left - 8}" y="{cy + 15:.1f}" text-anchor="end" '
-                f'class="dist-caption">{html.escape(caption)}<title>{tip}</title></text>'
-            )
-        if mid:
-            row_svg = (
-                f'<a href="/model/{html.escape(mid)}" class="dist-link">{row_svg}</a>'
-            )
-        bars += (
-            row_svg
-            + f'<text x="{x(v) + 6:.1f}" y="{cy + 4:.1f}" '
-            f'class="dist-value">{v}</text>'
-        )
-
-    def vline(v: float, cls: str, tip: str) -> str:
-        return (
-            f'<line x1="{x(v):.1f}" y1="{top}" x2="{x(v):.1f}" '
-            f'y2="{rows_bottom}" class="{cls}">'
-            f"<title>{html.escape(tip)}</title></line>"
-        )
-
-    lines = (
-        vline(DEFAULT_ELO, "dist-line-start", "старт: 1200")
-        + vline(mean, "dist-line-mean", f"среднее: {mean:.1f}")
-    )
-
-    legend = (
-        f'<line x1="{left}" y1="14" x2="{left + 28}" y2="14" class="dist-line-start"/>'
-        f'<text x="{left + 34}" y="18" class="chart-tick">старт 1200</text>'
-        f'<line x1="{left + 130}" y1="14" x2="{left + 158}" y2="14" class="dist-line-mean"/>'
-        f'<text x="{left + 164}" y="18" class="chart-tick">среднее {mean:.0f}</text>'
-    )
-
-    grid = ""
-    for v in (min(elos), (min(elos) + max(elos)) / 2, max(elos)):
-        gx = x(v)
-        grid += (
-            f'<line x1="{gx:.1f}" y1="{top}" x2="{gx:.1f}" '
-            f'y2="{rows_bottom}" class="chart-grid"/>'
-            f'<text x="{gx:.1f}" y="{rows_bottom + 22:.1f}" '
-            f'text-anchor="middle" class="chart-tick">{v:.0f}</text>'
-        )
-
-    return (
-        f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
-        f'aria-label="Распределение Elo: {n} моделей">'
-        f"{legend}{grid}{lines}{bars}</svg>"
-    )
-
-
 def confidence_half_width(games: int) -> int | None:
     """Половина интервала доверия рейтинга по числу игр.
 
@@ -924,7 +796,7 @@ def compute_rank_trends(
     return trends
 
 
-# ─── Аналитика: интервалы рейтинга (A1) ─────────────────────────────
+# ─── Аналитика: карточка «Рейтинг» (интервалы + распределение) ──────────
 
 
 def interval_groups(rows: list[dict]) -> dict:
@@ -973,36 +845,110 @@ def interval_groups(rows: list[dict]) -> dict:
     return {"rows": ordered, "groups": groups}
 
 
-def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
-    """SVG блока A1: место, имя (ссылка), ELO и интервал ±400/√игр.
+RATING_PAGE_SIZE = 50
 
-    rows — строки interval_groups()["rows"]. Полоса — интервал модели
-    (у модели без игр только точка и прочерк), группы «место не
-    определено» выделены фоном и правой меткой. Пустой список → "".
+
+def rating_page(
+    rows: list[dict],
+    groups: list[dict],
+    page: int,
+    page_size: int = RATING_PAGE_SIZE,
+) -> dict:
+    """Страница строк карточки «Рейтинг» вместе с фрагментами групп.
+
+    rows — строки interval_groups()["rows"] (весь пул, ELO по убыванию);
+    groups — groups того же результата: [{"start", "end"}] индексы строк.
+    Место строки — её индекс в полном пуле, поэтому постраничная навигация
+    не сдвигает места. Группа «место не определено» может быть разрезана
+    границей страницы: подпись ставится только у полностью видимой группы
+    (group_full=True), у разрезанной — маркер продолжения.
+
+    Возвращает {"rows", "page", "pages", "page_size", "total", "start"}.
     """
-    if not rows:
+    total = len(rows)
+    pages = max(1, math.ceil(total / page_size)) if page_size else 1
+    page = max(1, min(int(page or 1), pages))
+    start = (page - 1) * page_size
+    stop = min(start + page_size, total)
+
+    bounds = {
+        number: (int(g["start"]), int(g["end"]))
+        for number, g in enumerate(groups or [], start=1)
+    }
+    page_rows: list[dict] = []
+    for index in range(start, stop):
+        row = dict(rows[index])
+        number = int(row.get("group") or 0)
+        group_start, group_end = bounds.get(number, (0, -1))
+        row["rank"] = index + 1
+        row["group_full"] = bool(
+            number and group_start >= start and group_end < stop
+        )
+        page_rows.append(row)
+    return {
+        "rows": page_rows,
+        "page": page,
+        "pages": pages,
+        "page_size": page_size,
+        "total": total,
+        "start": start,
+    }
+
+
+def build_rating_svg(
+    rows: list[dict],
+    pool: list[dict],
+    highlight: bool = False,
+    width: int = 860,
+) -> str:
+    """SVG карточки «Рейтинг»: место, имя, ELO, интервал, градиентный бар.
+
+    rows — страница строк rating_page(): ключи id, name, elo, games, caption,
+    half, lo, hi, group, rank, group_full (и hit в режиме «Подсвечивать»).
+    pool — весь пул карточки (записи с ключом elo): шкала ELO и градиент
+    считаются по нему, а не по странице, иначе страницы несопоставимы.
+    Ширина колонки имён — тоже по пулу, иначе колонки «прыгают» между
+    страницами. highlight — режим «Подсвечивать»: строки с hit=True
+    получают класс filter-hit, остальные — filter-miss.
+    Пустой пул → "".
+    """
+    if not pool:
         return ""
 
-    row_h, top, bottom = 26, 44, 14
-    elo_x = 296
-    plot_x0, plot_x1 = 310, width - 132
-    label_x = width - 10
-    height = top + row_h * len(rows) + bottom
-
-    values: list[int] = []
-    for r in rows:
-        values.append(int(r.get("elo", DEFAULT_ELO)))
-        if r.get("has_interval"):
-            values += [int(r["lo"]), int(r["hi"])]
-    lo, hi = min(values), max(values)
+    elos = [int(r.get("elo", DEFAULT_ELO)) for r in pool]
+    lo, hi = min(elos), max(elos)
     if lo == hi:
         lo, hi = lo - 10, hi + 10
-    pad = (hi - lo) * 0.08 or 10
+    pad = max(15.0, (hi - lo) * 0.08)
     lo, hi = lo - pad, hi + pad
+    scale = build_elo_scale(elos)
+    mean = sum(elos) / len(elos)
+
+    row_h, bar_h = 30, 18
+    top, bottom = 44, 30
+    rank_x, name_x = 8, 52
+    max_name = max(
+        (max(len(str(r.get("name", ""))), len(str(r.get("caption", ""))))
+         for r in pool),
+        default=0,
+    )
+    name_w = max(150, min(360, int(max_name * 7.0)))
+    elo_x = name_x + name_w + 14
+    half_x = elo_x + 54
+    plot_x0, plot_x1 = half_x + 16, width - 132
+    label_x = width - 10
+    height = top + row_h * len(rows) + bottom
+    rows_bottom = top + row_h * len(rows)
 
     def x(value: float) -> float:
         return plot_x0 + (plot_x1 - plot_x0) * (value - lo) / (hi - lo)
 
+    def clamp_x(value: float) -> float:
+        return max(plot_x0, min(plot_x1, x(value)))
+
+    parts: list[str] = []
+
+    # Группы «место не определено» — полосой по видимому фрагменту.
     groups: list[list[int]] = []
     for i, r in enumerate(rows):
         number = int(r.get("group") or 0)
@@ -1012,8 +958,6 @@ def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
             groups[-1][2] = i
         else:
             groups.append([number, i, i])
-
-    parts: list[str] = []
     for _, start, end in groups:
         band_y = top + start * row_h + 2
         band_h = row_h * (end - start + 1) - 4
@@ -1021,11 +965,19 @@ def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
             f'<rect x="4" y="{band_y}" width="{width - 8}" height="{band_h}" '
             f'rx="6" class="interval-group-band"/>'
         )
-        center_y = top + (start + end) / 2 * row_h + 13 + 4
-        parts.append(
-            f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
-            f'class="interval-group-label">место не определено</text>'
-        )
+        center_y = top + (start + end) / 2 * row_h + 15 + 4
+        if rows[start].get("group_full", True):
+            parts.append(
+                f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
+                f'class="interval-group-label">место не определено</text>'
+            )
+        else:
+            parts.append(
+                f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
+                f'class="interval-group-label interval-group-cut">⋯'
+                f"<title>группа неразличимых мест продолжена "
+                f"на соседней странице</title></text>"
+            )
 
     step = 50 if hi - lo <= 400 else 100
     tick = math.ceil(lo / step) * step
@@ -1033,7 +985,7 @@ def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
         gx = x(tick)
         parts.append(
             f'<line x1="{gx:.1f}" y1="{top - 14}" x2="{gx:.1f}" '
-            f'y2="{height - bottom}" class="chart-grid"/>'
+            f'y2="{rows_bottom}" class="chart-grid"/>'
         )
         parts.append(
             f'<text x="{gx:.1f}" y="20" text-anchor="middle" '
@@ -1041,56 +993,102 @@ def build_rating_intervals_svg(rows: list[dict], width: int = 860) -> str:
         )
         tick += step
 
+    for value, cls, tip in (
+        (DEFAULT_ELO, "dist-line-start", "старт: 1200"),
+        (mean, "dist-line-mean", f"среднее: {mean:.1f}"),
+    ):
+        gx = x(value)
+        parts.append(
+            f'<line x1="{gx:.1f}" y1="{top}" x2="{gx:.1f}" y2="{rows_bottom}" '
+            f'class="{cls}"><title>{html.escape(tip)}</title></line>'
+        )
+
     for i, r in enumerate(rows):
-        cy = top + i * row_h + 13
+        cy = top + i * row_h + row_h / 2
         elo = int(r.get("elo", DEFAULT_ELO))
         mid = str(r.get("id", ""))
         name = html.escape(str(r.get("name", mid)))
         caption = str(r.get("caption", ""))
         grouped = bool(r.get("group"))
+        rank = int(r.get("rank") or (i + 1))
+        seg, frac = scale_segment(elo, scale)
+        style = (
+            f"--a:var(--dist-s{scale[seg][1]});"
+            f"--b:var(--dist-s{scale[seg + 1][1]});"
+            f"--p:{frac * 100:.1f}%"
+        )
+        cls = "dist-pt"
+        if highlight:
+            cls += " filter-hit" if r.get("hit") else " filter-miss"
+        raw_name = str(r.get("name", mid))
+        tip_name = f"{raw_name} ({caption})" if caption else raw_name
+        tip = html.escape(
+            f"{tip_name} · {elo} · игр: {r.get('games', 0)}"
+        )
         if r.get("has_interval"):
-            bx1, bx2 = x(int(r["lo"])), x(int(r["hi"]))
-            interval_note = f"{int(r['lo'])}–{int(r['hi'])}"
+            tip += f" · интервал {int(r['lo'])}–{int(r['hi'])}"
+        else:
+            tip += " · игр нет, интервал не определён"
+
+        # градиентный бар: от минимума пула до ELO модели
+        bar = (
+            f'<rect x="{x(lo):.1f}" y="{cy - bar_h / 2:.1f}" '
+            f'width="{max(1.0, x(elo) - x(lo)):.1f}" height="{bar_h}" rx="4" '
+            f'class="{cls}" style="{style}">'
+            f"<title>{tip}</title></rect>"
+        )
+        if mid:
+            bar = (
+                f'<a href="/model/{html.escape(mid)}" class="dist-link">{bar}</a>'
+            )
+        parts.append(bar)
+
+        # интервал ±400/√игр — отрезком поверх бара
+        if r.get("has_interval"):
+            bx1, bx2 = clamp_x(int(r["lo"])), clamp_x(int(r["hi"]))
             parts.append(
                 f'<line x1="{bx1:.1f}" y1="{cy:.1f}" x2="{bx2:.1f}" '
                 f'y2="{cy:.1f}" class="interval-bar'
                 f'{" interval-bar-grouped" if grouped else ""}">'
-                f"<title>{html.escape(name)}: интервал {interval_note}</title>"
+                f"<title>{html.escape(name)}: интервал "
+                f"{int(r['lo'])}–{int(r['hi'])}</title>"
                 f"</line>"
             )
-        tooltip = f"{name} — Elo {elo}"
-        if caption:
-            tooltip += f" ({html.escape(caption)})"
-        if not r.get("has_interval"):
-            tooltip += " · игр нет, интервал не определён"
+
         parts.append(
-            f'<text x="8" y="{cy + 4}" class="interval-rank'
+            f'<text x="{rank_x}" y="{cy + 4}" class="interval-rank'
             f'{" interval-rank-grouped" if grouped else ""}">'
-            f'{"≈" if grouped else ""}{i + 1}</text>'
+            f'{"≈" if grouped else ""}{rank}</text>'
         )
         parts.append(
-            f'<a href="/model/{html.escape(mid)}" class="interval-name">'
-            f"{name}<title>{tooltip}</title></a>"
+            f'<text x="{name_x}" y="{cy + 4}">'
+            f'<a href="/model/{html.escape(mid)}" class="dist-name">'
+            f"{name}<title>{tip}</title></a></text>"
         )
+        if caption:
+            parts.append(
+                f'<text x="{name_x}" y="{cy + 15}" class="dist-caption">'
+                f"{html.escape(caption)}</text>"
+            )
         parts.append(
             f'<text x="{elo_x}" y="{cy + 4}" text-anchor="end" '
             f'class="interval-elo">{elo}</text>'
         )
+        half = "—" if not r.get("has_interval") else f"±{int(r['half'])}"
         parts.append(
-            f'<a href="/model/{html.escape(mid)}">'
+            f'<text x="{half_x}" y="{cy + 4}" text-anchor="end" '
+            f'class="interval-gap">{half}</text>'
+        )
+        parts.append(
             f'<circle cx="{x(elo):.1f}" cy="{cy:.1f}" r="4" class="chart-dot'
             f'{" interval-dot-grouped" if grouped else ""}">'
-            f"<title>{tooltip}</title></circle></a>"
+            f"<title>{tip}</title></circle>"
         )
-        if not r.get("has_interval"):
-            parts.append(
-                f'<text x="{elo_x + 8}" y="{cy + 4}" class="interval-gap">—</text>'
-            )
 
     return (
-        f'<svg viewBox="0 0 {width} {height}" class="chart chart-intervals" '
-        f'role="img" aria-label="Интервалы рейтинга: {len(rows)} моделей, '
-        f'групп «место не определено»: {len(groups)}">'
+        f'<svg viewBox="0 0 {width} {height}" class="chart chart-rating" '
+        f'role="img" aria-label="Рейтинг: {len(rows)} моделей, '
+        f'групп неразличимых мест: {len(groups)}">'
         + "".join(parts)
         + "</svg>"
     )
@@ -1323,273 +1321,6 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
     )
 
 
-# ─── Аналитика: активность по дням (A3) ─────────────────────────────
-
-
-def activity_by_day(elo_history: list[dict]) -> list[dict]:
-    """Число применённых вердиктов по календарным дням (A3).
-
-    День — `date[:10]`, fallback `recorded_at[:10]`; дни без вердиктов
-    между первым и последним заполняются нулями. Возвращает
-    [{"day": "YYYY-MM-DD", "count": N}]; пустая история → [].
-    """
-    counts: dict[str, int] = {}
-    for item in elo_history or []:
-        day = day_of(item)
-        if not day:
-            continue
-        try:
-            date.fromisoformat(day)
-        except ValueError:
-            continue
-        counts[day] = counts.get(day, 0) + 1
-    if not counts:
-        return []
-    cursor = date.fromisoformat(min(counts))
-    last = date.fromisoformat(max(counts))
-    days: list[dict] = []
-    while cursor <= last:
-        key = cursor.isoformat()
-        days.append({"day": key, "count": counts.get(key, 0)})
-        cursor += timedelta(days=1)
-    return days
-
-
-def build_activity_bars_svg(days: list[dict], links: bool = True,
-                            width: int = 860, height: int = 170) -> str:
-    """SVG столбиков A3: число вердиктов на день, подсказка — дата и N.
-
-    links=True — столбики дней с вердиктами ведут на историю этого дня
-    (`/history?from=D&to=D`); links=False — без ссылок (слепок: фильтр
-    дат живёт только в консоли, зеркало его не применяет).
-    """
-    if not days:
-        return ""
-    left, right, top, bottom = 44, 12, 16, 26
-    plot_w = width - left - right
-    plot_h = height - top - bottom
-    n = len(days)
-    peak = max(d["count"] for d in days)
-    top_value = max(peak, 1)
-    bar_span = plot_w / n
-    bar_w = max(bar_span * 0.7, 1.6)
-
-    bars = ""
-    for index, item in enumerate(days):
-        count = item["count"]
-        bar_h = plot_h * count / top_value
-        bx = left + index * bar_span + (bar_span - bar_w) / 2
-        by = top + plot_h - bar_h
-        cls = "activity-bar" + ("" if count else " activity-bar-zero")
-        rect = (
-            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
-            f'height="{bar_h:.1f}" class="{cls}">'
-            f'<title>{_fmt_axis_date(item["day"])}: {count}</title></rect>'
-        )
-        if links and count:
-            day = item["day"]
-            rect = f'<a href="/history?from={day}&amp;to={day}">{rect}</a>'
-        bars += rect
-
-    grid = (
-        f'<line x1="{left}" y1="{top}" x2="{width - right}" y2="{top}" '
-        f'class="chart-grid"/>'
-        f'<line x1="{left}" y1="{top + plot_h}" x2="{width - right}" '
-        f'y2="{top + plot_h}" class="chart-grid"/>'
-        f'<text x="{left - 8}" y="{top + 4}" text-anchor="end" '
-        f'class="chart-tick">{top_value}</text>'
-        f'<text x="{left - 8}" y="{top + plot_h + 4}" text-anchor="end" '
-        f'class="chart-tick">0</text>'
-    )
-    axis = (
-        f'<text x="{left}" y="{height - 6}" text-anchor="start" '
-        f'class="chart-tick">{_fmt_axis_date(days[0]["day"])}</text>'
-        f'<text x="{width - right}" y="{height - 6}" text-anchor="end" '
-        f'class="chart-tick">{_fmt_axis_date(days[-1]["day"])}</text>'
-    )
-    total = sum(d["count"] for d in days)
-    return (
-        f'<svg viewBox="0 0 {width} {height}" class="chart chart-activity" '
-        f'role="img" aria-label="Активность по дням: дней {n}, вердиктов '
-        f'{total}, максимум {peak}">{grid}{bars}{axis}</svg>'
-    )
-
-
-# ─── Аналитика: матрица пар (A4) ────────────────────────────────────
-
-
-def _short_name(text: str, limit: int = 16) -> str:
-    """Обрезка подписи матрицы: длинное имя укорачивается многоточием."""
-    text = (text or "").strip()
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def pair_matrix(ids: list[str], pair_stats: dict) -> dict:
-    """Матрица применённых встреч активного пула (A4).
-
-    ids — порядок строк/столбцов (ELO по убыванию); pair_stats —
-    {frozenset({a, b}): число игр}; принимается и словарь get_pair_stats
-    с ключом "games". Возвращает {"ids", "rows", "meets"}: rows[i][j] —
-    None на диагонали и в ячейках без встреч, иначе {"count": N,
-    "rematch": N > 1}. Заполняются только ячейки со встречами: пул в
-    сотни моделей остаётся разреженным (без миллионов объектов).
-    """
-    ordered = list(ids)
-    n = len(ordered)
-    rows: list[list[dict | None]] = [[None] * n for _ in range(n)]
-
-    def _games(value) -> int:
-        if isinstance(value, dict):
-            return int(value.get("games", 0))
-        return int(value or 0)
-
-    pos = {mid: i for i, mid in enumerate(ordered)}
-    meets = 0
-    for key, value in (pair_stats or {}).items():
-        pair = tuple(key)
-        if len(pair) != 2:
-            continue
-        i = pos.get(pair[0])
-        j = pos.get(pair[1])
-        if i is None or j is None or i == j:
-            continue
-        count = _games(value)
-        if count <= 0:
-            continue
-        info = {"count": count, "rematch": count > 1}
-        rows[i][j] = info
-        rows[j][i] = info
-        meets += count
-    return {"ids": ordered, "rows": rows, "meets": meets}
-
-
-def build_pair_matrix_svg(matrix: dict, names: dict | None = None,
-                          links: bool = True, width: int = 860) -> str:
-    """SVG тепловой матрицы A4: заливка по числу игр, метка рематча.
-
-    names — {id: имя} для подписей; links=True — ячейки встреч ведут на
-    историю пары (`/history?pair=a:b`), links=False — без ссылок
-    (слепок). Нет моделей или нет ни одной встречи → "" (пустое
-    состояние рендерит шаблон). Отрисовка разреженная: фон и сетка —
-    O(n) элементов, прямоугольники и подписи — только у ячеек встреч
-    (плотная n²-сетка на пуле в сотни моделей давала бы сотни мегабайт).
-    """
-    ids = list(matrix.get("ids") or [])
-    n = len(ids)
-    if n == 0 or not matrix.get("meets"):
-        return ""
-    names = names or {}
-
-    label_len = max(len(str(names.get(mid, mid))) for mid in ids)
-    label_w = int(min(max(label_len * 6.6 + 14, 90), 200))
-    cell = max(12.0, min((width - label_w - 12) / n, 28.0))
-    header_h = 78
-    left = label_w
-    top = header_h
-    area = cell * n
-    height = header_h + area + 10
-
-    counters: list[tuple[int, int, dict]] = []
-    max_count = 0
-    for i, row in enumerate(matrix["rows"]):
-        for j, info in enumerate(row):
-            if info is None:
-                continue
-            counters.append((i, j, info))
-            if info["count"] > max_count:
-                max_count = info["count"]
-
-    labels_parts: list[str] = []
-    for j, mid in enumerate(ids):
-        cx = left + (j + 0.5) * cell
-        full = str(names.get(mid, mid))
-        labels_parts.append(
-            f'<text x="{cx:.1f}" y="{top - 10}" text-anchor="start" '
-            f'transform="rotate(-45 {cx:.1f} {top - 10})" '
-            f'class="pair-col-label">{html.escape(_short_name(full, 14))}'
-            f"<title>{html.escape(full)}</title></text>"
-        )
-    labels = "".join(labels_parts)
-
-    row_parts: list[str] = []
-    for i, mid in enumerate(ids):
-        cy = top + i * cell
-        full = str(names.get(mid, mid))
-        row_parts.append(
-            f'<text x="{left - 8}" y="{cy + cell / 2 + 4:.1f}" '
-            f'text-anchor="end" class="pair-row-label">'
-            f"{html.escape(_short_name(full, 22))}"
-            f"<title>{html.escape(full)}</title></text>"
-        )
-    row_labels = "".join(row_parts)
-
-    grid_d = []
-    for k in range(n + 1):
-        x = left + k * cell
-        grid_d.append(f"M{x:.1f} {top:.1f}V{top + area:.1f}")
-        y = top + k * cell
-        grid_d.append(f"M{left:.1f} {y:.1f}H{left + area:.1f}")
-    background = (
-        f'<rect x="{left:.1f}" y="{top:.1f}" width="{area:.1f}" '
-        f'height="{area:.1f}" class="pair-cells-bg"/>'
-        f'<path d="{" ".join(grid_d)}" class="pair-grid-lines"/>'
-    )
-
-    diag_parts: list[str] = []
-    for k in range(n):
-        x = left + k * cell
-        y = top + k * cell
-        diag_parts.append(
-            f'<rect x="{x + 0.5:.1f}" y="{y + 0.5:.1f}" '
-            f'width="{cell - 1:.1f}" height="{cell - 1:.1f}" '
-            f'class="pair-cell pair-cell-diagonal"/>'
-        )
-    diagonal = "".join(diag_parts)
-
-    body_parts: list[str] = []
-    for i, j, info in counters:
-        a, b = ids[i], ids[j]
-        cx = left + j * cell
-        cy = top + i * cell
-        count = info["count"]
-        full_a = str(names.get(a, a))
-        full_b = str(names.get(b, b))
-        cls = "pair-cell pair-cell-set"
-        style = f' style="fill-opacity: {0.18 + 0.62 * count / max_count:.2f}"'
-        title = f"{full_a} vs {full_b}: {count}"
-        if info["rematch"]:
-            cls += " pair-cell-rematch"
-            title += " · рематч"
-        cell_svg = (
-            f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cell:.1f}" '
-            f'height="{cell:.1f}" class="{cls}"{style}>'
-            f"<title>{html.escape(title)}</title></rect>"
-        )
-        if cell >= 19:
-            cell_svg += (
-                f'<text x="{cx + cell / 2:.1f}" y="{cy + cell / 2 + 3.5:.1f}" '
-                f'text-anchor="middle" class="pair-cell-count">{count}</text>'
-            )
-        if info["rematch"]:
-            cell_svg += (
-                f'<circle cx="{cx + cell - 4:.1f}" cy="{cy + 4:.1f}" '
-                f'r="2.2" class="pair-rematch-dot"/>'
-            )
-        if links:
-            pair = html.escape(":".join(sorted((a, b))))
-            body_parts.append(f'<a href="/history?pair={pair}">{cell_svg}</a>')
-        else:
-            body_parts.append(cell_svg)
-    body = "".join(body_parts)
-
-    return (
-        f'<svg viewBox="0 0 {label_w + area + 12:.0f} {height:.0f}" '
-        f'class="chart chart-matrix" role="img" aria-label="Матрица пар: '
-        f'{n} моделей, встреч {matrix.get("meets", 0)}">'
-        f"{labels}{row_labels}{background}{diagonal}{body}</svg>"
-    )
-
-
 # ─── Аналитика: агенты и компании (A5) ──────────────────────────────
 
 
@@ -1702,27 +1433,6 @@ def delta_leaders(elo_history: list[dict], models: dict, days: int,
     return {"days": days, "date": last_day, "growth": growth, "fall": fall}
 
 
-def stale_models(elo_history: list[dict], models: dict,
-                 gap: int = STALE_GLOBAL_GAP) -> list[dict]:
-    """Активные модели без личных матчей в последних `gap` вердиктах (A6).
-
-    Возвращает строки {id, name, games} (игры — по реестру); порядок —
-    игры по убыванию, при равенстве — по id.
-    """
-    ordered = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
-    played: set[str] = set()
-    for item in ordered[-gap:]:
-        played.add(str(item.get("model_a_id") or ""))
-        played.add(str(item.get("model_b_id") or ""))
-    rows = [
-        {"id": mid, "name": info.get("name", mid),
-         "games": int(info.get("games", 0) or 0)}
-        for mid, info in (models or {}).items() if mid not in played
-    ]
-    rows.sort(key=lambda r: (-r["games"], r["id"]))
-    return rows
-
-
 # ─── Аналитика: сила оппозиции (A7) ─────────────────────────────────
 
 
@@ -1776,50 +1486,3 @@ def opposition_strength(elo_history: list[dict], pool_ids: list[str],
         })
     return rows
 
-
-# ─── Аналитика: исходы (A8) ─────────────────────────────────────────
-
-
-def _winner_rows(events: list[dict]) -> dict:
-    """Числа и проценты исходов набора событий (a/b/draw)."""
-    counts = {"a": 0, "b": 0, "draw": 0}
-    total = 0
-    for item in events or []:
-        winner = str(item.get("winner") or "")
-        if winner not in counts:
-            continue
-        counts[winner] += 1
-        total += 1
-    rows = [
-        {
-            "key": key,
-            "label": WINNER_LABELS[key],
-            "n": counts[key],
-            "pct": round(counts[key] * 100 / total) if total else 0,
-        }
-        for key in ("a", "b", "draw")
-    ]
-    return {"total": total, "rows": rows}
-
-
-def winner_shares(elo_history: list[dict],
-                  task_ids: list[str] | None = None) -> dict:
-    """Доли исходов применённых вердиктов (A8).
-
-    Без `task_ids` — только общие числа и проценты; с непустым списком
-    добавляет разбивку `by_task` в порядке task_ids (таск записи —
-    префикс matchup). Проценты округляются до целого.
-    """
-    result = _winner_rows(elo_history)
-    if task_ids:
-        by_task = []
-        for tid in task_ids:
-            events = [
-                item for item in (elo_history or [])
-                if history_task_id(item) == tid
-            ]
-            row = _winner_rows(events)
-            if row["total"]:
-                by_task.append({"task": tid, **row})
-        result["by_task"] = by_task
-    return result

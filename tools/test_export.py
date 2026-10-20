@@ -606,16 +606,16 @@ def test_export_task_pages():
 
 
 def test_export_stats_analytics():
-    """Волна 4: слепок аналитики — A1/A2 рендерятся, live-контролы вырезаны."""
+    """Волна 6: слепок аналитики — карточка «Рейтинг», live-контролы вырезаны."""
     with _temp_storage():
         with tempfile.TemporaryDirectory(prefix="bench_mirror_stats_") as out:
             with _read_only():
                 assert export_web.main(["--out", out]) == 0
             stats = (Path(out) / "stats" / "index.html").read_text(encoding="utf-8")
 
-            # Карточки A1/A2 и SVG-ссылки на профили (разрешаются в файлы)
-            assert "Интервалы рейтинга" in stats and "Динамика ELO" in stats
-            assert 'aria-label="Интервалы рейтинга: 2 моделей' in stats
+            # Карточка «Рейтинг» и SVG-ссылки на профили (разрешаются в файлы)
+            assert "Рейтинг" in stats and "Динамика ELO" in stats
+            assert 'aria-label="Рейтинг: 2 моделей' in stats
             assert 'href="../model/alpha/"' in stats
             assert "line-legend" in stats and "нет матчей в периоде" not in stats
 
@@ -623,28 +623,36 @@ def test_export_stats_analytics():
             assert "lines-form" not in stats
             assert 'name="lines"' not in stats and 'name="period"' not in stats
             assert "lines-presets" not in stats
+            assert "lines-picker" not in stats
 
-            # A1 статичен: фильтры страницы в слепке не меняют SVG
-            assert 'aria-label="Распределение Elo: 2 моделей"' in stats
+            # Удалённые блоки в слепке отсутствуют
+            assert "Активность по дням" not in stats
+            assert "Матрица пар" not in stats
+            assert "Исходы" not in stats
+            assert "Интервалы рейтинга" not in stats
+            assert "Распределение Elo" not in stats
 
-            # A3/A5 рендерятся, A4 — без ссылок в ячейках
-            assert "Активность по дням" in stats and "activity-bar" in stats
+            # «Рейтинг» статичен: фильтры страницы в слепке не меняют SVG
+            assert 'class="chart chart-rating"' in stats
+
+            # Остальные карточки на месте
             assert "Агенты и компании" in stats and "card-subtitle" in stats
-            assert "Матрица пар" in stats and "pair-cell" in stats
-            assert "/history?pair=" not in stats, "ячейки матрицы слепка — ссылки"
-            assert "Клик по ячейке" not in stats, "подсказка live-перехода в слепке"
-
-            # Волна 5: бары распределения и линии A2 кликабельны (ссылки моделей
-            # разрешаются в файлы), столбики A3 без ссылок — фильтра дат в зеркале нет
-            assert 'class="dist-link"' in stats, "бары распределения слепка без ссылок"
-            assert 'class="chart-line-hit"' in stats, "линии A2 слепка без ссылок"
-            assert "/history?from=" not in stats, "столбики A3 слепка ведут на фильтр дат"
-
-            # A6–A8 рендерятся (разбивка A8 по таскам — только при 2+ активных)
             assert "Взлёты и падения" in stats and "delta-list" in stats
             assert "Сила оппозиции" in stats
-            assert "Исходы" in stats and "outcome-rows" in stats
-    print("wave4 export stats analytics: OK")
+            assert "Остывшие" not in stats
+
+            # Волна 5: бары рейтинга и линии A2 кликабельны (ссылки моделей
+            # разрешаются в файлы)
+            assert 'class="dist-link"' in stats, "бары рейтинга слепка без ссылок"
+            assert 'class="chart-line-hit"' in stats, "линии A2 слепка без ссылок"
+
+            # Таблица «Силы оппозиции» собрана со всех страниц: каждая
+            # активная модель — ровно одна строка
+            opp = stats.split('id="opposition"', 1)[1]
+            opp_models = re.findall(r'<td><a href="\.\./model/([^/]+)/">', opp)
+            assert len(opp_models) == len(set(opp_models)), "строки оппозиции задвоены"
+            assert len(opp_models) == 2, f"в слепке {len(opp_models)} строк оппозиции"
+    print("wave6 export stats analytics: OK")
 
 
 def test_check_output_violations():

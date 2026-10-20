@@ -2095,54 +2095,159 @@ def test_wave4_task_links():
     print("wave4 task links: OK")
 
 
-def test_wave4_stats_a1_a2():
-    """Волна 4: /stats — карточки A1/A2, выбор линий, период, лимит, пусто."""
+# -*- coding: utf-8 -*-
+"""Новые серверные сценарии «Аналитики» (волна 6) для test_data_cache.py."""
+
+def test_wave6_stats_rating():
+    """Волна 6: /stats — карточка «Рейтинг»: состав, строка, сводка, фильтры."""
     with _temp_storage() as paths:
         server.app.config["TESTING"] = True
         client = server.app.test_client()
 
         html = client.get("/stats").get_data(as_text=True)
-        # Порядок карточек: A1 → «Распределение Elo» → A2
-        i1 = html.index("Интервалы рейтинга")
-        i2 = html.index("Распределение Elo")
-        i3 = html.index("Динамика ELO")
-        assert i1 < i2 < i3, "порядок карточек аналитики"
 
-        # A1: активный пул, интервалы, группа, ссылки на профили
-        assert 'aria-label="Интервалы рейтинга: 2 моделей' in html
+        # Состав дашборда: пять карточек в заданном порядке
+        order = [
+            "<h2>Рейтинг</h2>",
+            "<h2>Динамика ELO</h2>",
+            "<h2>Агенты и компании</h2>",
+            "<h2>Взлёты и падения</h2>",
+            "<h2>Сила оппозиции</h2>",
+        ]
+        positions = [html.index(name) for name in order]
+        assert positions == sorted(positions), "порядок карточек аналитики"
+        for gone in ("Активность по дням", "Матрица пар", "Исходы",
+                     "Интервалы рейтинга", "Распределение Elo"):
+            assert gone not in html, f"удалённый блок на странице: {gone}"
+
+        # Строка рейтинга: место, имя, ELO, интервал и бар; ссылки на профили
+        assert 'aria-label="Рейтинг: 2 моделей' in html
         assert 'href="/model/alpha"' in html and 'href="/model/beta"' in html
-        assert 'href="/model/gamma"' not in html, "архивная модель попала в A1"
-        assert "место не определено" in html
-        assert "interval-gap" not in html, "прочерк без игр"
+        assert 'href="/model/gamma"' not in html, "архивная модель попала в «Рейтинг»"
+        assert "dist-pt" in html, "нет градиентного бара"
+        assert "±400" in html, "интервал не показан"
+        assert "место не определено" in html, "нет групп неразличимых мест"
 
-        # A1 не зависит от фильтров страницы: распределение меняется, A1 — нет
+        # Сводка: размер пула и число различимых мест
+        assert "моделей: 2" in html
+        assert "мест определено: 0" in html, "интервалы перекрываются — мест нет"
+
+        # Фильтры страницы действуют на карточку
         html_all = client.get("/stats?filter=all").get_data(as_text=True)
-        assert "моделей: 2" in html and "моделей: 3" in html_all
-        assert 'aria-label="Интервалы рейтинга: 2 моделей' in html_all
+        assert "моделей: 3" in html_all
+        assert 'href="/model/gamma"' in html_all
+        assert "мест определено: 3" in html_all, "модель без игр — место определено"
 
-        # A2 по умолчанию: топ-5 активных, период 90, пресеты
+        # Пустой пул под фильтром — пустое состояние карточки
+        empty = client.get("/stats?providers=none").get_data(as_text=True)
+        assert "Под выбранный фильтр не попала ни одна модель" in empty
+        assert "моделей: 0" in empty
+
+        # Режим «Подсвечивать»: пул не сужается, отобранные строки выделены
+        hl = client.get("/stats?view=highlight").get_data(as_text=True)
+        assert "моделей: 3" in hl, "в подсветке пул не сужается"
+        assert "подсвечено: 2" in hl, "отобраны активные модели"
+        assert 'class="dist-pt filter-hit"' in hl
+        assert 'class="dist-pt filter-miss"' in hl, "архивная модель приглушена"
+        miss = client.get("/stats?view=highlight&providers=none").get_data(
+            as_text=True
+        )
+        assert "подсвечено: 0" in miss
+        assert 'class="dist-pt filter-miss"' in miss
+    print("wave6 stats rating: OK")
+
+
+def test_wave6_stats_pagination():
+    """Волна 6: постраничность «Рейтинга» и «Силы оппозиции»."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Одна страница — навигации нет
+        html = client.get("/stats").get_data(as_text=True)
+        assert "rank_page" not in html and "opp_page" not in html
+
+        ids = [f"m{i:03d}" for i in range(120)]
+        models_yaml = ["models:"]
+        for mid in ids:
+            models_yaml += [
+                f"  - id: {mid}",
+                f"    name: Model {mid}",
+                "    agent: Agent",
+                "    provider: Prov",
+                "    added: 2026-01-01",
+                "    status: active",
+            ]
+        _write(paths["models"], "\n".join(models_yaml) + "\n")
+        _write(paths["journal"], "")
+        data_cache.clear()
+
+        page1 = client.get("/stats").get_data(as_text=True)
+        assert page1.count('class="interval-rank') == 50, "страница рейтинга — 50 строк"
+        assert "rank_page=2" in page1 and "rank_page=3" in page1
+        assert "opp_page=2" in page1, "нет навигации «Силы оппозиции»"
+        first = re.search(r'class="interval-rank[^"]*">(\d+)<', page1)
+        assert first and first.group(1) == "1", "место первой строки"
+
+        # Место считается по всему пулу, а не в пределах страницы
+        page2 = client.get("/stats?rank_page=2").get_data(as_text=True)
+        second = re.search(r'class="interval-rank[^"]*">(\d+)<', page2)
+        assert second and second.group(1) == "51", "место — во всём пуле"
+        assert page2.count('class="interval-rank') == 50
+
+        # Номер страницы за пределами диапазона — последняя существующая
+        last = client.get("/stats?rank_page=99").get_data(as_text=True)
+        third = re.search(r'class="interval-rank[^"]*">(\d+)<', last)
+        assert third and third.group(1) == "101", "последняя страница рейтинга"
+
+        # Страница одного блока не меняет страницу другого
+        both = client.get("/stats?rank_page=2&opp_page=2").get_data(as_text=True)
+        assert re.search(r'class="interval-rank[^"]*">(\d+)<', both).group(1) == "51"
+        opp_rows = both.split('id="opposition"', 1)[1]
+        assert opp_rows.count("<tr>") == 51, "таблица оппозиции — 50 строк + заголовок"
+
+        # Страницы в URL: перезагрузка показывает ту же страницу
+        again = client.get("/stats?rank_page=2").get_data(as_text=True)
+        assert re.search(r'class="interval-rank[^"]*">(\d+)<', again).group(1) == "51"
+    print("wave6 stats pagination: OK")
+
+
+def test_wave6_stats_lines_picker():
+    """Волна 6: выбор линий — чипы и текстовое поле, без контрола на модель."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/stats").get_data(as_text=True)
+        assert html.count('name="lines"') == 1, "одно текстовое поле выбора линий"
+        assert 'type="checkbox" name="lines"' not in html, "чекбокс на модель"
+        assert 'data-lines-input' in html
+        assert 'data-lines-chips' in html
+        assert 'data-lines-search' in html
+        assert 'class="lines-chip"' in html, "нет чипов выбранных моделей"
+        assert 'name="lines" value="alpha,beta"' in html, "поле не заполнено выбором"
+
+        # Пресеты и период на месте
         assert 'name="period" value="90" checked' in html
-        assert html.count('class="lines-check"') == 2, "чекбоксы активных моделей"
-        assert 'name="lines" value="alpha" checked' in html
-        assert 'name="lines" value="beta" checked' in html
         assert "lines-presets" in html and "/stats?lines=" in html
         assert 'aria-label="Динамика ELO: линий 2, матчей 1"' in html
 
-        # A2: выбор одной линии из URL
+        # Выбор из URL — тот же результат, что и чипы
         one = client.get("/stats?lines=beta").get_data(as_text=True)
+        assert 'name="lines" value="beta"' in one
         assert 'aria-label="Динамика ELO: линий 1, матчей 1"' in one
         legend_one = one.split('class="line-legend"', 1)[1].split("</div>", 1)[0]
         assert legend_one.count('class="line-legend-item') == 1
         assert "Beta" in legend_one and "Alpha" not in legend_one
 
-        # Период из URL: 30/90/all; невалидное значение → 90
+        # Период из URL: 30/90/all; невалидное значение — 90
         for value in ("30", "all"):
             page = client.get(f"/stats?period={value}").get_data(as_text=True)
             assert f'name="period" value="{value}" checked' in page
         bad = client.get("/stats?period=zzz").get_data(as_text=True)
         assert 'name="period" value="90" checked' in bad
 
-        # Дефолт и лимит линий: 12 активных моделей, журнал пуст
+        # Лимит линий: 12 перечисленных id — 10 линий
         ids = [f"m{i:02d}" for i in range(12)]
         models_yaml = ["models:"]
         for mid in ids:
@@ -2164,7 +2269,7 @@ def test_wave4_stats_a1_a2():
         assert all12.count('class="line-legend-item') == 10, "кап 10 линий"
         assert "Нет матчей выбранных моделей в периоде" in all12
 
-        # Пусто: все модели архивные — оба блока показывают заглушки
+        # Пусто: все модели архивные — блоки показывают заглушки
         _write(paths["models"], (
             "models:\n  - id: gamma\n    name: Gamma\n    agent: Agent\n"
             "    provider: Prov\n    added: 2026-01-01\n    status: archived\n"
@@ -2174,106 +2279,62 @@ def test_wave4_stats_a1_a2():
         assert "Нет активных моделей" in empty
         assert "Нет матчей выбранных моделей в периоде" in empty
         assert "line-legend" not in empty, "легенда без выбранных линий"
-    print("wave4 stats A1/A2: OK")
+    print("wave6 stats lines picker: OK")
 
 
-def test_wave4_stats_a3_a5():
-    """Волна 4: /stats — A3 активность, A4 матрица (ссылки, рематч), A5 сводки."""
+def test_wave6_stats_model_search():
+    """Волна 6: поиск моделей реестра для выбора линий."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        resp = client.get("/stats/models?q=alp")
+        assert resp.status_code == 200
+        payload = json.loads(resp.get_data(as_text=True))
+        assert [row["id"] for row in payload] == ["alpha"]
+        assert payload[0]["name"] == "Alpha"
+
+        by_name = json.loads(
+            client.get("/stats/models?q=Beta").get_data(as_text=True)
+        )
+        assert [row["id"] for row in by_name] == ["beta"]
+
+        # Архивные не выдаются; пустой запрос — все активные
+        assert client.get("/stats/models?q=gam").get_data(as_text=True) == "[]"
+        every = json.loads(client.get("/stats/models?q=").get_data(as_text=True))
+        assert [row["id"] for row in every] == ["alpha", "beta"]
+    print("wave6 stats model search: OK")
+
+
+def test_wave6_stats_deltas_and_opposition():
+    """Волна 6: «Взлёты и падения» без «остывших», «Сила оппозиции» прочерки."""
     with _temp_storage() as paths:
         server.app.config["TESTING"] = True
         client = server.app.test_client()
 
         html = client.get("/stats").get_data(as_text=True)
-        # A3: сводка и столбик единственного дня
-        assert "дней: 1 · вердиктов: 1 · максимум: 1" in html
-        assert "activity-bar" in html and "02.01.2026: 1" in html
-        # A4: матрица активного пула, ссылка на историю пары
-        assert 'aria-label="Матрица пар: 2 моделей, встреч 1"' in html
-        assert 'href="/history?pair=alpha:beta"' in html
-        assert "pair-cell-diagonal" in html
-        assert "pair-cell-rematch" not in html, "одна встреча — не рематч"
-        # A5: сводки по активному пулу (архивная gamma не участвует)
-        assert '<h3 class="card-subtitle">Агенты</h3>' in html
-        assert "<td>Agent</td><td>2</td><td>1200</td><td>1200</td><td>2</td><td>50%</td>" in html
-        assert "<td>Prov</td><td>2</td><td>1200</td><td>1200</td><td>2</td><td>50%</td>" in html
-        assert "без агента" not in html
-
-        # Рематч: две встречи — метка рематча и подсказка
-        _write(paths["journal"], _history_journal(2))
-        data_cache.clear()
-        html2 = client.get("/stats").get_data(as_text=True)
-        assert "pair-cell-rematch" in html2 and "pair-rematch-dot" in html2
-        assert "Alpha vs Beta: 2 · рематч" in html2
-        assert "дней: 1 · вердиктов: 2 · максимум: 2" in html2
-
-        # Пустые журнал и матрица — заглушки A3/A4
-        _write(paths["journal"], "")
-        data_cache.clear()
-        html3 = client.get("/stats").get_data(as_text=True)
-        assert "Нет применённых встреч" in html3
-        assert "В истории нет вердиктов" in html3
-        assert "matrix-wrap" not in html3
-        assert "activity-bar" not in html3
-    print("wave4 stats A3/A5: OK")
-
-
-def test_wave4_stats_a6_a8():
-    """Волна 4: /stats — A6 окна и остывшие, A7 оппозиция, A8 доли и таски."""
-    with _temp_storage() as paths:
-        server.app.config["TESTING"] = True
-        client = server.app.test_client()
-
-        html = client.get("/stats").get_data(as_text=True)
-        # A6: единственный матч — рост alpha и падение beta
         assert "Взлёты и падения" in html
         assert 'class="delta-sum delta-up">+20' in html
         assert 'class="delta-sum delta-down">-20' in html
-        assert "Остывшие" not in html, "обе активные модели играли"
+        assert "Остывшие" not in html, "список «остывшие» вернулся"
+        assert "остывшие" not in html, "список «остывшие» вернулся"
 
-        # A7: пул в порядке рейтинга, прочерков нет — обе играли
-        opp = html.split('id="opposition"', 1)[1].split('id="outcomes"', 1)[0]
+        opp = html.split('id="opposition"', 1)[1]
         assert '<a href="/model/alpha">Alpha</a>' in opp
         assert "<td>1220</td>" in opp and "<td>1180</td>" in opp
         assert "<td>1200</td>" in opp, "средний ELO соперников"
-        assert "<td>0</td>" in opp, "у beta нет побед над топ-10"
         assert "—" not in opp
 
-        # A8: одна активная задача — общие доли без разбивки
-        assert "всего применённых вердиктов: 1" in html
-        assert 'class="outcome-pct">100%' in html
-        assert "По активным задачам" not in html
-
-        # Две активные задачи: разбивка с ссылками на страницы задач
-        lines = _history_journal(2).strip().splitlines()
-        second = json.loads(lines[1])
-        second["task"] = "T-002"
-        second["matchup"] = "T-002/001"
-        lines[1] = json.dumps(second, ensure_ascii=False)
-        _write(paths["journal"], "\n".join(lines) + "\n")
-        data_cache.clear()
-
-        two = client.get("/stats").get_data(as_text=True)
-        assert "По активным задачам" in two
-        assert 'href="/task/T-001"' in two and 'href="/task/T-002"' in two
-        assert "всего применённых вердиктов: 2" in two
-        assert two.count('class="outcome-pct">50%</span>') == 2
-        assert 'class="outcome-pct">0%</span>' in two
-        assert "победила A · 100% (1)" in two, "разбивка T-001"
-        assert "победила B · 100% (1)" in two, "разбивка T-002"
-
-        # Пустой журнал: A4/A8 — заглушки, A6 — пустые окна и все активные остыли
+        # Пустой журнал: окна пустые, оппозиция — прочерки
         _write(paths["journal"], "")
         data_cache.clear()
         empty = client.get("/stats").get_data(as_text=True)
-        assert "Нет применённых встреч." in empty
-        assert "Нет применённых вердиктов." in empty
-        assert "Остывшие" in empty
-        assert empty.count('class="delta-empty">Нет роста</div>') == 2
+        assert "Нет применённых матчей." in empty
+        assert "delta-empty" not in empty, "окна не показаны — карточка пуста"
         assert "delta-sum" not in empty, "роста и падения нет"
-        assert empty.count('class="delta-name"') == 2, "остыли обе модели"
-        opp_empty = empty.split('id="opposition"', 1)[1].split('id="outcomes"', 1)[0]
+        opp_empty = empty.split('id="opposition"', 1)[1]
         assert opp_empty.count("—") == 4, "модели без игр — прочерки"
-    print("wave4 stats A6/A8: OK")
+    print("wave6 stats deltas and opposition: OK")
 
 
 def _profile_journal() -> str:
@@ -2495,7 +2556,7 @@ def test_wave5_history_title():
 
 
 def test_wave5_chart_links():
-    """Волна 5: графики кликабельны — распределение/A2/A3 и точки профиля."""
+    """Волна 5: графики кликабельны — «Рейтинг»/A2 и точки профиля."""
     with _temp_storage():
         server.app.config["TESTING"] = True
         client = server.app.test_client()
@@ -2503,9 +2564,6 @@ def test_wave5_chart_links():
         html = client.get("/stats").get_data(as_text=True)
         assert '<a href="/model/alpha" class="dist-link">' in html
         assert 'class="chart-line-hit"' in html and 'href="/model/beta"' in html
-        assert (
-            'href="/history?from=2026-01-02&amp;to=2026-01-02"' in html
-        ), "столбик дня без ссылки"
 
         model = client.get("/model/alpha").get_data(as_text=True)
         assert 'class="chart-dot-link"' in model and 'class="chart-dot-hit"' in model
@@ -2517,8 +2575,7 @@ def test_wave5_chart_links():
         server.app.config["READ_ONLY"] = True
         try:
             ro = client.get("/stats").get_data(as_text=True)
-            assert "/history?from=" not in ro, "столбики дней ведут на фильтр дат"
-            assert 'class="dist-link"' in ro, "бары распределения без ссылок"
+            assert 'class="dist-link"' in ro, "бары «Рейтинга» без ссылок"
             assert 'class="chart-line-hit"' in ro, "линии A2 без ссылок"
             ro_model = client.get("/model/alpha").get_data(as_text=True)
             assert 'class="chart-dot-link"' in ro_model, "точки графика без ссылок"
@@ -2589,9 +2646,11 @@ if __name__ == "__main__":
     test_wave4_task_page()
     test_wave4_task_verdicts_pagination()
     test_wave4_task_links()
-    test_wave4_stats_a1_a2()
-    test_wave4_stats_a3_a5()
-    test_wave4_stats_a6_a8()
+    test_wave6_stats_rating()
+    test_wave6_stats_pagination()
+    test_wave6_stats_lines_picker()
+    test_wave6_stats_model_search()
+    test_wave6_stats_deltas_and_opposition()
     test_wave4_profile()
     test_wave5_history_title()
     test_wave5_chart_links()

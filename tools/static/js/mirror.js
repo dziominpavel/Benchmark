@@ -685,6 +685,9 @@
 
   /* ── Страница «Аналитика» ───────────────────────────────────────── */
 
+  const RATING_PAGE_SIZE = 50;
+  const MIDDOT = "·";
+
   function buildScale(elos) {
     let lo = Math.min(...elos);
     let hi = Math.max(...elos);
@@ -709,17 +712,81 @@
     return [anchors.length - 2, 1];
   }
 
-  // Порт build_elo_distribution_svg (render_helpers.py): бары пула ELO.
-  // Округление координат — toFixed (в редких точных «полу-случаях» Python
-  // округляет полу-чётно, расхождение ≤0.1 px — принято).
-  function buildDistribution(pts, highlight) {
+  // Порт confidence_half_width (render_helpers.py): половина интервала
+  // рейтинга — round(400 / √игр); без игр интервала нет.
+  function confidenceHalf(games) {
+    const n = Number(games) || 0;
+    if (n <= 0) return null;
+    return Math.round(400 / Math.sqrt(n));
+  }
+
+  // Порт interval_groups (render_helpers.py): группы «место не определено» —
+  // цепочки перекрывающихся интервалов соседей (транзитивно).
+  function intervalGroups(rows) {
+    const ordered = [...rows].sort((a, b) => {
+      const diff = modelElo(b.mid) - modelElo(a.mid);
+      if (diff) return diff;
+      return a.mid < b.mid ? -1 : a.mid > b.mid ? 1 : 0;
+    });
+    ordered.forEach((row) => {
+      const elo = modelElo(row.mid);
+      row.half = confidenceHalf(modelGames(row.mid));
+      row.hasInterval = row.half !== null;
+      row.lo = row.hasInterval ? elo - row.half : elo;
+      row.hi = row.hasInterval ? elo + row.half : elo;
+      row.group = 0;
+    });
+    const groups = [];
+    let i = 0;
+    while (i < ordered.length) {
+      let j = i;
+      while (
+        j + 1 < ordered.length &&
+        ordered[j].hasInterval &&
+        ordered[j + 1].hasInterval &&
+        ordered[j].lo <= ordered[j + 1].hi
+      ) {
+        j += 1;
+      }
+      if (j > i) {
+        const number = groups.length + 1;
+        groups.push({ number, start: i, end: j });
+        for (let k = i; k <= j; k += 1) ordered[k].group = number;
+      }
+      i = j + 1;
+    }
+    return { rows: ordered, groups };
+  }
+
+  // Порт rating_page (render_helpers.py): страница строк карточки «Рейтинг»
+  // и её фрагменты групп; место строки — место во всём пуле.
+  function ratingPage(rows, groups, page) {
+    const total = rows.length;
+    const pages = Math.max(1, Math.ceil(total / RATING_PAGE_SIZE));
+    const current = Math.max(1, Math.min(page || 1, pages));
+    const start = (current - 1) * RATING_PAGE_SIZE;
+    const stop = Math.min(start + RATING_PAGE_SIZE, total);
+    const bounds = new Map();
+    groups.forEach((group) => bounds.set(group.number, group));
+    const pageRows = [];
+    for (let index = start; index < stop; index += 1) {
+      const row = Object.assign({}, rows[index]);
+      const group = bounds.get(row.group);
+      row.rank = index + 1;
+      row.groupFull = Boolean(
+        row.group && group && group.start >= start && group.end < stop
+      );
+      pageRows.push(row);
+    }
+    return { rows: pageRows, page: current, pages, total };
+  }
+
+  // Порт build_rating_svg (render_helpers.py): строка карточки «Рейтинг» —
+  // место, имя, ELO, интервал ±400/√игр и градиентный бар. Шкала и ширина
+  // колонки имён считаются по всему пулу, а не по странице.
+  function buildRating(pageRows, pool, highlight) {
     const width = 860;
-    const sorted = [...pts].sort((a, b) => modelElo(b.mid) - modelElo(a.mid));
-    const anyHits = highlight && sorted.some((p) => p.hit);
-    const elos = sorted.map((p) => modelElo(p.mid));
-    const n = elos.length;
-    const mean = elos.reduce((sum, v) => sum + v, 0) / n;
-    const scale = buildScale(elos);
+    const elos = pool.map((row) => modelElo(row.mid));
     let lo = Math.min(...elos);
     let hi = Math.max(...elos);
     if (lo === hi) {
@@ -729,97 +796,183 @@
     const pad = Math.max(15.0, (hi - lo) * 0.08);
     lo -= pad;
     hi += pad;
+    const scale = buildScale(elos);
+    const mean = elos.reduce((sum, v) => sum + v, 0) / elos.length;
 
     const rowH = 30;
     const barH = 18;
+    const top = 44;
+    const bottom = 30;
+    const rankX = 8;
+    const nameX = 52;
     let maxName = 0;
-    for (const p of sorted) {
+    pool.forEach((row) => {
       maxName = Math.max(
         maxName,
-        String(modelName(p.mid)).length,
-        String(modelCaption(p.mid)).length
+        String(modelName(row.mid)).length,
+        String(modelCaption(row.mid)).length
       );
-    }
-    const left = Math.max(220, Math.min(420, Math.trunc(maxName * 7.2) + 24));
-    const right = 56;
-    const top = 44;
-    const bottom = 34;
-    const height = top + n * rowH + bottom;
-    const plotW = width - left - right;
-    const rowsBottom = top + n * rowH;
-    const x = (v) => left + (plotW * (v - lo)) / (hi - lo);
+    });
+    const nameW = Math.max(150, Math.min(360, Math.trunc(maxName * 7.0)));
+    const eloX = nameX + nameW + 14;
+    const halfX = eloX + 54;
+    const plotX0 = halfX + 16;
+    const plotX1 = width - 132;
+    const labelX = width - 10;
+    const height = top + rowH * pageRows.length + bottom;
+    const rowsBottom = top + rowH * pageRows.length;
+    const x = (v) => plotX0 + (plotX1 - plotX0) * ((v - lo) / (hi - lo));
+    const clampX = (v) => Math.max(plotX0, Math.min(plotX1, x(v)));
 
-    let bars = "";
-    sorted.forEach((p, i) => {
-      const v = modelElo(p.mid);
-      const [seg, frac] = scaleSegment(v, scale);
-      let cls = "dist-pt";
-      if (anyHits) cls += p.hit ? " filter-hit" : " filter-miss";
+    const parts = [];
+
+    // Группы «место не определено» — полосой по видимому фрагменту.
+    const groups = [];
+    pageRows.forEach((row, i) => {
+      if (!row.group) return;
+      const last = groups[groups.length - 1];
+      if (last && last[0] === row.group) last[2] = i;
+      else groups.push([row.group, i, i]);
+    });
+    groups.forEach(([, start, end]) => {
+      const bandY = top + start * rowH + 2;
+      const bandH = rowH * (end - start + 1) - 4;
+      parts.push(
+        '<rect x="4" y="' + bandY.toFixed(1) + '" width="' + (width - 8) +
+          '" height="' + bandH.toFixed(1) + '" rx="6" class="interval-group-band"/>'
+      );
+      const centerY = top + ((start + end) / 2) * rowH + 19;
+      if (pageRows[start].groupFull !== false) {
+        parts.push(
+          '<text x="' + labelX + '" y="' + centerY.toFixed(1) +
+            '" text-anchor="end" class="interval-group-label">' +
+            "место не определено</text>"
+        );
+      } else {
+        parts.push(
+          '<text x="' + labelX + '" y="' + centerY.toFixed(1) +
+            '" text-anchor="end" class="interval-group-label interval-group-cut">' +
+            "⋯<title>группа неразличимых мест продолжена " +
+            "на соседней странице</title></text>"
+        );
+      }
+    });
+
+    const step = hi - lo <= 400 ? 50 : 100;
+    let tick = Math.ceil(lo / step) * step;
+    while (tick <= hi) {
+      const gx = x(tick);
+      parts.push(
+        '<line x1="' + gx.toFixed(1) + '" y1="' + (top - 14) + '" x2="' +
+          gx.toFixed(1) + '" y2="' + rowsBottom + '" class="chart-grid"/>' +
+          '<text x="' + gx.toFixed(1) + '" y="20" text-anchor="middle" ' +
+          'class="chart-tick">' + tick + "</text>"
+      );
+      tick += step;
+    }
+
+    [
+      [DEFAULT_ELO, "dist-line-start", "старт: 1200"],
+      [mean, "dist-line-mean", "среднее: " + mean.toFixed(1)],
+    ].forEach(([value, cls, tip]) => {
+      const gx = x(value);
+      parts.push(
+        '<line x1="' + gx.toFixed(1) + '" y1="' + top + '" x2="' + gx.toFixed(1) +
+          '" y2="' + rowsBottom + '" class="' + cls + '"><title>' + esc(tip) +
+          "</title></line>"
+      );
+    });
+
+    pageRows.forEach((row, i) => {
+      const elo = modelElo(row.mid);
+      const mid = row.mid;
+      const rawName = modelName(mid);
+      const caption = modelCaption(mid);
+      const grouped = Boolean(row.group);
+      const [seg, frac] = scaleSegment(elo, scale);
       const style =
         "--a:var(--dist-s" + scale[seg][1] + ");" +
         "--b:var(--dist-s" + scale[seg + 1][1] + ");" +
         "--p:" + (frac * 100).toFixed(1) + "%";
-      const cy = top + i * rowH + rowH / 2;
-      const caption = modelCaption(p.mid);
-      const tipName = caption
-        ? modelName(p.mid) + " (" + caption + ")"
-        : modelName(p.mid);
-      const tip = esc(tipName + " · " + v + " · игр: " + modelGames(p.mid));
-      bars +=
-        '<rect x="' + x(lo).toFixed(1) + '" y="' + (cy - barH / 2).toFixed(1) +
-        '" width="' + Math.max(1.0, x(v) - x(lo)).toFixed(1) + '" height="' + barH +
-        '" rx="4" class="' + cls + '" style="' + style + '">' +
-        "<title>" + tip + "</title></rect>" +
-        '<text x="' + (left - 8) + '" y="' + (cy + 4).toFixed(1) +
-        '" text-anchor="end" class="dist-name">' + esc(modelName(p.mid)) +
-        "<title>" + tip + "</title></text>";
-      if (caption) {
-        bars +=
-          '<text x="' + (left - 8) + '" y="' + (cy + 15).toFixed(1) +
-          '" text-anchor="end" class="dist-caption">' + esc(caption) +
-          "<title>" + tip + "</title></text>";
+      let cls = "dist-pt";
+      if (highlight) cls += row.hit ? " filter-hit" : " filter-miss";
+      const tipName = caption ? rawName + " (" + caption + ")" : rawName;
+      let tip = tipName + " · " + elo + " · игр: " + modelGames(mid);
+      if (row.hasInterval) {
+        tip += " · интервал " + row.lo + "–" + row.hi;
+      } else {
+        tip += " · игр нет, интервал не определён";
       }
-      bars +=
-        '<text x="' + (x(v) + 6).toFixed(1) + '" y="' + (cy + 4).toFixed(1) +
-        '" class="dist-value">' + v + "</text>";
+      tip = esc(tip);
+      const cy = top + i * rowH + rowH / 2;
+
+      let bar =
+        '<rect x="' + x(lo).toFixed(1) + '" y="' + (cy - barH / 2).toFixed(1) +
+        '" width="' + Math.max(1.0, x(elo) - x(lo)).toFixed(1) + '" height="' +
+        barH + '" rx="4" class="' + cls + '" style="' + style + '">' +
+        "<title>" + tip + "</title></rect>";
+      if (mid) bar = '<a href="/model/' + esc(mid) + '" class="dist-link">' + bar + "</a>";
+      parts.push(bar);
+
+      if (row.hasInterval) {
+        const bx1 = clampX(row.lo);
+        const bx2 = clampX(row.hi);
+        parts.push(
+          '<line x1="' + bx1.toFixed(1) + '" y1="' + cy.toFixed(1) + '" x2="' +
+            bx2.toFixed(1) + '" y2="' + cy.toFixed(1) + '" class="interval-bar' +
+            (grouped ? " interval-bar-grouped" : "") + '"><title>' + esc(rawName) +
+            ": интервал " + row.lo + "–" + row.hi + "</title></line>"
+        );
+      }
+
+      parts.push(
+        '<text x="' + rankX + '" y="' + (cy + 4).toFixed(1) + '" class="interval-rank' +
+          (grouped ? " interval-rank-grouped" : "") + '">' +
+          (grouped ? "≈" : "") + row.rank + "</text>"
+      );
+      parts.push(
+        '<text x="' + nameX + '" y="' + (cy + 4).toFixed(1) + '">' +
+          '<a href="/model/' + esc(mid) + '" class="dist-name">' + esc(rawName) +
+          "<title>" + tip + "</title></a></text>"
+      );
+      if (caption) {
+        parts.push(
+          '<text x="' + nameX + '" y="' + (cy + 15).toFixed(1) +
+            '" class="dist-caption">' + esc(caption) + "</text>"
+        );
+      }
+      parts.push(
+        '<text x="' + eloX + '" y="' + (cy + 4).toFixed(1) +
+          '" text-anchor="end" class="interval-elo">' + elo + "</text>"
+      );
+      parts.push(
+        '<text x="' + halfX + '" y="' + (cy + 4).toFixed(1) +
+          '" text-anchor="end" class="interval-gap">' +
+          (row.hasInterval ? "±" + row.half : "—") + "</text>"
+      );
+      parts.push(
+        '<circle cx="' + x(elo).toFixed(1) + '" cy="' + cy.toFixed(1) +
+          '" r="4" class="chart-dot' +
+          (grouped ? " interval-dot-grouped" : "") +
+          '"><title>' + tip + "</title></circle>"
+      );
     });
 
-    const vline = (v, cls, tip) =>
-      '<line x1="' + x(v).toFixed(1) + '" y1="' + top + '" x2="' + x(v).toFixed(1) +
-      '" y2="' + rowsBottom + '" class="' + cls + '">' +
-      "<title>" + esc(tip) + "</title></line>";
-    const lines =
-      vline(DEFAULT_ELO, "dist-line-start", "старт: 1200") +
-      vline(mean, "dist-line-mean", "среднее: " + mean.toFixed(1));
-
-    const legend =
-      '<line x1="' + left + '" y1="14" x2="' + (left + 28) + '" y2="14" class="dist-line-start"/>' +
-      '<text x="' + (left + 34) + '" y="18" class="chart-tick">старт 1200</text>' +
-      '<line x1="' + (left + 130) + '" y1="14" x2="' + (left + 158) + '" y2="14" class="dist-line-mean"/>' +
-      '<text x="' + (left + 164) + '" y="18" class="chart-tick">среднее ' + Math.round(mean) + "</text>";
-
-    let grid = "";
-    for (const v of [Math.min(...elos), (Math.min(...elos) + Math.max(...elos)) / 2, Math.max(...elos)]) {
-      const gx = x(v);
-      grid +=
-        '<line x1="' + gx.toFixed(1) + '" y1="' + top + '" x2="' + gx.toFixed(1) +
-        '" y2="' + rowsBottom + '" class="chart-grid"/>' +
-        '<text x="' + gx.toFixed(1) + '" y="' + (rowsBottom + 22).toFixed(1) +
-        '" text-anchor="middle" class="chart-tick">' + v.toFixed(0) + "</text>";
-    }
-
     return (
-      '<svg viewBox="0 0 ' + width + " " + height + '" class="chart" role="img" ' +
-      'aria-label="Распределение Elo: ' + n + ' моделей">' +
-      legend + grid + lines + bars + "</svg>"
+      '<svg viewBox="0 0 ' + width + " " + height + '" class="chart chart-rating" ' +
+      'role="img" aria-label="Рейтинг: ' + pageRows.length + " моделей, " +
+      "групп неразличимых мест: " + groups.length + '">' +
+      parts.join("") +
+      "</svg>"
     );
   }
 
   function initStats() {
-    const card = document.getElementById("elo-distribution");
+    const card = document.getElementById("rating");
     const form = panelForm();
     if (!card || !form) return;
     const statsEl = card.querySelector(".stats");
+    let currentPage = 1;
 
     const state = () => ({
       mode: checkedValue(form, "filter", "active") === "all" ? "all" : "active",
@@ -829,37 +982,105 @@
       providerSel: formTags(form, "providers"),
     });
 
-    function render(st) {
+    function poolRows(st) {
       const highlight = st.view === "highlight";
-      const pts = [];
+      const rows = [];
       for (const mid of MODEL_IDS) {
         const statusOk = st.mode === "all" || !isArchived(mid);
         const tagOk = passesTags(mid, st.agentSel, st.providerSel);
-        if (highlight) pts.push({ mid, hit: statusOk && tagOk });
-        else if (statusOk && tagOk) pts.push({ mid, hit: true });
+        if (highlight) rows.push({ mid, hit: statusOk && tagOk });
+        else if (statusOk && tagOk) rows.push({ mid, hit: true });
       }
+      return rows;
+    }
+
+    function navigation(pages) {
+      let wrap = card.querySelector(".analytics-pagination");
+      if (pages <= 1) {
+        if (wrap) setShown(wrap, false);
+        return;
+      }
+      if (!wrap) {
+        wrap = document.createElement("div");
+        wrap.className = "analytics-pagination";
+        card.appendChild(wrap);
+      }
+      setShown(wrap, true);
+      const parts = [
+        currentPage > 1
+          ? '<a class="page-arrow" href="?rank_page=' + (currentPage - 1) +
+            '" rel="prev" aria-label="Назад">←</a>'
+          : '<span class="page-arrow disabled" aria-disabled="true">←</span>',
+      ];
+      for (const item of paginationItems(currentPage, pages)) {
+        if (item === null) parts.push('<span class="ellipsis" aria-hidden="true">...</span>');
+        else if (item === currentPage) {
+          parts.push('<span class="current" aria-current="page">' + item + "</span>");
+        } else {
+          parts.push('<a href="?rank_page=' + item + '">' + item + "</a>");
+        }
+      }
+      parts.push(
+        currentPage < pages
+          ? '<a class="page-arrow" href="?rank_page=' + (currentPage + 1) +
+            '" rel="next" aria-label="Вперёд">→</a>'
+          : '<span class="page-arrow disabled" aria-disabled="true">→</span>'
+      );
+      let nav = wrap.querySelector("nav.pagination");
+      if (!nav) {
+        nav = document.createElement("nav");
+        nav.className = "pagination";
+        nav.setAttribute("aria-label", "Пагинация");
+        wrap.appendChild(nav);
+      }
+      nav.innerHTML = parts.join("\n");
+      nav.querySelectorAll("a").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const match = (link.getAttribute("href") || "").match(/rank_page=(\d+)/);
+          if (!match) return;
+          currentPage = Number(match[1]);
+          render(state());
+          card.scrollIntoView({ block: "start" });
+        });
+      });
+    }
+
+    function render(st) {
+      const highlight = st.view === "highlight";
+      const info = intervalGroups(poolRows(st));
+      const all = info.rows;
+      const determined = all.filter((row) => !row.group).length;
 
       let summary = "моделей: 0";
-      if (pts.length) {
-        const elos = pts.map((p) => modelElo(p.mid));
+      if (all.length) {
+        const elos = all.map((row) => modelElo(row.mid));
         const n = elos.length;
         const mean = elos.reduce((sum, v) => sum + v, 0) / n;
         const below = elos.filter((v) => v < DEFAULT_ELO).length;
         summary =
-          "моделей: " + n + " · ниже 1200: " + below +
-          " · выше/равно 1200: " + (n - below) + " · среднее: " + Math.round(mean);
+          "моделей: " + n + " " + MIDDOT + " ниже 1200: " + below +
+          " " + MIDDOT + " выше/равно 1200: " + (n - below) +
+          " " + MIDDOT + " среднее: " + Math.round(mean) +
+          " " + MIDDOT + " мест определено: " + determined;
         if (highlight) {
-          summary += " · подсветчено: " + pts.filter((p) => p.hit).length;
+          summary += " " + MIDDOT + " подсвечено: " +
+            all.filter((row) => row.hit).length;
         }
       }
       if (statsEl) statsEl.textContent = summary;
 
+      const page = ratingPage(all, info.groups, currentPage);
       const old = card.querySelector("svg.chart, .empty-state");
-      const node = pts.length
-        ? htmlToNode(buildDistribution(pts, highlight))
-        : htmlToNode('<div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>');
+      const node = all.length
+        ? htmlToNode(buildRating(page.rows, all, highlight))
+        : htmlToNode(
+            '<div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>'
+          );
       if (old) old.replaceWith(node);
       else card.appendChild(node);
+
+      navigation(page.pages);
     }
 
     const apply = () => {
@@ -873,13 +1094,18 @@
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
+        ["rank_page", currentPage > 1 ? String(currentPage) : ""],
       ]);
     };
 
     syncFromUrl(form, ["agents", "providers"]);
-    form.addEventListener("change", apply);
+    form.addEventListener("change", () => {
+      currentPage = 1;
+      apply();
+    });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      currentPage = 1;
       apply();
     });
     apply();

@@ -22,6 +22,7 @@ import csv
 import heapq
 import io
 import json
+import math
 import re
 import subprocess
 import sys
@@ -55,14 +56,12 @@ from register_task import (
 
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
-    build_elo_distribution_svg, compute_rank_trends, pagination_items,
+    compute_rank_trends, pagination_items,
     merge_history_feed, history_task_id, plural_ru,
-    interval_groups, build_rating_intervals_svg,
+    interval_groups, rating_page, build_rating_svg, RATING_PAGE_SIZE,
     parse_lines_param, parse_period_param, default_line_ids,
     build_elo_series, build_elo_multiline_svg, ELO_LINE_COLORS,
-    activity_by_day, build_activity_bars_svg,
-    pair_matrix, build_pair_matrix_svg, group_summary,
-    delta_leaders, stale_models, opposition_strength, winner_shares,
+    group_summary, delta_leaders, opposition_strength,
 )
 
 from register_model import parse_existing, format_model
@@ -2319,25 +2318,16 @@ TASK_TEMPLATE = """{% extends "shell.html" %}
 
 STATS_TEMPLATE = """{% extends "shell.html" %}
 {% from "_tag_filter.html" import filter_panel with context %}
+{% from "_pagination.html" import pagination %}
 {% block title %}Аналитика — ELO Benchmark{% endblock %}
 {% block content %}
   <div class="header">
     <h1>Аналитика</h1>
   </div>
 
-  <div class="card" id="rating-intervals">
-    <h2>Интервалы рейтинга</h2>
-    <div class="hint">Точка — Elo модели, полоса — интервал ±400/√игр; модели с перекрывающимися интервалами объединены в группы «место не определено». Блок не зависит от фильтров страницы.</div>
-    {% if intervals_svg %}
-    {{ intervals_svg|safe }}
-    {% else %}
-    <div class="empty-state">Нет активных моделей.</div>
-    {% endif %}
-  </div>
-
-  <div class="card" id="elo-distribution">
-    <h2>Распределение Elo</h2>
-    <div class="stats">{{ summary }}</div>
+  <div class="card" id="rating">
+    <h2>Рейтинг</h2>
+    <div class="stats">{{ rating_summary }}</div>
     {% call filter_panel() %}
       <span class="filter-label">Показывать</span>
       <div class="segmented" role="radiogroup" aria-label="Показывать">
@@ -2345,8 +2335,13 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
         <label><input type="radio" name="filter" value="all" {% if stats_filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
       </div>
     {% endcall %}
-    {% if pool_count %}
-    {{ chart_svg|safe }}
+    {% if rating_svg %}
+    {{ rating_svg|safe }}
+    {% if not read_only() %}
+    <div class="analytics-pagination">
+      {{ pagination(rating_page_num, rating_pages, rating_items, rating_page_url) }}
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">Под выбранный фильтр не попала ни одна модель.</div>
     {% endif %}
@@ -2356,14 +2351,28 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
     <h2>Динамика ELO</h2>
     <div class="hint">Матчи выбранных моделей в порядке записи; пунктирная линия — старт 1200.</div>
     {% if not read_only() %}
-    <form method="GET" action="/stats" class="lines-form">
+    <form method="GET" action="/stats" class="lines-form" data-lines-picker>
       {% for h in lines_hidden %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
       <div class="lines-row">
         <span class="filter-label">Модели</span>
-        <div class="lines-checkboxes">
-          {% for m in lines_models %}
-          <label class="lines-check"><input type="checkbox" name="lines" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span>{{ m.name }}</span></label>
-          {% endfor %}
+        <div class="lines-picker">
+          <div class="lines-chips" data-lines-chips>
+            {% for m in lines_models %}
+            <span class="lines-chip" data-lines-id="{{ m.id }}" data-lines-name="{{ m.name }}">
+              <span class="lines-chip-name">{{ m.name }}</span>
+              <button type="button" class="lines-chip-remove" data-lines-remove="{{ m.id }}" aria-label="Убрать {{ m.name }}">×</button>
+            </span>
+            {% endfor %}
+          </div>
+          <label class="lines-field">
+            <span class="lines-field-label">id моделей через запятую</span>
+            <input type="text" name="lines" value="{{ lines_value }}" placeholder="например: gpt-5, claude-4" data-lines-input autocomplete="off" spellcheck="false">
+          </label>
+          <label class="lines-field">
+            <span class="lines-field-label">Поиск по реестру</span>
+            <input type="search" class="lines-search" placeholder="имя или id модели" data-lines-search autocomplete="off" spellcheck="false" aria-label="Поиск модели по реестру">
+          </label>
+          <ul class="lines-results" data-lines-results hidden></ul>
         </div>
       </div>
       <div class="lines-row">
@@ -2396,26 +2405,6 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
       </span>
       {% endfor %}
     </div>
-    {% endif %}
-  </div>
-
-  <div class="card" id="activity-by-day">
-    <h2>Активность по дням</h2>
-    {% if activity_svg %}
-    <div class="stats">{{ activity_summary }}</div>
-    {{ activity_svg|safe }}
-    {% else %}
-    <div class="empty-state">В истории нет вердиктов.</div>
-    {% endif %}
-  </div>
-
-  <div class="card" id="pair-matrix">
-    <h2>Матрица пар</h2>
-    <div class="hint">Число применённых встреч пары по активному пулу; точка в углу ячейки — рематч.{% if not read_only() %} Клик по ячейке открывает историю пары.{% endif %}</div>
-    {% if matrix_svg %}
-    <div class="matrix-wrap">{{ matrix_svg|safe }}</div>
-    {% else %}
-    <div class="empty-state">Нет применённых встреч.</div>
     {% endif %}
   </div>
 
@@ -2455,7 +2444,7 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="card" id="delta-leaders">
     <h2>Взлёты и падения</h2>
-    {% if delta_7.growth or delta_7.fall or delta_30.growth or delta_30.fall or stale %}
+    {% if delta_7.growth or delta_7.fall or delta_30.growth or delta_30.fall %}
     <div class="hint">Сумма изменений рейтинга по личным матчам моделей активного пула за окно.</div>
     <div class="delta-grid">
       {% for window in (delta_7, delta_30) %}
@@ -2492,18 +2481,6 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
       </div>
       {% endfor %}
     </div>
-    {% if stale %}
-    <h3 class="card-subtitle">Остывшие</h3>
-    <div class="hint">Без личных матчей в последних 30 вердиктах.</div>
-    <ul class="delta-list delta-stale">
-      {% for row in stale %}
-      <li>
-        <a href="/model/{{ row.id }}" class="delta-name">{{ row.name }}</a>
-        <span class="delta-games">игр: {{ row.games }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    {% endif %}
     {% else %}
     <div class="empty-state">Нет применённых матчей.</div>
     {% endif %}
@@ -2531,39 +2508,13 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
         </tbody>
       </table>
     </div>
+    {% if not read_only() %}
+    <div class="analytics-pagination">
+      {{ pagination(opposition_page_num, opposition_pages, opposition_items, opposition_page_url) }}
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">Нет активных моделей.</div>
-    {% endif %}
-  </div>
-
-  <div class="card" id="outcomes">
-    <h2>Исходы</h2>
-    {% if shares.total %}
-    <div class="outcome-rows">
-      {% for row in shares.rows %}
-      <div class="outcome-row">
-        <span class="outcome-label">{{ row.label }}</span>
-        <span class="outcome-bar"><span class="outcome-fill outcome-key-{{ row.key }}" style="width: {{ row.pct }}%"></span></span>
-        <span class="outcome-n">{{ row.n }}</span>
-        <span class="outcome-pct">{{ row.pct }}%</span>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="stats">всего применённых вердиктов: {{ shares.total }}</div>
-    {% if shares.by_task %}
-    <h3 class="card-subtitle">По активным задачам</h3>
-    <ul class="outcome-tasks">
-      {% for group in shares.by_task %}
-      <li>
-        <a href="/task/{{ group.task }}" class="outcome-task-id">{{ group.task }}</a>
-        <span class="outcome-task-total">вердиктов: {{ group.total }}</span>
-        {% for row in group.rows %}<span class="outcome-task-row">{{ row.label }} · {{ row.pct }}% ({{ row.n }})</span>{% endfor %}
-      </li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-    {% else %}
-    <div class="empty-state">Нет применённых вердиктов.</div>
     {% endif %}
   </div>
 {% endblock %}
@@ -3664,6 +3615,19 @@ def model_page(model_id: str):
     )
 
 
+def parse_page_param(raw: str | None) -> int:
+    """Номер страницы из URL: положительное целое, иначе 1.
+
+    Значение выше числа страниц не обрезается здесь — верхняя граница
+    накладывается на реальное число страниц блока.
+    """
+    try:
+        value = int(str(raw or "1").strip())
+    except (TypeError, ValueError):
+        return 1
+    return value if value > 0 else 1
+
+
 @app.route("/stats")
 def stats_page():
     index_data = ensure_index()
@@ -3697,9 +3661,11 @@ def stats_page():
     if not highlight:
         pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
 
-    entries = []
+    # Карточка «Рейтинг»: строки пула с интервалами ±400/√игр и группами
+    # «место не определено». Фильтры страницы действуют и на неё.
+    rating_rows: list[dict] = []
     for m in pool:
-        entry = {
+        row = {
             "id": m.get("id", ""),
             "elo": m.get("elo", DEFAULT_ELO),
             "name": m.get("name", m.get("id", "")),
@@ -3707,42 +3673,41 @@ def stats_page():
             "caption": format_model_caption(m),
         }
         if highlight:
-            entry["hit"] = (
+            row["hit"] = (
                 (stats_filter == "all" or is_model_active(m))
                 and model_passes_tags(m, agent_sel, provider_sel)
             )
-        entries.append(entry)
+        rating_rows.append(row)
 
-    if entries:
-        elos = sorted(e["elo"] for e in entries)
+    rating_info = interval_groups(rating_rows)
+    all_rating_rows = rating_info["rows"]
+    determined = sum(1 for r in all_rating_rows if not r.get("group"))
+
+    if all_rating_rows:
+        elos = [int(r["elo"]) for r in all_rating_rows]
         n = len(elos)
         mean = sum(elos) / n
         below = sum(1 for v in elos if v < DEFAULT_ELO)
-        summary = (
+        rating_summary = (
             f"моделей: {n} · ниже 1200: {below} · "
             f"выше/равно 1200: {n - below} · "
-            f"среднее: {mean:.0f}"
+            f"среднее: {mean:.0f} · "
+            f"мест определено: {determined}"
         )
         if highlight:
-            summary += f" · подсветчено: {sum(1 for e in entries if e['hit'])}"
+            rating_summary += (
+                f" · подсвечено: "
+                f"{sum(1 for r in all_rating_rows if r.get('hit'))}"
+            )
     else:
-        summary = "моделей: 0"
+        rating_summary = "моделей: 0"
 
-    # A1 «Интервалы рейтинга»: всегда по активному пулу, фильтры не влияют.
-    active_rows = [
-        {
-            "id": mid,
-            "name": info.get("name", mid),
-            "elo": info.get("elo", DEFAULT_ELO),
-            "games": info.get("games", 0),
-            "caption": format_model_caption(info),
-        }
-        for mid, info in models.items()
-        if is_model_active(info)
-    ]
-    intervals = interval_groups(active_rows)
+    rank = rating_page(
+        all_rating_rows, rating_info["groups"],
+        parse_page_param(request.args.get("rank_page")),
+    )
 
-    # A2 «Динамика ELO»: выбор из URL, иначе топ-5 активных; период 30/90/all.
+    # «Динамика ELO»: выбор из URL, иначе топ-5 активных; период 30/90/all.
     lines_raw = ",".join(request.args.getlist("lines"))
     selected = parse_lines_param(lines_raw, models) or default_line_ids(models)
     period = parse_period_param(request.args.get("period"))
@@ -3766,103 +3731,133 @@ def stats_page():
             "elo": info.get("elo", DEFAULT_ELO),
         })
 
-    # A3 «Активность по дням»: дни от первого до последнего в истории.
-    activity = activity_by_day(index_data.get("elo_history", []))
-    activity_summary = ""
-    if activity:
-        activity_summary = (
-            f"дней: {len(activity)} · "
-            f"вердиктов: {sum(d['count'] for d in activity)} · "
-            f"максимум: {max(d['count'] for d in activity)}"
-        )
-
-    # A4 «Матрица пар»: активный пул по ELO, встречи из memo pair_scan.
-    active_ids = [row["id"] for row in intervals["rows"]]
-    matrix = pair_matrix(
-        active_ids,
-        {key: st.get("games", 0) for key, st in get_pair_stats().items()},
-    )
-    model_names = {mid: info.get("name", mid) for mid, info in models.items()}
-
-    # A5 «Агенты и компании»: сводки по активному пулу.
+    # «Агенты и компании»: сводки по активному пулу.
     active_models = {
         mid: info for mid, info in models.items() if is_model_active(info)
     }
 
-    # A6 «Взлёты и падения»: окна 7 и 30 дней, «остывшие» — последние 30 вердиктов.
+    # «Взлёты и падения»: окна 7 и 30 дней.
     elo_history = index_data.get("elo_history", [])
     delta_7 = delta_leaders(elo_history, active_models, 7)
     delta_30 = delta_leaders(elo_history, active_models, 30)
-    stale = stale_models(elo_history, active_models)
 
-    # A7 «Сила оппозиции»: активный пул в порядке рейтинга, апсеты против топ-10.
-    opposition = opposition_strength(elo_history, active_ids, models)
-
-    # A8 «Исходы»: разбивка по таскам только при двух и более активных.
-    active_task_ids = memo_active_tasks()
-    shares = winner_shares(
-        elo_history, active_task_ids if len(active_task_ids) >= 2 else None,
+    # «Сила оппозиции»: активный пул в порядке рейтинга, апсеты против топ-10.
+    active_ids = [
+        mid for mid, _ in sorted(
+            active_models.items(),
+            key=lambda pair: (
+                -int(pair[1].get("elo", DEFAULT_ELO)), pair[0],
+            ),
+        )
+    ]
+    opposition_all = opposition_strength(elo_history, active_ids, models)
+    opposition_pages = max(1, math.ceil(len(opposition_all) / RATING_PAGE_SIZE))
+    opposition_page = max(
+        1, min(parse_page_param(request.args.get("opp_page")), opposition_pages),
     )
+    opposition_start = (opposition_page - 1) * RATING_PAGE_SIZE
+    opposition = opposition_all[
+        opposition_start:opposition_start + RATING_PAGE_SIZE
+    ]
 
-    selected_set = set(selected)
-
-    def _stats_link(lines_ids: list[str], period_out: str) -> str:
+    def _stats_url(**overrides) -> str:
+        """Адрес «Аналитики» с сохранением фильтров, линий и страниц блоков."""
         args: dict = {}
         for name in ("filter", "agents", "providers", "view", "chips"):
             values = request.args.getlist(name)
             if values:
                 args[name] = values
-        args["lines"] = ",".join(lines_ids)
-        args["period"] = period_out
+        for name in ("lines", "period", "rank_page", "opp_page"):
+            value = request.args.get(name)
+            if value:
+                args[name] = value
+        for name, value in overrides.items():
+            if value is None:
+                args.pop(name, None)
+            else:
+                args[name] = value
         return url_for("stats_page", **args)
 
+    def _block_page_url(param: str, page: int) -> str:
+        return _stats_url(**{param: page if page > 1 else None})
+
+    lines_hidden = [{"name": "filter", "value": stats_filter}]
+    lines_hidden += filter_ctx["filter_hidden_fields"]
+    for name in ("rank_page", "opp_page"):
+        value = request.args.get(name)
+        if value:
+            lines_hidden.append({"name": name, "value": value})
+
     return STATS_TEMPLATE.render(
-        summary=summary,
+        rating_summary=rating_summary,
         stats_filter=stats_filter,
-        pool_count=len(entries),
-        chart_svg=build_elo_distribution_svg(entries, highlight=highlight),
-        intervals_svg=build_rating_intervals_svg(intervals["rows"]),
+        rating_svg=build_rating_svg(
+            rank["rows"], all_rating_rows, highlight=highlight,
+        ),
+        rating_page_num=rank["page"],
+        rating_pages=rank["pages"],
+        rating_items=pagination_items(rank["page"], rank["pages"]),
+        rating_page_url=lambda page: _block_page_url("rank_page", page),
         lines_models=[
-            {
-                "id": mid,
-                "name": info.get("name", mid),
-                "checked": mid in selected_set,
-            }
-            for mid, info in sorted(
-                models.items(),
-                key=lambda pair: (
-                    -int(pair[1].get("elo", DEFAULT_ELO)), pair[0],
-                ),
-            )
-            if is_model_active(info)
+            {"id": mid, "name": models.get(mid, {}).get("name", mid)}
+            for mid in selected
         ],
-        lines_hidden=[{"name": "filter", "value": stats_filter}]
-        + filter_ctx["filter_hidden_fields"],
+        lines_value=",".join(selected),
+        lines_hidden=lines_hidden,
         period_value=period_value,
-        top5_url=_stats_link(default_line_ids(models, 5), period_value),
-        top10_url=_stats_link(default_line_ids(models, 10), period_value),
+        top5_url=_stats_url(
+            lines=",".join(default_line_ids(models, 5)), period=period_value,
+        ),
+        top10_url=_stats_url(
+            lines=",".join(default_line_ids(models, 10)), period=period_value,
+        ),
         dynamics_svg=build_elo_multiline_svg(
             line_series, series_data["x_count"], series_data["dates"],
         ),
         line_legend=line_legend,
-        activity_summary=activity_summary,
-        activity_svg=build_activity_bars_svg(activity, links=not read_only()),
-        matrix_svg=build_pair_matrix_svg(
-            matrix, model_names, links=not read_only(),
-        ),
         agents_summary=group_summary(active_models, "agent"),
         providers_summary=group_summary(active_models, "provider"),
         delta_7=delta_7,
         delta_30=delta_30,
-        stale=stale,
         opposition=opposition,
-        shares=shares,
+        opposition_page_num=opposition_page,
+        opposition_pages=opposition_pages,
+        opposition_items=pagination_items(opposition_page, opposition_pages),
+        opposition_page_url=lambda page: _block_page_url("opp_page", page),
         **filter_ctx,
         crumbs=[
             {"label": "Рейтинг", "href": "/"},
             {"label": "Аналитика"},
         ],
     )
+
+
+@app.route("/stats/models")
+def stats_models():
+    """Поиск моделей реестра для выбора линий «Динамики ELO».
+
+    Отдаёт не более 20 совпадений по имени или id среди активных моделей:
+    реестр не перечисляется на странице целиком — выбор идёт через поиск.
+    """
+    query = request.args.get("q", "").strip().casefold()
+    limit = 20
+    index_data = ensure_index()
+    models = index_data.get("models", {})
+    found: list[dict] = []
+    for mid, info in models.items():
+        if info.get("status", "active") != "active":
+            continue
+        name = str(info.get("name", mid))
+        if query and query not in name.casefold() and query not in mid.casefold():
+            continue
+        found.append({
+            "id": mid,
+            "name": name,
+            "elo": int(info.get("elo", DEFAULT_ELO)),
+        })
+    found.sort(key=lambda row: (-row["elo"], row["id"]))
+    payload = json.dumps(found[:limit], ensure_ascii=False, separators=(",", ":"))
+    return Response(payload, mimetype="application/json; charset=utf-8")
 
 
 @app.route("/")
