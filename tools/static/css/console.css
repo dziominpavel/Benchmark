@@ -1328,27 +1328,6 @@ tr[data-search][hidden],
 
 .settings-nav a:hover { color: var(--text); background: var(--surface); }
 
-/* «О консоли»: версия и дата-время сборки запущенного кода */
-.about-meta {
-  margin: 0;
-  max-width: 460px;
-}
-
-.about-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-.about-row:last-child { border-bottom: none; }
-
-.about-row dt { color: var(--muted); }
-
-.about-row dd { margin: 0; font-weight: 600; }
-
 .card[id] { scroll-margin-top: 84px; }
 
 .tasks-table input[type="checkbox"],
