@@ -2369,7 +2369,7 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="card" id="elo-dynamics">
     <h2>Динамика ELO</h2>
-    <div class="hint">Матчи выбранных моделей в порядке записи; пунктирная линия — старт 1200.</div>
+    <div class="hint">Матчи выбранных моделей по дням: точка — ELO после последнего матча дня; пунктирная линия — старт 1200.</div>
     {% if not read_only() %}
     <form method="GET" action="/stats" class="lines-form" data-lines-picker data-lines-applied="{{ lines_applied }}">
       {% for h in lines_hidden %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
@@ -3770,6 +3770,7 @@ def stats_page():
             "name": info.get("name", mid),
             "color": ELO_LINE_COLORS[index % len(ELO_LINE_COLORS)],
             "points": series_data["series"].get(mid, []),
+            "matches": series_data["match_counts"].get(mid, 0),
         }
         line_series.append(item)
         line_legend.append({
@@ -3881,7 +3882,7 @@ def stats_page():
         lines_preset_top5=_composition(top5_ids),
         lines_preset_top10=_composition(top10_ids),
         dynamics_svg=build_elo_multiline_svg(
-            line_series, series_data["x_count"], series_data["dates"],
+            line_series, series_data["window"], series_data["match_count"],
         ),
         dynamics_empty=(
             "Не выбрано ни одной модели: список не разобран."

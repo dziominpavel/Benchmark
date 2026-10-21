@@ -2243,12 +2243,15 @@ def test_wave6_stats_lines_picker():
         # Пресеты и период на месте
         assert 'name="period" value="90" checked' in html
         assert "lines-presets" in html and "/stats?lines=" in html
-        assert 'aria-label="Динамика ELO: линий 2, матчей 1"' in html
+        assert 'aria-label="Динамика ELO: линий 2, матчей 1, дней 1"' in html
+        assert "Матчи выбранных моделей по дням" in html
+        assert "в порядке записи" not in html
+        assert "02.01.2026" in html
 
         # Выбор из URL — тот же результат, что и чипы
         one = client.get("/stats?lines=beta").get_data(as_text=True)
         assert 'name="lines" value="Beta"' in one
-        assert 'aria-label="Динамика ELO: линий 1, матчей 1"' in one
+        assert 'aria-label="Динамика ELO: линий 1, матчей 1, дней 1"' in one
         legend_one = one.split('class="line-legend"', 1)[1].split("</div>", 1)[0]
         assert legend_one.count('class="line-legend-item') == 1
         assert "Beta" in legend_one and "Alpha" not in legend_one
@@ -2296,6 +2299,60 @@ def test_wave6_stats_lines_picker():
         assert "Нет матчей выбранных моделей в периоде" in empty
         assert "line-legend" not in empty, "легенда без выбранных линий"
     print("wave6 stats lines picker: OK")
+
+
+def test_stats_elo_calendar_axis():
+    """A2: календарная ось, дневная агрегация и стабильное окно."""
+    second = (
+        '{"version": 1, "seq": 2, "task": "T-001", "matchup": "T-001/002", '
+        '"model_a": "alpha", "model_b": "beta", "model_a_id": "alpha", '
+        '"model_b_id": "beta", "winner": "b", "date": "2026-01-04", '
+        '"recorded_at": "2026-01-04T10:00:00+03:00", "elo": {}}\n'
+    )
+    third = (
+        '{"version": 1, "seq": 3, "task": "T-001", "matchup": "T-001/003", '
+        '"model_a": "alpha", "model_b": "beta", "model_a_id": "alpha", '
+        '"model_b_id": "beta", "winner": "a", "date": "2026-01-04", '
+        '"recorded_at": "2026-01-04T11:00:00+03:00", "elo": {}}\n'
+    )
+    with _temp_storage() as paths:
+        _write(paths["journal"], JOURNAL_LINE + second + third)
+        data_cache.clear()
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        page = client.get("/stats?lines=alpha&period=all").get_data(as_text=True)
+        axis = re.findall(
+            r'<text x="[^"]+" y="252" text-anchor="[^"]+" '
+            r'class="chart-tick">([^<]+)</text>',
+            page,
+        )
+        assert axis == ["02.01.2026", "03.01.2026", "04.01.2026"], (
+            "ось должна быть календарной, с промежуточной датой"
+        )
+        first_line = re.search(
+            r'<polyline points="([^"]+)" class="chart-line-multi"', page,
+        )
+        assert first_line and len(first_line.group(1).split()) == 2, (
+            "два матча 04.01 должны дать одну дневную точку"
+        )
+        assert "Alpha: 3 матча, 2 дня, последний матч 04.01.2026" in page, (
+            "подсказка линии не показывает матчи, дни и дату"
+        )
+
+        # Окно не зависит от выбранной линии; period=30 короче истории.
+        for url in (
+            "/stats?lines=beta&period=all",
+            "/stats?lines=alpha&period=30",
+        ):
+            other = client.get(url).get_data(as_text=True)
+            other_axis = re.findall(
+                r'<text x="[^"]+" y="252" text-anchor="[^"]+" '
+                r'class="chart-tick">([^<]+)</text>',
+                other,
+            )
+            assert other_axis == axis, f"окно сдвинулось: {url}"
+    print("A2 stats calendar axis: OK")
 
 
 def test_stats_lines_unresolved_empty_state():
@@ -2981,6 +3038,7 @@ if __name__ == "__main__":
     test_wave6_stats_rating()
     test_wave6_stats_pagination()
     test_wave6_stats_lines_picker()
+    test_stats_elo_calendar_axis()
     test_stats_lines_unresolved_empty_state()
     test_stats_lines_picker_rewrite()
     test_stats_lines_canonical_url()

@@ -620,6 +620,13 @@ def test_export_stats_analytics():
             assert 'href="../model/alpha/"' in stats
             assert "line-legend" in stats and "нет матчей в периоде" not in stats
 
+            # «Динамика ELO»: календарная ось и дневная подсказка
+            assert "Матчи выбранных моделей по дням" in stats
+            assert "в порядке записи" not in stats
+            assert 'aria-label="Динамика ELO: линий 2, матчей 1, дней 1"' in stats
+            assert "02.01.2026" in stats
+            assert 'class="chart-line-hit"' in stats
+
             # Live-контролы выбора линий и периода в слепке не рендерятся
             assert "lines-form" not in stats
             assert 'name="lines"' not in stats and 'name="period"' not in stats

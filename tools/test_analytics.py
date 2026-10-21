@@ -340,7 +340,7 @@ def _series_event(seq: int, day: str, a: str, b: str,
 
 
 def test_build_elo_series():
-    """A2: окно периода отсчитывается от последней даты истории."""
+    """A2: календарное окно и одна дневная точка на модель."""
     base = date(2025, 10, 1)
     history = [
         _series_event(1, base.isoformat(), "a", "b", 1210, 1190),
@@ -348,56 +348,166 @@ def test_build_elo_series():
         _series_event(3, (base + timedelta(days=153)).isoformat(), "a", "b", 1225, 1195),
         _series_event(4, (base + timedelta(days=163)).isoformat(), "b", "c", 1200, 1205),
     ]
-    # Последняя дата — 2026-03-13; period=30 → 2026-02-12+
+    # Последняя дата — 2026-03-13; period=30 → 2026-02-12..2026-03-13.
     result = rh.build_elo_series(history, ["a", "b"], 30)
-    assert result["x_count"] == 2, f"в окне 30 дней не 2 матча: {result['x_count']}"
-    assert result["series"]["a"] == [(0, 1225)], (
-        "a играла только в матче 3 окна"
+    assert result["window"] == ("2026-02-12", "2026-03-13")
+    assert result["day_count"] == 30
+    assert result["match_count"] == 2
+    assert result["match_counts"] == {"a": 1, "b": 2}
+    assert result["series"]["a"] == [(19, 1225)], (
+        "a играла только в матче 3 окна; x — день календаря"
     )
-    assert result["series"]["b"] == [(0, 1195), (1, 1200)]
-    assert result["dates"] == ("2026-03-03", "2026-03-13")
+    assert result["series"]["b"] == [(19, 1195), (29, 1200)]
 
-    # period=90 → без матча 2025-10-01; шкала — только матчи выборки
-    result90 = rh.build_elo_series(history, ["a"], 90)
-    assert result90["x_count"] == 2
-    assert result90["dates"] == ("2026-01-02", "2026-03-03")
+    # period=90 → окно от 2025-12-14, а не от первого матча выборки
+    result90 = rh.build_elo_series(history, ["a", "b"], 90)
+    assert result90["window"] == ("2025-12-14", "2026-03-13")
+    assert result90["day_count"] == 90
+    assert result90["match_count"] == 3
+    assert result90["match_counts"] == {"a": 2, "b": 2}
+    assert result90["series"]["a"] == [(19, 1230), (79, 1225)]
+    assert result90["series"]["b"] == [(79, 1195), (89, 1200)]
 
-    # all → вся история
+    # all → вся история; смена выбора не двигает окно
     result_all = rh.build_elo_series(history, ["a"], None)
-    assert result_all["x_count"] == 3
-    assert result_all["dates"] == ("2025-10-01", "2026-03-03")
+    assert result_all["window"] == ("2025-10-01", "2026-03-13")
+    assert result_all["day_count"] == 164
+    assert result_all["match_counts"] == {"a": 3}
+    assert result_all["series"]["a"] == [(0, 1210), (93, 1230), (153, 1225)]
+    only_a = rh.build_elo_series(history, ["a"], 30)
+    both = rh.build_elo_series(history, ["a", "b"], 30)
+    assert only_a["window"] == both["window"]
+    assert only_a["day_count"] == both["day_count"]
+    assert set(only_a["series"]) == {"a"} and set(both["series"]) == {"a", "b"}
 
-    # Модель без матчей в окне — пустая линия, но выбор сохраняется
+    # Одна точка в день: побеждает последний матч дня по seq.
+    same_day = [
+        _series_event(1, "2026-01-05", "a", "b", 1210, 1190),
+        _series_event(2, "2026-01-05", "a", "c", 1220, 1180),
+        _series_event(3, "2026-01-07", "a", "b", 1230, 1170),
+    ]
+    daily = rh.build_elo_series(same_day, ["a", "b"], None)
+    assert daily["window"] == ("2026-01-05", "2026-01-07")
+    assert daily["day_count"] == 3
+    assert daily["series"]["a"] == [(0, 1220), (2, 1230)]
+    assert daily["series"]["b"] == [(0, 1190), (2, 1170)]
+    assert daily["match_counts"] == {"a": 3, "b": 2}
+    assert daily["match_count"] == 3
+
+    # История короче периода: окно начинается с первой даты истории.
+    short = rh.build_elo_series(
+        [_series_event(1, "2026-01-05", "a", "b", 1210, 1190)],
+        ["a"], 90,
+    )
+    assert short["window"] == ("2026-01-05", "2026-01-05")
+    assert short["day_count"] == 1
+
+    # Модель без матчей в окне — пустая линия, но окно остаётся общим.
     empty = rh.build_elo_series(history, ["d"], 30)
-    assert empty["x_count"] == 0 and empty["series"]["d"] == []
-    assert rh.build_elo_series([], ["a"], 90)["x_count"] == 0
+    assert empty["window"] == ("2026-02-12", "2026-03-13")
+    assert empty["day_count"] == 30
+    assert empty["series"]["d"] == []
+    assert empty["match_counts"]["d"] == 0
+    assert empty["match_count"] == 0
+
+    # Невалидная дата не создаёт точку и не сдвигает окно.
+    bad_date = rh.build_elo_series(
+        history + [{
+            "seq": 5, "date": "not-a-date",
+            "model_a_id": "a", "model_b_id": "b",
+            "elo_a": {"after": 9999}, "elo_b": {"after": 1},
+        }],
+        ["a", "b"], None,
+    )
+    assert bad_date["window"] == result_all["window"]
+    assert bad_date["match_count"] == 4
+    assert bad_date["series"]["a"][-1] == (153, 1225)
+
+    # Пустая история.
+    empty_history = rh.build_elo_series([], ["a"], 90)
+    assert empty_history["window"] == ()
+    assert empty_history["day_count"] == 0
+    assert empty_history["series"] == {"a": []}
+    assert empty_history["match_counts"] == {"a": 0}
+    assert empty_history["match_count"] == 0
     print("A2 elo series: OK")
 
 
+def _axis_labels(svg: str) -> list[str]:
+    """Подписи дат на нижней оси SVG (y = height - 8)."""
+    return re.findall(
+        r'<text x="[^"]+" y="252" text-anchor="[^"]+" '
+        r'class="chart-tick">([^<]+)</text>',
+        svg,
+    )
+
+
 def test_elo_multiline_svg():
-    """A2: линии окрашены, 1200 — пунктиром, даты подписаны, пусто → ""."""
+    """A2: календарная ось, дневные подсказки, пусто → ""."""
     series = [
-        {"id": "a", "name": "A", "points": [(0, 1210), (1, 1230)]},
-        {"id": "b", "name": "B", "points": [(1, 1180)]},
+        {"id": "a", "name": "A", "points": [(0, 1210), (10, 1230)],
+         "matches": 2},
+        {"id": "b", "name": "B", "points": [(20, 1180)], "matches": 1},
     ]
     svg = rh.build_elo_multiline_svg(
-        series, 2, ("2026-01-02", "2026-02-01"),
+        series, ("2026-01-02", "2026-02-01"), match_count=3,
     )
     assert 'class="chart-line-multi"' in svg and 'stroke="#3b82f6"' in svg
     assert 'stroke="#ef4444"' in svg, "вторая линия без своего цвета"
     assert "chart-baseline" in svg, "нет опорной линии 1200"
-    assert "02.01.2026" in svg and "01.02.2026" in svg
-    assert "Динамика ELO: линий 2, матчей 2" in svg
+    assert _axis_labels(svg) == [
+        "02.01.2026", "10.01.2026", "17.01.2026",
+        "24.01.2026", "01.02.2026",
+    ], "на оси не пять равномерных дат"
+
+    first_line = re.search(
+        r'<polyline points="([^"]+)" class="chart-line-multi"', svg,
+    )
+    assert first_line, "нет видимой линии"
+    coords = first_line.group(1).split()
+    assert coords[0].split(",")[0] == "52.0", "день 0 не у левого края"
+    assert coords[1].split(",")[0] == "316.0", (
+        "день 10 должен стоять на 10/30 ширины, а не на позиции 1 из 2"
+    )
+    assert "Динамика ELO: линий 2, матчей 3, дней 31" in svg
+    assert "A: 2 матча, 2 дня, последний матч 12.01.2026, Elo 1230" in svg
+    assert "B: 1 матч, 1 день, последний матч 22.01.2026, Elo 1180" in svg
     assert 'href="/model/a"' in svg and 'href="/model/b"' in svg, "линия без ссылки"
     assert svg.count('class="chart-line-hit"') == 2, "нет хит-слоя на линии"
+
+    # Короткие окна: тики не дублируются.
+    two_days = rh.build_elo_multiline_svg(
+        [{"id": "a", "name": "A", "points": [(0, 1210), (1, 1230)],
+          "matches": 2}],
+        ("2026-01-02", "2026-01-03"),
+    )
+    assert _axis_labels(two_days) == ["02.01.2026", "03.01.2026"]
+    one_day = rh.build_elo_multiline_svg(
+        [{"id": "a", "name": "A", "points": [(0, 1210)], "matches": 1}],
+        ("2026-01-02", "2026-01-02"),
+    )
+    assert _axis_labels(one_day) == ["02.01.2026"]
+    assert 'x="448.0"' in one_day and 'text-anchor="middle"' in one_day, (
+        "единственный день должен быть по центру"
+    )
+
     no_link = rh.build_elo_multiline_svg(
-        [{"name": "A", "points": [(0, 1210), (1, 1230)]}], 2, (),
+        [{"name": "A", "points": [(0, 1210), (1, 1230)]}],
+        ("2026-01-02", "2026-01-03"),
     )
     assert "/model/" not in no_link, "серия без id не должна вести на профиль"
-    assert rh.build_elo_multiline_svg([], 0, ()) == ""
+    assert rh.build_elo_multiline_svg([], ("2026-01-02", "2026-01-03")) == ""
     assert rh.build_elo_multiline_svg(
-        [{"id": "a", "name": "A", "points": []}], 3, (),
+        [{"id": "a", "name": "A", "points": []}],
+        ("2026-01-02", "2026-01-03"),
     ) == "", "нет матчей — пустое состояние"
+    assert rh.build_elo_multiline_svg(
+        [{"id": "a", "name": "A", "points": [(0, 1210)]}], (),
+    ) == "", "пустое окно — пустое состояние"
+    assert rh.build_elo_multiline_svg(
+        [{"id": "a", "name": "A", "points": [(99, 1210)]}],
+        ("2026-01-02", "2026-01-03"),
+    ) == "", "точка вне окна не должна рисоваться"
     print("A2 multiline svg: OK")
 
 

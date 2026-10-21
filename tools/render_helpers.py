@@ -1369,71 +1369,119 @@ def day_of(item: dict) -> str:
 
 def build_elo_series(elo_history: list[dict], selected: list[str],
                      days: int | None) -> dict:
-    """Линии A2: точки (позиция матча, ELO после) по выбранным моделям.
+    """Линии A2: дневные точки (индекс дня, ELO после) по выбранным моделям.
 
-    Шкала X — общий упорядоченный список матчей выбранных моделей
-    (по `seq`). Окно периода `days` отсчитывается от последней даты
-    истории (включительно); `days=None` — вся история. Возвращает
-    {"x_count", "dates", "series": {mid: [(x, elo)]}}, "dates" — дни
-    первого и последнего матча выборки.
+    Ось X — календарные дни окна периода. Окно отсчитывается от максимальной
+    валидной даты истории (включительно) и не зависит от `selected`:
+    `days=30/90` — последние N дней, но не раньше первой даты истории;
+    `days=None` — вся история. На модель и день — одна точка: ELO после
+    последнего матча дня по `seq` (с непустым `after`). Матчи без валидной
+    даты пропускаются. Возвращает {"window", "day_count", "series",
+    "match_counts", "match_count"}.
     """
-    ordered = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
-    cutoff = ""
-    if days is not None and ordered:
-        last_day = next(
-            (day_of(e) for e in reversed(ordered) if day_of(e)), "",
-        )
-        if last_day:
-            try:
-                cutoff = (
-                    date.fromisoformat(last_day) - timedelta(days=days - 1)
-                ).isoformat()
-            except ValueError:
-                cutoff = ""
-
     series: dict[str, list[tuple[int, int]]] = {mid: [] for mid in selected}
-    dates: list[str] = []
-    x_count = 0
+    match_counts = {mid: 0 for mid in selected}
+    ordered = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
+
+    dated: list[tuple[dict, date]] = []
     for e in ordered:
+        raw_day = day_of(e)
+        try:
+            day = date.fromisoformat(raw_day[:10])
+        except (TypeError, ValueError):
+            continue
+        dated.append((e, day))
+    if not dated:
+        return {
+            "window": (),
+            "day_count": 0,
+            "series": series,
+            "match_counts": match_counts,
+            "match_count": 0,
+        }
+
+    min_day = min(day for _, day in dated)
+    max_day = max(day for _, day in dated)
+    start = min_day
+    if days is not None:
+        start = max(min_day, max_day - timedelta(days=days - 1))
+    day_count = (max_day - start).days + 1
+
+    daily: dict[str, dict[date, int]] = {mid: {} for mid in selected}
+    match_count = 0
+    for e, day in dated:
+        if day < start or day > max_day:
+            continue
         a_id = str(e.get("model_a_id") or "")
         b_id = str(e.get("model_b_id") or "")
         if a_id not in series and b_id not in series:
             continue
-        day = day_of(e)
-        if days is not None:
-            if not cutoff or not day or day < cutoff:
-                continue
-        for side, elo_key in (("model_a_id", "elo_a"), ("model_b_id", "elo_b")):
+        match_count += 1
+        for side, elo_key in (
+            ("model_a_id", "elo_a"), ("model_b_id", "elo_b"),
+        ):
             mid = str(e.get(side) or "")
             if mid not in series:
                 continue
+            match_counts[mid] += 1
             after = (e.get(elo_key) or {}).get("after")
-            if after is None:
-                continue
-            series[mid].append((x_count, int(after)))
-        dates.append(day)
-        x_count += 1
+            if after is not None:
+                daily[mid][day] = int(after)
 
-    visible_days = [d for d in dates if d]
-    span = (visible_days[0], visible_days[-1]) if visible_days else ()
-    return {"x_count": x_count, "dates": span, "series": series}
+    for mid, points_by_day in daily.items():
+        series[mid] = sorted(
+            ((day - start).days, after)
+            for day, after in points_by_day.items()
+        )
+    return {
+        "window": (start.isoformat(), max_day.isoformat()),
+        "day_count": day_count,
+        "series": series,
+        "match_counts": match_counts,
+        "match_count": match_count,
+    }
 
 
-def build_elo_multiline_svg(series: list[dict], x_count: int,
-                            dates: tuple[str, str] | None = None,
-                            colors: tuple[str, ...] = ELO_LINE_COLORS,
-                            width: int = 860, height: int = 260) -> str:
-    """SVG блока A2: ломаные выбранных моделей на общей шкале матчей.
+def build_elo_multiline_svg(
+    series: list[dict],
+    window: tuple[str, str] | None,
+    match_count: int = 0,
+    colors: tuple[str, ...] = ELO_LINE_COLORS,
+    width: int = 860,
+    height: int = 260,
+) -> str:
+    """SVG блока A2: дневные ломаные выбранных моделей.
 
-    series — [{"id", "name", "points": [(x, elo)]}] в порядке легенды;
-    цвета берутся по индексу серии (палитра ELO_LINE_COLORS). Ось Y
-    включает опорную линию 1200; подписи дат — первая и последняя.
+    series — [{"id", "name", "points": [(day_index, elo)], "matches": n}]
+    в порядке легенды; `window` — (первый день, последний день) окна.
+    Ось X календарная: `day_index` — номер дня от начала окна. Ось Y
+    включает опорную линию 1200; на оси до пяти равномерных дат.
     Серия с непустым id кликабельна: линия оборачивается ссылкой
     на `/model/<id>` (невидимый хит-слой stroke-width 12).
-    Нет матчей у всех серий → "" (шаблон показывает пустое состояние).
+    Нет точек у всех серий или пустое окно → "" (шаблон показывает
+    пустое состояние).
     """
-    drawn = [s for s in series if s.get("points")]
-    if x_count <= 0 or not drawn:
+    if not window or len(window) != 2:
+        return ""
+    try:
+        start = date.fromisoformat(str(window[0])[:10])
+        end = date.fromisoformat(str(window[1])[:10])
+    except (TypeError, ValueError):
+        return ""
+    if end < start:
+        return ""
+    day_count = (end - start).days + 1
+
+    drawn: list[dict] = []
+    for item in series:
+        points = sorted(
+            (int(px), int(pv))
+            for px, pv in (item.get("points") or [])
+            if 0 <= int(px) < day_count
+        )
+        if points:
+            drawn.append({**item, "points": points})
+    if not drawn:
         return ""
 
     left, right, top, bottom = 52, 16, 18, 30
@@ -1449,9 +1497,9 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
     lo, hi = lo - pad, hi + pad
 
     def x(i: int) -> float:
-        if x_count <= 1:
+        if day_count <= 1:
             return left + plot_w / 2
-        return left + plot_w * i / (x_count - 1)
+        return left + plot_w * i / (day_count - 1)
 
     def y(value: float) -> float:
         return top + plot_h * (1 - (value - lo) / (hi - lo))
@@ -1473,20 +1521,37 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
         f"<title>старт: {DEFAULT_ELO}</title></line>"
     )
 
+    # До пяти равномерных дат: начало, четверти, конец. Для короткого
+    # окна дубликаты индексов отбрасываются.
+    if day_count <= 1:
+        tick_indexes = [0]
+    else:
+        tick_indexes = sorted({
+            round((day_count - 1) * step / 4) for step in range(5)
+        })
     axis = ""
-    if dates:
-        d_first = _fmt_axis_date(dates[0])
-        d_last = _fmt_axis_date(dates[1])
-        if d_first:
-            axis += (
-                f'<text x="{left}" y="{height - 8}" text-anchor="start" '
-                f'class="chart-tick">{html.escape(d_first)}</text>'
-            )
-        if d_last:
-            axis += (
-                f'<text x="{width - right}" y="{height - 8}" text-anchor="end" '
-                f'class="chart-tick">{html.escape(d_last)}</text>'
-            )
+    for idx in tick_indexes:
+        tick_day = start + timedelta(days=idx)
+        label = _fmt_axis_date(tick_day.isoformat())
+        if day_count == 1:
+            anchor = "middle"
+        elif idx == 0:
+            anchor = "start"
+        elif idx == day_count - 1:
+            anchor = "end"
+        else:
+            anchor = "middle"
+        axis += (
+            f'<text x="{x(idx):.1f}" y="{height - 8}" '
+            f'text-anchor="{anchor}" class="chart-tick">'
+            f"{html.escape(label)}</text>"
+        )
+
+    total_matches = int(match_count or 0)
+    if not total_matches:
+        total_matches = sum(
+            int(s.get("matches", len(s["points"]))) for s in drawn
+        )
 
     lines = ""
     for index, item in enumerate(drawn):
@@ -1494,25 +1559,30 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
         points = item["points"]
         mid = str(item.get("id", ""))
         name = html.escape(str(item.get("name", item.get("id", ""))))
+        matches = int(item.get("matches", len(points)))
+        last_day = start + timedelta(days=points[-1][0])
+        last_date = _fmt_axis_date(last_day.isoformat())
+        title = (
+            f"{name}: {matches} "
+            f"{plural_ru(matches, 'матч', 'матча', 'матчей')}, "
+            f"{len(points)} {plural_ru(len(points), 'день', 'дня', 'дней')}, "
+            f"последний матч {last_date}, Elo {points[-1][1]}"
+        )
         poly = " ".join(f"{x(px):.1f},{y(pv):.1f}" for px, pv in points)
         end_x, end_y = x(points[-1][0]), y(points[-1][1])
         visible = (
             f'<polyline points="{poly}" class="chart-line-multi" fill="none" '
-            f'stroke="{color}">'
-            f"<title>{name}: {len(points)} матчей, Elo {points[-1][1]}</title>"
-            f"</polyline>"
+            f'stroke="{color}"><title>{title}</title></polyline>'
         )
         end_dot = (
             f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="3.5" '
-            f'fill="{color}"><title>{name}: текущий Elo {points[-1][1]}</title>'
-            f"</circle>"
+            f'fill="{color}"><title>{title}</title></circle>'
         )
         if mid:
             hit = (
                 f'<polyline points="{poly}" class="chart-line-hit" fill="none" '
                 f'stroke-linecap="round">'
-                f"<title>{name}: {len(points)} матчей, Elo {points[-1][1]}"
-                f" — открыть профиль</title></polyline>"
+                f"<title>{title} — открыть профиль</title></polyline>"
             )
             lines += (
                 f'<a href="/model/{html.escape(mid)}">{visible}{hit}{end_dot}</a>'
@@ -1522,7 +1592,8 @@ def build_elo_multiline_svg(series: list[dict], x_count: int,
 
     return (
         f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
-        f'aria-label="Динамика ELO: линий {len(drawn)}, матчей {x_count}">'
+        f'aria-label="Динамика ELO: линий {len(drawn)}, '
+        f'матчей {total_matches}, дней {day_count}">'
         f"{grid}{baseline}{lines}{axis}</svg>"
     )
 
