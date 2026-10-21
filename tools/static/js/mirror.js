@@ -733,7 +733,18 @@
     return Math.round(400 / Math.sqrt(n));
   }
 
-  // Порт interval_groups (render_helpers.py): группы «место не определено» —
+  // Порт plural_ru (render_helpers.py): русская форма слова по числу.
+  function pluralRu(n, one, few, many) {
+    const abs = Math.abs(Number(n) || 0);
+    const mod100 = abs % 100;
+    if (mod100 >= 11 && mod100 <= 14) return many;
+    const last = abs % 10;
+    if (last === 1) return one;
+    if (last >= 2 && last <= 4) return few;
+    return many;
+  }
+
+  // Порт interval_groups (render_helpers.py): группы неразличимых мест —
   // цепочки перекрывающихся интервалов соседей (транзитивно).
   function intervalGroups(rows) {
     const ordered = [...rows].sort((a, b) => {
@@ -789,6 +800,7 @@
       row.groupFull = Boolean(
         row.group && group && group.start >= start && group.end < stop
       );
+      row.groupSize = row.group && group ? group.end - group.start + 1 : 0;
       pageRows.push(row);
     }
     return { rows: pageRows, page: current, pages, total };
@@ -830,8 +842,7 @@
     const eloX = nameX + nameW + 14;
     const halfX = eloX + 54;
     const plotX0 = halfX + 16;
-    const plotX1 = width - 132;
-    const labelX = width - 10;
+    const plotX1 = width - 16;
     const height = top + rowH * pageRows.length + bottom;
     const rowsBottom = top + rowH * pageRows.length;
     const x = (v) => plotX0 + (plotX1 - plotX0) * ((v - lo) / (hi - lo));
@@ -839,7 +850,8 @@
 
     const parts = [];
 
-    // Группы «место не определено» — полосой по видимому фрагменту.
+    // Группы неразличимых мест — полосой по видимому фрагменту. Надписи над
+    // строками нет: смысл признака объясняет легенда карточки, детали — тултип.
     const groups = [];
     pageRows.forEach((row, i) => {
       if (!row.group) return;
@@ -850,25 +862,23 @@
     groups.forEach(([, start, end]) => {
       const bandY = top + start * rowH + 2;
       const bandH = rowH * (end - start + 1) - 4;
+      const full = pageRows[start].groupFull !== false;
+      const size = pageRows[start].groupSize || end - start + 1;
+      const visible = end - start + 1;
+      let tip =
+        "Группа неразличимых мест: " + size + " " +
+        pluralRu(size, "модель", "модели", "моделей") +
+        " — интервалы соседей перекрываются, точный порядок статистически не различим";
+      if (!full) {
+        tip +=
+          "; на этой странице видно " + visible +
+          ", продолжение — на соседней странице";
+      }
       parts.push(
         '<rect x="4" y="' + bandY.toFixed(1) + '" width="' + (width - 8) +
-          '" height="' + bandH.toFixed(1) + '" rx="6" class="interval-group-band"/>'
+          '" height="' + bandH.toFixed(1) + '" rx="6" class="interval-group-band">' +
+          "<title>" + esc(tip) + "</title></rect>"
       );
-      const centerY = top + ((start + end) / 2) * rowH + 19;
-      if (pageRows[start].groupFull !== false) {
-        parts.push(
-          '<text x="' + labelX + '" y="' + centerY.toFixed(1) +
-            '" text-anchor="end" class="interval-group-label">' +
-            "место не определено</text>"
-        );
-      } else {
-        parts.push(
-          '<text x="' + labelX + '" y="' + centerY.toFixed(1) +
-            '" text-anchor="end" class="interval-group-label interval-group-cut">' +
-            "⋯<title>группа неразличимых мест продолжена " +
-            "на соседней странице</title></text>"
-        );
-      }
     });
 
     const step = hi - lo <= 400 ? 50 : 100;
@@ -938,10 +948,15 @@
         );
       }
 
+      // У места в группе — подсказка: почему оно помечено «≈».
+      const rankTip = grouped
+        ? "<title>место не определено: интервалы соседей перекрываются, " +
+          "точный порядок статистически не различим</title>"
+        : "";
       parts.push(
         '<text x="' + rankX + '" y="' + (cy + 4).toFixed(1) + '" class="interval-rank' +
           (grouped ? " interval-rank-grouped" : "") + '">' +
-          (grouped ? "≈" : "") + row.rank + "</text>"
+          (grouped ? "≈" : "") + row.rank + rankTip + "</text>"
       );
       parts.push(
         '<text x="' + nameX + '" y="' + (cy + 4).toFixed(1) + '">' +
@@ -971,10 +986,13 @@
       );
     });
 
+    const visibleGroups = new Set(
+      pageRows.map((row) => row.group).filter((group) => group)
+    ).size;
     return (
       '<svg viewBox="0 0 ' + width + " " + height + '" class="chart chart-rating" ' +
       'role="img" aria-label="Рейтинг: ' + pageRows.length + " моделей, " +
-      "групп неразличимых мест: " + groups.length + '">' +
+      "групп неразличимых мест: " + visibleGroups + '">' +
       parts.join("") +
       "</svg>"
     );
@@ -1083,6 +1101,11 @@
         }
       }
       if (statsEl) statsEl.textContent = summary;
+
+      // Легенда объясняет пометку «≈» — показывается, только если в
+      // отобранном составе есть группы неразличимых мест.
+      const legend = card.querySelector("#rating-legend");
+      if (legend) legend.hidden = info.groups.length === 0;
 
       const page = ratingPage(all, info.groups, currentPage);
       const old = card.querySelector("svg.chart, .empty-state");

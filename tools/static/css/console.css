@@ -2159,14 +2159,8 @@ a.matchup-chip:hover {
   stroke-width: 1;
 }
 
-.interval-group-label {
-  fill: var(--muted);
-  font-size: 11px;
-  font-style: italic;
-}
-
-/* маркер разрезанной границей страницы группы «место не определено» */
-.interval-group-cut { font-style: normal; font-weight: 700; }
+/* легенда карточки «Рейтинг»: объяснение пометки «≈» */
+.rating-legend { margin-top: var(--sp-1); }
 
 /* карточка «Рейтинг»: строка на модель, градиентный бар и интервал */
 .chart-rating { width: 100%; height: auto; }

@@ -2347,6 +2347,7 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
   <div class="card" id="rating">
     <h2>Рейтинг</h2>
     <div class="stats">{{ rating_summary }}</div>
+    <div class="hint rating-legend" id="rating-legend"{% if not rating_groups %} hidden{% endif %}>«≈» — у соседей перекрываются интервалы ELO (±400/√игр): точный порядок внутри группы статистически не различим.</div>
     {% call filter_panel() %}
       <span class="filter-label">Показывать</span>
       <div class="segmented" role="radiogroup" aria-label="Показывать">
@@ -3717,6 +3718,7 @@ def stats_page():
     rating_info = interval_groups(rating_rows)
     all_rating_rows = rating_info["rows"]
     determined = sum(1 for r in all_rating_rows if not r.get("group"))
+    rating_groups = len(rating_info["groups"])
 
     if all_rating_rows:
         elos = [int(r["elo"]) for r in all_rating_rows]
@@ -3855,6 +3857,7 @@ def stats_page():
 
     return STATS_TEMPLATE.render(
         rating_summary=rating_summary,
+        rating_groups=rating_groups,
         stats_filter=stats_filter,
         rating_svg=build_rating_svg(
             rank["rows"], all_rating_rows, highlight=highlight,

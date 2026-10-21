@@ -2128,7 +2128,12 @@ def test_wave6_stats_rating():
         assert 'href="/model/gamma"' not in html, "архивная модель попала в «Рейтинг»"
         assert "dist-pt" in html, "нет градиентного бара"
         assert "±400" in html, "интервал не показан"
-        assert "место не определено" in html, "нет групп неразличимых мест"
+        assert "interval-group-label" not in html, "надпись группы над строками не убрана"
+        assert "Группа неразличимых мест" in html, "у полосы группы нет подсказки"
+
+        # Легенда объясняет пометку «≈» и показывается, только если есть группы
+        assert 'id="rating-legend"' in html, "нет легенды карточки «Рейтинг»"
+        assert "id=\"rating-legend\" hidden" not in html, "легенда скрыта, а группы есть"
 
         # Сводка: размер пула и число различимых мест
         assert "моделей: 2" in html
@@ -2139,6 +2144,9 @@ def test_wave6_stats_rating():
         assert "моделей: 3" in html_all
         assert 'href="/model/gamma"' in html_all
         assert "мест определено: 3" in html_all, "модель без игр — место определено"
+        assert "id=\"rating-legend\" hidden" in html_all, (
+            "легенда показана, а групп в пуле нет"
+        )
 
         # Пустой пул под фильтром — пустое состояние карточки
         empty = client.get("/stats?providers=none").get_data(as_text=True)

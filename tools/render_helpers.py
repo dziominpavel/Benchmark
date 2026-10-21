@@ -859,9 +859,10 @@ def rating_page(
     rows — строки interval_groups()["rows"] (весь пул, ELO по убыванию);
     groups — groups того же результата: [{"start", "end"}] индексы строк.
     Место строки — её индекс в полном пуле, поэтому постраничная навигация
-    не сдвигает места. Группа «место не определено» может быть разрезана
-    границей страницы: подпись ставится только у полностью видимой группы
-    (group_full=True), у разрезанной — маркер продолжения.
+    не сдвигает места. Группа неразличимых мест может быть разрезана границей
+    страницы: group_full=True — группа помещается на странице целиком,
+    group_size — размер группы по всему пулу (у разрезанной больше, чем
+    видно на странице).
 
     Возвращает {"rows", "page", "pages", "page_size", "total", "start"}.
     """
@@ -884,6 +885,9 @@ def rating_page(
         row["group_full"] = bool(
             number and group_start >= start and group_end < stop
         )
+        # Размер группы — по всему пулу: на разрезанной страницей группе
+        # показывается её фрагмент, а считать надо целую.
+        row["group_size"] = (group_end - group_start + 1) if number else 0
         page_rows.append(row)
     return {
         "rows": page_rows,
@@ -904,7 +908,8 @@ def build_rating_svg(
     """SVG карточки «Рейтинг»: место, имя, ELO, интервал, градиентный бар.
 
     rows — страница строк rating_page(): ключи id, name, elo, games, caption,
-    half, lo, hi, group, rank, group_full (и hit в режиме «Подсвечивать»).
+    half, lo, hi, group, rank, group_full, group_size (и hit в режиме
+    «Подсвечивать»).
     pool — весь пул карточки (записи с ключом elo): шкала ELO и градиент
     считаются по нему, а не по странице, иначе страницы несопоставимы.
     Ширина колонки имён — тоже по пулу, иначе колонки «прыгают» между
@@ -935,8 +940,7 @@ def build_rating_svg(
     name_w = max(150, min(360, int(max_name * 7.0)))
     elo_x = name_x + name_w + 14
     half_x = elo_x + 54
-    plot_x0, plot_x1 = half_x + 16, width - 132
-    label_x = width - 10
+    plot_x0, plot_x1 = half_x + 16, width - 16
     height = top + row_h * len(rows) + bottom
     rows_bottom = top + row_h * len(rows)
 
@@ -948,7 +952,8 @@ def build_rating_svg(
 
     parts: list[str] = []
 
-    # Группы «место не определено» — полосой по видимому фрагменту.
+    # Группы неразличимых мест — полосой по видимому фрагменту. Надписи над
+    # строками нет: смысл признака объясняет легенда карточки, детали — тултип.
     groups: list[list[int]] = []
     for i, r in enumerate(rows):
         number = int(r.get("group") or 0)
@@ -961,23 +966,24 @@ def build_rating_svg(
     for _, start, end in groups:
         band_y = top + start * row_h + 2
         band_h = row_h * (end - start + 1) - 4
+        full = bool(rows[start].get("group_full", True))
+        size = int(rows[start].get("group_size") or (end - start + 1))
+        visible = end - start + 1
+        tip = (
+            f"Группа неразличимых мест: {size} "
+            f"{plural_ru(size, 'модель', 'модели', 'моделей')} — интервалы "
+            f"соседей перекрываются, точный порядок статистически не различим"
+        )
+        if not full:
+            tip += (
+                f"; на этой странице видно {visible}, продолжение — "
+                f"на соседней странице"
+            )
         parts.append(
             f'<rect x="4" y="{band_y}" width="{width - 8}" height="{band_h}" '
-            f'rx="6" class="interval-group-band"/>'
+            f'rx="6" class="interval-group-band">'
+            f"<title>{html.escape(tip)}</title></rect>"
         )
-        center_y = top + (start + end) / 2 * row_h + 15 + 4
-        if rows[start].get("group_full", True):
-            parts.append(
-                f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
-                f'class="interval-group-label">место не определено</text>'
-            )
-        else:
-            parts.append(
-                f'<text x="{label_x}" y="{center_y:.1f}" text-anchor="end" '
-                f'class="interval-group-label interval-group-cut">⋯'
-                f"<title>группа неразличимых мест продолжена "
-                f"на соседней странице</title></text>"
-            )
 
     step = 50 if hi - lo <= 400 else 100
     tick = math.ceil(lo / step) * step
@@ -1055,10 +1061,16 @@ def build_rating_svg(
                 f"</line>"
             )
 
+        # У места в группе — подсказка: почему оно помечено «≈».
+        rank_tip = (
+            "<title>место не определено: интервалы соседей перекрываются, "
+            "точный порядок статистически не различим</title>"
+            if grouped else ""
+        )
         parts.append(
             f'<text x="{rank_x}" y="{cy + 4}" class="interval-rank'
             f'{" interval-rank-grouped" if grouped else ""}">'
-            f'{"≈" if grouped else ""}{rank}</text>'
+            f'{"≈" if grouped else ""}{rank}{rank_tip}</text>'
         )
         parts.append(
             f'<text x="{name_x}" y="{cy + 4}">'
@@ -1085,10 +1097,11 @@ def build_rating_svg(
             f"<title>{tip}</title></circle>"
         )
 
+    visible_groups = len({int(r.get("group") or 0) for r in rows if r.get("group")})
     return (
         f'<svg viewBox="0 0 {width} {height}" class="chart chart-rating" '
         f'role="img" aria-label="Рейтинг: {len(rows)} моделей, '
-        f'групп неразличимых мест: {len(groups)}">'
+        f'групп неразличимых мест: {visible_groups}">'
         + "".join(parts)
         + "</svg>"
     )

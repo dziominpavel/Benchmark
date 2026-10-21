@@ -462,7 +462,8 @@ def test_export_mirror_layer():
             assert 'src="../static/js/filter-panel.js"' in settings
             script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
             for marker in ("mirror-archived-rows", "mirror-table-wrap",
-                           "mirror-stats-data", "HISTORY_PAGE_SIZE"):
+                           "mirror-stats-data", "HISTORY_PAGE_SIZE",
+                           "rating-legend"):
                 assert marker in script, f"mirror.js: нет маркера {marker}"
 
             # Навигационные onchange фильтров сняты (их роль играет mirror.js)
@@ -634,6 +635,10 @@ def test_export_stats_analytics():
 
             # «Рейтинг» статичен: фильтры страницы в слепке не меняют SVG
             assert 'class="chart chart-rating"' in stats
+
+            # Легенда пометки «≈» в слепке есть, надписи над строками нет
+            assert 'id="rating-legend"' in stats, "в слепке нет легенды «Рейтинг»"
+            assert "interval-group-label" not in stats, "в слепке осталась надпись группы"
 
             # Остальные карточки на месте
             assert "Агенты и компании" in stats and "card-subtitle" in stats

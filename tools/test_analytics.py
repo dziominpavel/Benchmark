@@ -115,8 +115,11 @@ def test_rating_svg_row_fields():
     assert "dist-pt" in svg, "нет градиентного бара"
     assert "±20" in svg, "интервал не показан"
     assert "—" in svg, "у модели без игр прочерк"
-    assert "место не определено" in svg and "interval-group-band" in svg
+    assert "interval-group-band" in svg
+    assert "interval-group-label" not in svg, "надпись группы над строками не убрана"
+    assert "Группа неразличимых мест" in svg, "у полосы группы нет подсказки"
     assert "≈" in svg, "группы не помечены при числителе места"
+    assert "интервалы соседей перекрываются" in svg, "у ≈ нет подсказки"
     assert "chart-tick" in svg and "dist-line-start" in svg
     assert rh.build_rating_svg([], []) == "", "пустой пул — пустое состояние"
     print("«Рейтинг» svg: row fields: OK")
@@ -155,18 +158,20 @@ def test_rating_page_places_and_groups():
     page2 = rh.rating_page(rows, pool["groups"], 2, page_size=2)
     assert [r["rank"] for r in page2["rows"]] == [3], "место второй страницы"
 
-    # Группа разрезана границей страницы: подписи нет, есть маркер
+    # Группа разрезана границей страницы: подсказка упоминает продолжение
     assert page1["rows"][1]["group_full"] is False
+    assert page1["rows"][1]["group_size"] == 2, "размер группы — по всему пулу"
     svg = rh.build_rating_svg(page1["rows"], rows)
-    assert "место не определено" not in svg, "у разрезанной группы не подпись"
-    assert "interval-group-cut" in svg, "нет маркера продолжения"
+    assert "interval-group-label" not in svg, "надпись группы над строками не убрана"
+    assert "продолжение — на соседней странице" in svg, "нет подсказки о продолжении"
 
-    # Группа целиком на странице: подпись есть, маркера нет
+    # Группа целиком на странице: подсказка без упоминания продолжения
     full = rh.rating_page(rows, pool["groups"], 1, page_size=3)
     assert full["rows"][1]["group_full"] is True
+    assert full["rows"][1]["group_size"] == 2
     svg_full = rh.build_rating_svg(full["rows"], rows)
-    assert "место не определено" in svg_full
-    assert "interval-group-cut" not in svg_full
+    assert "Группа неразличимых мест: 2 модели" in svg_full
+    assert "продолжение — на соседней странице" not in svg_full
 
     # Номер страницы за пределами диапазона — последняя существующая
     assert rh.rating_page(rows, pool["groups"], 99, page_size=2)["page"] == 2
