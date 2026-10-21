@@ -345,14 +345,17 @@ def main(argv: list[str]) -> int:
             )
     else:
         # Самопроверка проекта: тракт по файлам, без versioning.yaml.
-        track = "static" if not (ROOT / "version").exists() and not (ROOT / "VERSION").exists() else "release"
-        version_file = None
-        if (ROOT / "version").exists():
-            version_file = "version"
-        elif (ROOT / "VERSION").exists():
-            version_file = "VERSION"
-        elif (ROOT / "pyproject.toml").exists():
-            version_file = "pyproject.toml"
+        # Релизный трек — есть файл версии (включая pyproject.toml) и теги;
+        # без тегов версия считается замороженной (static).
+        version_file = next(
+            (
+                name
+                for name in ("version", "VERSION", "pyproject.toml")
+                if (ROOT / name).exists()
+            ),
+            None,
+        )
+        track = "release" if version_file and has_tags(ROOT) else "static"
         results.append(check_project(ROOT.name, ROOT, track, version_file, "CHANGELOG.md"))
 
     # Подсказка по [Unreleased] печатается внутри check_project.

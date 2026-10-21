@@ -81,14 +81,15 @@ UI-тексты — на русском, код и идентификаторы 
 ### Requirement: baseline_commit опционален
 
 Для задач на реальном проекте `baseline_commit` SHALL обеспечивать
-воспроизводимость: skills прогонов и судьи делают checkout перед анализом
-и очистку после. Для абстрактных задач checkout не выполняется.
+воспроизводимость: skills прогонов и судьи создают отдельную копию проекта
+(`git clone --no-local --no-checkout`) и делают checkout baseline только в ней.
+Исходный проект MUST NOT изменяться. Для абстрактных задач checkout не выполняется.
 
 #### Scenario: Модель читает проект
 
 - **WHEN** задача имеет `baseline_commit` и `project`
-- **THEN** skill выполняет `cd C:/projects/<project> && git checkout <baseline_commit>`
-- **AND** после работы выполняет `git checkout . && git clean -fd`
+- **THEN** skill создаёт отдельную копию проекта и выполняет в ней `git checkout <baseline_commit>`
+- **AND** исходный проект остаётся с зафиксированными до старта HEAD и `git status --short`
 
 ### Requirement: Статус активности задачи
 Каждая известная таска SHALL иметь статус активности: `active` или `inactive`, хранящийся в `data/settings.yaml`. Множество известных тасок SHALL определяться как объединение идентификаторов `data/tasks/T-NNN-*` и значений поля `task` в событиях `data/matchups/journal.jsonl`. `general` и другие не-T-NNN значения `task` в журнале MUST NOT считаться тасками и не SHALL появляться в настройках. Неактивные таски MUST NOT участвовать в расчёте прогресса и MUST NOT предлагаться как текущие. Таска без записи в `data/settings.yaml` SHALL считаться активной, кроме не-T-NNN значений.

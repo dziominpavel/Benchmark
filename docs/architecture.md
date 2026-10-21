@@ -124,8 +124,6 @@ _На схеме ниже префикс `data/` опущен: `tasks/` = `data/
   допустимые значения полей agent/provider; CRUD — секция «Справочники»
   страницы /settings, авто-дополнение — tools/register_model.py
 - `data/tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `data/tasks/_TEMPLATE.md`)
-- `data/answers/T-NNN/modelA.md`, `modelB.md` — ответы от skills;
-  `data/answers/T-NNN/<model-id>.md` — ручные прогоны произвольных моделей
 - `data/matchups/journal.jsonl` — журнал вердиктов: единый append-only
   JSONL-файл, строка = событие (поля: version, seq, task, matchup,
   model_a/b, model_a_id/b_id, winner, date, recorded_at, elo-снэпшот;
@@ -133,6 +131,11 @@ _На схеме ниже префикс `data/` опущен: `tasks/` = `data/
   `matchup` — `T-NNN/NNN` (max+1 внутри задачи). Старая раскладка (файлы
   вердиктов по задачам и счётчик seq) упразднена разовой миграцией
   `tools/migrate_journal.py`
+
+**Локально (не в git, игнорируется):**
+- `data/answers/T-NNN/modelA.md`, `modelB.md` — транзитные слоты текущего
+  судейства; `data/answers/T-NNN/<model-id>.md` — ручные прогоны произвольных
+  моделей. Система читает только слоты: для судейства текст копируется в слот.
 
 **Кэш (генерируется, в git):**
 - `data/index.json` — ELO + статистика + сводки + история + matchups_digest

@@ -41,16 +41,17 @@
    data/answers/<task-id>/modelA.md   # если ты участник A (@benchmark-run-a)
    data/answers/<task-id>/modelB.md   # если ты участник B (@benchmark-run-b)
    ```
-   Ручной прогон произвольной модели из реестра — файл
-   `data/answers/<task-id>/<model-id>.md` по формату `data/answers/_TEMPLATE.md`.
-   Формат и рубрика конкретной задачи имеют приоритет над общим шаблоном ниже.
+   Ручной прогон произвольной модели из реестра — локальный файл
+   `data/answers/<task-id>/<model-id>.md` по формату `data/answers/_TEMPLATE.md`
+   (каталог `data/answers/` игнорируется git; для судейства текст копируется
+   в один из слотов). Формат и рубрика конкретной задачи имеют приоритет над
+   общим шаблоном ниже.
 
 ## Формат ответа
 
 ````markdown
 ---
 task: T-NNN
-model: modelA
 date: YYYY-MM-DD
 ---
 
@@ -120,12 +121,17 @@ python tools/register_model.py --auto --id <slug> --name "<Имя Модели>"
 ## Проверка самого Benchmark (не прогон участника)
 
 - `uv run python tools/test_elo.py` — тесты ELO, регистрации и выбора задач.
+- `uv run python tools/test_pairing.py` — герметичные тесты рекомендаций:
+  источники подменяются в памяти, рабочие `data/models.yaml` и `data/index.json`
+  не меняются. Запускать целиком безопасно.
+- `uv run python tools/test_data_cache.py`, `test_export.py`, `test_analytics.py`,
+  `test_trends.py`, `test_migrate_journal.py` — остальные юнит-тесты.
+- `uv run python tools/test_perf.py` — нагрузочные бюджеты. По умолчанию
+  множитель 1.5 (поправка на холодный старт Windows); строгий замер —
+  `BENCH_PERF_FACTOR=1`.
 - `uv run python tools/elo.py --check` — проверка индекса и журнала без записи.
-- `tools/test_pairing.py` при запуске целиком временно переписывает реальные
-  `data/models.yaml` и `data/index.json`. Не запускай его целиком в рабочем
-  репозитории с текущими сравнениями; используй отдельную копию. Проверку
-  `test_rematch_recommendations()` можно вызвать отдельно: она подменяет
-  статистику в памяти и не вызывает сценарий архивации моделей.
+- `uv run python scripts/check-version.py` — сверка версии и changelog.
+- `openspec validate --all` — валидация спек и изменений.
 
 ## Git — коммиты (для работы над этим репозиторием)
 

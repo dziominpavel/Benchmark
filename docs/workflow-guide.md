@@ -28,15 +28,18 @@ python tools/register_task.py --title "Bug Hunt — NewModule" \
 @benchmark-run-b T-001
 ```
 
-Каждый skill сам: читает `task.md`, делает `git checkout <baseline_commit>`
-в проекте-референсе, анализирует код, пишет анонимный ответ
-(`data/answers/T-001/modelA.md` / `data/answers/T-001/modelB.md`) и чистит проект после.
-В конце сообщает сколько багов найдено. Реальный `id` участника не пишется
+Каждый skill сам: читает `task.md`, создаёт отдельную копию проекта
+(`git clone --no-local --no-checkout`), делает `git checkout <baseline_commit>`
+только в ней, анализирует код и пишет анонимный ответ
+(`data/answers/T-001/modelA.md` / `data/answers/T-001/modelB.md`). Исходный
+проект не меняется: HEAD и `git status --short` после прогона те же. В конце
+skill сообщает, сколько багов найдено. Реальный `id` участника не пишется
 в файл ответа и не сохраняется рядом с ним.
 
 Прогон произвольной модели из реестра (например `opencode-mimo-v2-5-free`)
 готовым skill не покрыт — ответ пишется вручную по `data/answers/_TEMPLATE.md`
-в файл `data/answers/T-001/<model-id>.md`.
+в локальный файл `data/answers/T-001/<model-id>.md` (каталог `data/answers/`
+не входит в git; для судейства текст копируется в слот).
 
 ### Шаг 3: Судья (skill)
 
@@ -116,7 +119,8 @@ python tools/record_verdict.py --void T-001/003 --reason "ошибка"
 python tools/register_model.py --auto --id gemini-3-pro --name "Gemini 3 Pro"
 ```
 
-Затем: ответ модели на существующую задачу (вручную в `data/answers/T-001/<id>.md`),
+Затем: ответ модели на существующую задачу (вручную в `data/answers/T-001/<id>.md`;
+каталог локальный, не в git),
 судейство против уже оценённых моделей (калибровка) — веб-UI сам предложит
 пары с новой моделью первыми (у неё 0 игр).
 

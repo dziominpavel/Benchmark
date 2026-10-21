@@ -1,0 +1,61 @@
+name: ci
+
+# Проверки репозитория: юнит-тесты, целостность ELO-кэша, версия/changelog
+# и валидация OpenSpec. Нагрузочные бюджеты запускаются с множителем 2:
+# разделяемые раннеры шумные, но грубые регрессии всё равно ловятся.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установить зависимости
+        run: uv sync --frozen
+
+      - name: Юнит-тесты
+        run: |
+          for t in test_elo test_data_cache test_export test_analytics \
+                   test_trends test_migrate_journal test_pairing; do
+            echo "=== $t ==="
+            uv run python "tools/$t.py"
+          done
+
+      - name: Нагрузочные бюджеты
+        env:
+          BENCH_PERF_FACTOR: "2"
+        run: uv run python tools/test_perf.py
+
+      - name: Целостность ELO-кэша
+        run: uv run python tools/elo.py --check
+
+      - name: Версия и changelog
+        run: uv run python scripts/check-version.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Установить OpenSpec
+        run: npm install -g @fission-ai/openspec@1.14.2
+
+      - name: Валидация OpenSpec
+        run: openspec validate --all

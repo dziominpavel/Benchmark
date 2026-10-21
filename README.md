@@ -42,7 +42,9 @@
 | `@benchmark-run-b T-NNN` | Прогон слота B: то же самое → `data/answers/T-NNN/modelB.md` |
 | `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; не вызывает `record_verdict.py` |
 
-Skills продублированы для трёх сред: `.opencode/skills/`, `.cursor/skills/`, `.devin/skills/`.
+Три основных skill продублированы для трёх сред: `.opencode/skills/`,
+`.cursor/skills/`, `.devin/skills/`. `benchmark-batch-judge` есть только
+в OpenCode — он запускает параллельные судейские сессии.
 Ручное судейство без skill — по шаблону [docs/judge-prompt.md](docs/judge-prompt.md),
 запись результата — через веб-сервер.
 
@@ -68,7 +70,7 @@ Benchmark/
 │   │   └── T-NNN-<slug>/
 │   │       └── task.md    # Описание + критерии + baseline_commit (опц.)
 │   │
-│   ├── answers/           # Ответы: modelA.md / modelB.md (skills) или <model-id>.md (вручную)
+│   ├── answers/           # Ответы (не в git): modelA.md / modelB.md (skills) или <model-id>.md (вручную)
 │   │   ├── _TEMPLATE.md
 │   │   └── T-NNN/
 │   │       ├── modelA.md
@@ -98,8 +100,10 @@ Benchmark/
 │
 └── openspec/              # Спецификации системы (по факту кода MVP)
     ├── config.yaml
-    ├── specs/             # 10 capabilities: benchmark-workflow, task/answer/matchup-management,
-    │                      # elo-engine, pairing-algorithm, leaderboard-ui, model-registry, data-storage,
+    ├── specs/             # 13 capabilities: benchmark-workflow, task/answer/
+    │                      # matchup-management, answer-coverage, elo-engine,
+    │                      # pairing-algorithm, leaderboard-ui, console-shell,
+    │                      # static-mirror, model-registry, data-storage,
     │                      # run-progress
     └── changes/archive/   # История принятых изменений (активных changes нет)
 ```
@@ -124,8 +128,17 @@ uv run python tools/elo.py --check
 # каталог вывода должен быть пуст, --catalog-depth — глубина от корня витрины)
 uv run python tools/export_web.py --out <каталог>
 
-# Юнит-тесты движка
+# Юнит-тесты: движок, данные, экспорт, аналитика, миграции, рекомендации
 uv run python tools/test_elo.py
+uv run python tools/test_data_cache.py
+uv run python tools/test_export.py
+uv run python tools/test_analytics.py
+uv run python tools/test_trends.py
+uv run python tools/test_migrate_journal.py
+uv run python tools/test_pairing.py
+
+# Нагрузочные бюджеты (по умолчанию множитель 1.5; строгий замер: BENCH_PERF_FACTOR=1)
+uv run python tools/test_perf.py
 
 # Зарегистрировать модель (--agent/--provider опциональны)
 uv run python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
@@ -145,5 +158,5 @@ uv run python tools/archive_model.py --restore gpt-5
 - [docs/elo-mechanics.md](docs/elo-mechanics.md) — математика ELO
 - [docs/workflow-guide.md](docs/workflow-guide.md) — пошаговая инструкция
 - [docs/judge-prompt.md](docs/judge-prompt.md) — шаблон промпта судьи
-- [openspec/specs/](openspec/specs/) — нормативные спеки по факту кода MVP (10 capabilities)
+- [openspec/specs/](openspec/specs/) — нормативные спеки по факту кода MVP (13 capabilities)
 - [AGENTS.md](AGENTS.md) — протокол модели-участницы

@@ -4,12 +4,13 @@ context: |
   Benchmark — репозиторий для сравнения LLM-моделей через попарные сравнения и ELO-рейтинг.
   Модели отвечают на аналитические задачи (анализ проекта, поиск багов, планирование),
   судья сравнивает два ответа и выбирает победителя, ELO пересчитывается.
-  Кода приложения здесь нет: только текстовые артефакты — задачи (tasks/),
-  ответы моделей (answers/), вердикты (matchups/), реестр (models.yaml),
-  кэш ELO (index.json), инструменты (tools/), веб-сервер leaderboard (tools/server.py).
+  Данные бенчмарка — текстовые артефакты: задачи (tasks/), тексты ответов
+  (answers/, локально, вне git), вердикты (matchups/), реестр (models.yaml),
+  кэш ELO (index.json). Инструменты (tools/), веб-сервер leaderboard
+  (tools/server.py) и skills обслуживают этот процесс.
   Прогоны выполняются skills benchmark-run-a / benchmark-run-b
   (фиксированные слоты modelA / modelB), судейство — skill benchmark-judge
-  или вручную по docs/judge-prompt.md с записью через веб-UI (корзина general).
+  или вручную по docs/judge-prompt.md с записью через веб-UI или tools/record_verdict.py.
   OpenSpec-артефакты (proposal, design, tasks, specs) — на русском,
   кроме normative keywords MUST/SHALL/MUST NOT и заголовков сценариев WHEN/THEN/AND.
   Код и идентификаторы — на английском.
@@ -22,8 +23,9 @@ rules:
     - "Delta spec (openspec/changes/*/specs/): ## ADDED/MODIFIED/REMOVED Requirements"
     - "Каждый requirement — минимум один #### Scenario: с WHEN/THEN"
     - Capability = подсистема бенчмарк-системы (benchmark-workflow, task-management,
-      answer-management, matchup-management, elo-engine, pairing-algorithm,
-      leaderboard-ui, model-registry, data-storage) — спеки описывают ФАКТИЧЕСКОЕ
+      answer-management, answer-coverage, matchup-management, elo-engine,
+      pairing-algorithm, leaderboard-ui, console-shell, static-mirror,
+      model-registry, data-storage, run-progress) — спеки описывают ФАКТИЧЕСКОЕ
       поведение кода MVP (tools/*.py, skills), а не желаемое
     - Известные дефекты кода фиксировать в спеке явно (пометка «Известный дефект»),
       код при наведении порядка в документации не менять

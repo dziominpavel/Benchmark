@@ -15,11 +15,12 @@
 - **AND** в корне нет `tasks/`, `answers/`, `matchups/`, `models.yaml`, `settings.yaml`, `index.json`
 
 ### Requirement: Source of truth — файлы
-Исходные данные SHALL храниться в файлах: `data/models.yaml` (реестр), `data/lookups.yaml` (справочники агентов и компаний), `data/tasks/T-NNN-<slug>/task.md` (задачи), `data/answers/T-NNN/modelA.md` / `modelB.md` (только два транзитных слота текущего судейства), `data/matchups/journal.jsonl` (журнал вердиктов: одна JSON-строка на событие), `data/settings.yaml` (настройки: статусы тасок и текущая таска), `data/answer_flags.yaml` (ручной учёт наличия ответов, см. `answer-coverage`). Файлы `data/answers/<task>/<model-id>.md` в проекте MUST NOT использоваться (тексты ответов хранятся вне проекта). `data/matchups/general/` и `data/matchups/<non-T-NNN>/` MUST NOT использоваться. `data/answers/<task>/slots.json` MUST NOT использоваться. Эти файлы SHALL коммититься в git.
+Исходные данные SHALL храниться в файлах: `data/models.yaml` (реестр), `data/lookups.yaml` (справочники агентов и компаний), `data/tasks/T-NNN-<slug>/task.md` (задачи), `data/answers/T-NNN/modelA.md` / `modelB.md` (только два транзитных слота текущего судейства; каталог `data/answers/` игнорируется git), `data/matchups/journal.jsonl` (журнал вердиктов: одна JSON-строка на событие), `data/settings.yaml` (настройки: статусы тасок и текущая таска), `data/answer_flags.yaml` (ручной учёт наличия ответов, см. `answer-coverage`). Файлы `data/answers/<task>/<model-id>.md` MAY существовать локально для ручного архива, но система MUST NOT читать их как источник ответа: для судейства текст копируется в слот. `data/matchups/general/` и `data/matchups/<non-T-NNN>/` MUST NOT использоваться. `data/answers/<task>/slots.json` MUST NOT использоваться. Файлы реестра, задач, журнала, настроек, флагов и `data/index.json` SHALL коммититься в git; `data/answers/` MUST NOT коммититься.
 
-#### Scenario: Git diff ответа
+#### Scenario: Ответ не попадает в git
 - **WHEN** модель пишет ответ
-- **THEN** git diff показывает изменённый Markdown-файл `data/answers/T-NNN/modelA.md` или `modelB.md`
+- **THEN** файл `data/answers/T-NNN/modelA.md` или `modelB.md` существует локально
+- **AND** `git status --short` не показывает изменений в `data/answers/`
 - **AND** не создаётся `data/answers/T-NNN/slots.json`
 
 #### Scenario: Git diff вердикта

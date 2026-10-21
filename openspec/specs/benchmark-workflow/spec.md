@@ -24,7 +24,7 @@ leaderboard. Минимальный прогон: 1 задача + 2 ответ�
 
 ### Requirement: Шаг 2 — Прогон моделей через run-a / run-b
 
-Прогоны SHALL выполняться skills `benchmark-run-a` и `benchmark-run-b`. Каждый skill сам читает task.md, делает `git checkout <baseline_commit>` в проекте-референсе, анализирует код и пишет ответ в фиксированный файл: `data/answers/<task-id>/modelA.md` либо `data/answers/<task-id>/modelB.md`. Front matter ответа SHALL содержать только `{task, date}` без поля `model`; слот определяется именем файла. После работы skill возвращает проект командой `git checkout . && git clean -fd`. Участник не записывает свой реальный `id` нигде. Тексты ответов для длительного хранения находятся вне проекта; в проекте остаются только два транзитных слота текущего судейства, а наличие ответов по всем моделям ведётся ручным учётом (см. `answer-coverage`).
+Прогоны SHALL выполняться skills `benchmark-run-a` и `benchmark-run-b`. Каждый skill сам читает task.md, создаёт отдельную копию проекта через `git clone --no-local --no-checkout`, выполняет checkout `<baseline_commit>` только внутри этой копии, анализирует код и пишет ответ в фиксированный файл: `data/answers/<task-id>/modelA.md` либо `data/answers/<task-id>/modelB.md`. Front matter ответа SHALL содержать только `{task, date}` без поля `model`; слот определяется именем файла. Исходный проект MUST NOT изменяться: checkout/reset/clean/stash в нём запрещены, HEAD и `git status --short` после прогона SHALL совпадать с зафиксированными до старта. Участник не записывает свой реальный `id` нигде. Тексты ответов для длительного хранения находятся вне git; в проекте остаются только два транзитных слота текущего судейства, а наличие ответов по всем моделям ведётся ручным учётом (см. `answer-coverage`).
 
 #### Scenario: Прогон модели A
 
@@ -36,11 +36,18 @@ leaderboard. Минимальный прогон: 1 задача + 2 ответ�
 - **WHEN** пользователь вызывает `@benchmark-run-b T-001`
 - **THEN** skill пишет `data/answers/T-001/modelB.md` с front matter `{task, date}` без поля `model`
 
+#### Scenario: Исходный проект не меняется
+
+- **WHEN** skill завершает прогон
+- **THEN** `git rev-parse HEAD` и `git status --short` исходного проекта совпадают с зафиксированными до старта
+- **AND** checkout baseline выполнялся только в отдельной копии проекта
+- **AND** в исходном проекте не выполнялись `git checkout/reset/clean/stash`
+
 #### Scenario: Прогон произвольной модели из реестра
 
 - **WHEN** нужно прогнать модель с id из `data/models.yaml` (например `opencode-mimo-v2-5-free`)
-- **THEN** текст ответа хранится вне проекта
-- **AND** в проект для судейства копируются только два слота `modelA.md` / `modelB.md`
+- **THEN** текст ответа MAY храниться локально в `data/answers/T-001/` (каталог игнорируется git) или вне проекта
+- **AND** для судейства используются только два слота `modelA.md` / `modelB.md`
 - **AND** координатор отмечает наличие ответа в ручном учёте
 
 ### Requirement: Шаг 3 — Судья через skill
