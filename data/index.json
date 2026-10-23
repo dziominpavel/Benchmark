@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated": "2026-10-21",
+  "updated": "2026-10-23",
   "matchups_digest": "44cd052f188ef5c91db297afe0752f8c69066532acc0895c333de09e7e14dd2a",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
@@ -314,6 +314,18 @@
       "wins": 18,
       "losses": 13,
       "draws": 5
+    },
+    "opencode-kimi-k3-1-pro-max": {
+      "name": "OpenCode Kimi K3.1 Pro Max",
+      "agent": "OpenCode",
+      "provider": "Moonshot AI",
+      "added": "2026-10-23",
+      "status": "active",
+      "elo": 1200,
+      "games": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0
     },
     "opencode-ling-3-0-flash-fin-free": {
       "name": "OpenCode Ling 3.0 Flash Fin Free",

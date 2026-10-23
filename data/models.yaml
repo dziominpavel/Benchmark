@@ -217,6 +217,13 @@ models:
     released: 2026-08-28
     added: 2026-10-17
     status: active
+  - id: opencode-kimi-k3-1-pro-max
+    name: "OpenCode Kimi K3.1 Pro Max"
+    agent: OpenCode
+    provider: Moonshot AI
+    version: 
+    added: 2026-10-23
+    status: active
   - id: opencode-ling-3-0-flash-fin-free
     name: "OpenCode Ling 3.0 Flash Fin Free"
     agent: OpenCode
