@@ -403,7 +403,7 @@ def test_routes_smoke():
 
         # Волна 1: favicon живой консоли и компактная плашка при 100%
         home_html = client.get("/").get_data(as_text=True)
-        assert '<link rel="icon" href="/static/icon.svg">' in home_html, (
+        assert '<link rel="icon" href="/static/icon.png">' in home_html, (
             "нет favicon живой консоли"
         )
         assert "Прогресс прогона — 100% · все пары закрыты" in home_html, (

@@ -204,7 +204,7 @@ def test_read_only_two_modes():
         assert "mirror-banner" in html, "в read-only нет плашки зеркала"
         assert "только просмотр" in html, "нет пометки «только просмотр»"
         assert "__catalog__" in html, "нет ссылки в каталог по маркеру"
-        assert '__root__icon.svg' in html, "нет favicon по маркеру __root__"
+        assert '__root__icon.png' in html, "нет favicon по маркеру __root__"
         assert "локальная консоль" not in html, "футер read-only упоминает локальную консоль"
         assert "демонстрационная копия" in html
 
@@ -327,7 +327,7 @@ def test_export_output_and_determinism():
                 "model/gamma/index.html", "task/T-001/index.html",
                 "static/css/console.css",
                 "static/js/theme.js", "static/js/mirror.js",
-                "static/js/filter-panel.js", "icon.svg",
+                "static/js/filter-panel.js", "icon.png",
             ):
                 assert expected in files_a, f"нет файла вывода: {expected}"
     print("2.1 export output and determinism: OK")

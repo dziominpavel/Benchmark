@@ -647,7 +647,7 @@ def _build(args: argparse.Namespace, out_root: Path) -> int:
     urls = build_url_map(model_ids, queue_pages, task_ids)
 
     shutil.copytree(TOOLS_DIR / "static", out_root / "static")
-    shutil.copyfile(TOOLS_DIR / "static" / "icon.svg", out_root / "icon.svg")
+    shutil.copyfile(TOOLS_DIR / "static" / "icon.png", out_root / "icon.png")
 
     written: list[str] = []
     mirror = MirrorData(client, index_data)
