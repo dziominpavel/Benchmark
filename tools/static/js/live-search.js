@@ -104,15 +104,17 @@
       const needle = normalize(raw).trim();
       let visible = 0;
       let hits = 0;
+      const matched = new Map();
 
       for (const row of rows) {
         const hay = normalize(row.dataset.search || "");
         const show = !needle || hay.indexOf(needle) !== -1;
-        row.hidden = !show;
-        if (show) {
-          visible += 1;
-          if (row.dataset.hit === "1") hits += 1;
-        }
+        matched.set(row, show);
+        /* В режиме «Подсвечивать» поиск не сужает состав: несовпавшие
+           строки остаются в таблице и приглушаются. */
+        row.hidden = highlightMode ? false : !show;
+        if (highlightMode || show) visible += 1;
+        if (show && row.dataset.hit === "1") hits += 1;
       }
 
       /* Подсветка: «filter-hit»/«filter-miss» — по тем же правилам, что и на
@@ -122,8 +124,8 @@
       if (highlightMode) {
         if (hits > 0) {
           for (const row of rows) {
-            const isHit = row.dataset.hit === "1";
-            row.classList.toggle("filter-hit", isHit);
+            const isHit = row.dataset.hit === "1" && matched.get(row);
+            row.classList.toggle("filter-hit", Boolean(isHit));
             row.classList.toggle("filter-miss", !isHit);
           }
         } else {
@@ -150,7 +152,11 @@
       setResetVisibility(root, Boolean(typed));
       updateLinks(root, param, typed);
       replaceLocationParam(param, typed);
-      setStatus(status, typed ? "Найдено: " + visible : "Показано: " + visible);
+      if (highlightMode) {
+        setStatus(status, typed ? "Подсвечено: " + hits : "Показано: " + visible);
+      } else {
+        setStatus(status, typed ? "Найдено: " + visible : "Показано: " + visible);
+      }
     }
 
     input.addEventListener("input", apply);

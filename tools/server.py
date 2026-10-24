@@ -1432,18 +1432,20 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
         return True
 
     if highlight:
-        for m in models_sorted:
-            m["hit"] = status_matches(m) and model_passes_tags(m, agent_sel, provider_sel)
+        # «Подсветка»: пул — весь реестр, статус и чипы — критерии отбора.
+        # Текстовый поиск тоже критерий отбора, а не сужение состава: строки
+        # остаются на месте, совпадения подсвечиваются, прочие приглушаются.
         models_pool = list(models_sorted)
-        models_visible = [m for m in models_pool if model_matches_query(m, query)]
-        highlight_hits = sum(1 for m in models_visible if m["hit"])
+        for m in models_pool:
+            m["hit"] = (
+                status_matches(m)
+                and model_passes_tags(m, agent_sel, provider_sel)
+            )
     else:
         models_pool = [
             m for m in models_sorted
             if model_passes_tags(m, agent_sel, provider_sel)
         ]
-        models_visible = [m for m in models_pool if model_matches_query(m, query)]
-        highlight_hits = 0
 
     # Живой поиск главной: сервер отдаёт весь пул (после нетекстовых
     # фильтров), а не только совпавшие строки. Клиент переключает hidden по
@@ -1453,6 +1455,14 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
             f"{m.get('name', '')} {m.get('id', '')}".casefold()
         )
         m["matches_query"] = model_matches_query(m, query)
+
+    # Выборка для экспорта: поиск сужает её в обоих режимах — файл не зависит
+    # от способа показа. Подсветка считает строки, совпавшие с поиском и
+    # прошедшие остальные условия.
+    models_visible = [m for m in models_pool if m["matches_query"]]
+    highlight_hits = (
+        sum(1 for m in models_visible if m["hit"]) if highlight else 0
+    )
 
     # Движение рейтинга: пул детерминирован парой (highlight, filter_mode).
     pool_ids = [m.get("id", "") for m in models_sorted]
@@ -1775,7 +1785,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             </thead>
             <tbody>
               {% for m in models_pool %}
-              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}"{% if not read_only() %} data-search="{{ m.search_text }}"{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if not m.matches_query %} hidden{% endif %}{% endif %}>
+              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit and m.matches_query else 'filter-miss' }}{% endif %}"{% if not read_only() %} data-search="{{ m.search_text }}"{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if filter_view != 'highlight' and not m.matches_query %} hidden{% endif %}{% endif %}>
                 <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span></td>
                 <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span></span>{% endif %}</td>
                 <td class="model-cell">
@@ -3984,6 +3994,9 @@ def leaderboard():
     # тот же, что при отдельной сортировке (сортировка стабильна).
     models_visible = [m for m in models_pool if m["matches_query"]]
     highlight_hits = selection["highlight_hits"]
+    # В подсветке таблица не сужается поиском: счётчик «Моделей» показывает
+    # весь пул, а «подсвечено» — отобранные строки (см. rating_selection).
+    filtered_count = len(models_pool) if highlight else len(models_visible)
 
     # Для формы вердикта — только активные модели (id, имя, агент)
     active_models = {
@@ -4088,7 +4101,7 @@ def leaderboard():
         models_pool=models_pool,
         models_visible=models_visible,
         models_count=len(models),
-        filtered_count=len(models_visible),
+        filtered_count=filtered_count,
         highlight_hits=highlight_hits,
         show_medals=show_medals,
         matchups_count=matchups_count,

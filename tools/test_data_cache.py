@@ -1170,7 +1170,37 @@ def test_main_highlight_dimming():
         assert "filter-miss" in heads["gamma"], "неотобранная строка не приглушена"
         assert "filter-hit" not in heads["gamma"], "неотобранная строка подсвечена"
 
-        # (б) Не отобрана ни одна строка — приглушения нет (спецификация).
+        # (б) Поиск в подсветке не сужает состав: совпадение выделено,
+        # несовпавшие строки остаются в таблице и приглушаются.
+        html = client.get("/?q=alp&view=highlight&filter=all").get_data(
+            as_text=True
+        )
+        heads = row_heads(html)
+        assert len(_rating_rows(html)) == 3, "поиск скрыл строки в подсветке"
+        assert "filter-hit" in heads["alpha"], "совпадение не подсвечено"
+        assert "filter-miss" in heads["beta"], "несовпавшая строка не приглушена"
+        assert "filter-miss" in heads["gamma"]
+        assert (
+            'data-live-count-value>3</a> · подсвечено '
+            '<span data-live-hits-value>1</span>'
+        ) in html
+        assert 'data-live-empty="search" hidden' in html
+
+        # (в) Поиск без совпадений в подсветке: строки видны, приглушения нет,
+        # вместо пустого состояния — подпись «ничего не подсвечено».
+        html = client.get("/?q=zzz&view=highlight&filter=all").get_data(
+            as_text=True
+        )
+        assert len(_rating_rows(html)) == 3, "пустой поиск скрыл строки"
+        heads = row_heads(html)
+        for mid, head in heads.items():
+            assert "filter-hit" not in head and "filter-miss" not in head, (
+                f"{mid}: приглушение без подсвеченных строк — {head}"
+            )
+        assert "data-live-hit-hint" in html and "data-live-hit-hint hidden" not in html
+        assert 'data-live-empty="search" hidden' in html
+
+        # (г) Не отобрана ни одна строка — приглушения нет (спецификация).
         models_yaml = ["models:"]
         for mid in ("n01", "n02"):
             models_yaml += [
@@ -1734,10 +1764,22 @@ def test_wave3_rating_search_sort():
         assert "Ничего не найдено по запросу" in html and "elta" in html
         assert 'data-live-table hidden' in html
         assert 'data-live-empty="search" hidden' not in html
-        # Подсветка: поиск сужает список, чипы только красят
+        # Подсветка: поиск не сужает список — совпадение выделено, прочие
+        # строки остаются видимыми и приглушаются.
         html = client.get("/?q=elta&view=highlight").get_data(as_text=True)
-        assert len(_rating_rows(html)) == 1
-        assert 'data-live-count-value>1</a> · подсвечено' in html
+        assert len(_rating_rows(html)) == 4, "поиск сузил список в подсветке"
+        assert (
+            'data-live-count-value>4</a> · подсвечено '
+            '<span data-live-hits-value>1</span>'
+        ) in html
+        delta_head = next(
+            r for r in _all_rating_rows(html) if "model/delta" in r
+        ).split(">", 1)[0]
+        alpha_head = next(
+            r for r in _all_rating_rows(html) if "model/alpha" in r
+        ).split(">", 1)[0]
+        assert "filter-hit" in delta_head and "filter-miss" not in delta_head
+        assert "filter-miss" in alpha_head and "filter-hit" not in alpha_head
         # Все строки пула несут data-search; скрытые возвращает очистка.
         assert all("data-search=" in r for r in _all_rating_rows(html))
 
