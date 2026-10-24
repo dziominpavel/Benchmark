@@ -118,6 +118,10 @@ python tools/register_model.py --auto --id <slug> --name "<Имя Модели>"
 Координатор укажет реальные `id` при записи вердикта. Правило анонимности относится
 к A/B; при ручной саморегистрации реестр читается только для регистрации, не оценки.
 
+Регистрация в `models.yaml` **не** ставит флаг в `data/answer_flags.yaml`. Если ответ
+уже лежит в `data/answers/<T-NNN>/<name>/`, флаг `true` на этот таск нужно проставить
+отдельно (см. `.cursor/rules/model-registration.mdc`).
+
 ## Проверка самого Benchmark (не прогон участника)
 
 - `uv run python tools/test_elo.py` — тесты ELO, регистрации и выбора задач.

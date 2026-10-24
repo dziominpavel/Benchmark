@@ -312,6 +312,13 @@ models:
     version: 
     added: 2026-10-15
     status: archived
+  - id: opencode-north-mini-code-free-thinking
+    name: "OpenCode North Mini Code Free Thinking"
+    agent: OpenCode
+    provider: 
+    version: 
+    added: 2026-10-24
+    status: active
   - id: opencode-qwen3-8-max-xhigh
     name: "OpenCode Qwen3.8 Max Xhigh"
     agent: OpenCode

@@ -41,6 +41,7 @@ answer_flags:
     opencode-minimax-m3-1-flash-free-max: true
     opencode-muse-spark-1-3-free-xhigh: true
     opencode-nemotron-3-5-super-vl-free-xhigh: true
+    opencode-north-mini-code-free-thinking: true
     opencode-qwen3-8-max-xhigh: true
     opencode-space-bunny-free-max: true
     opencode-step-5-preview-free-high: true

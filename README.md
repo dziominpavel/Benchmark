@@ -41,10 +41,12 @@
 | `@benchmark-run-a T-NNN` | Прогон слота A: читает task.md, изучает код, пишет `data/answers/T-NNN/modelA.md` |
 | `@benchmark-run-b T-NNN` | Прогон слота B: то же самое → `data/answers/T-NNN/modelB.md` |
 | `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; не вызывает `record_verdict.py` |
+| `@benchmark-batch-judge [N] [T-NNN]` | Батч-судейство: N пар из очереди, параллельные судьи, автозапись через `record_verdict` (по умолчанию N=10) |
 
 Три основных skill продублированы для трёх сред: `.opencode/skills/`,
-`.cursor/skills/`, `.devin/skills/`. `benchmark-batch-judge` есть только
-в OpenCode — он запускает параллельные судейские сессии.
+`.cursor/skills/`, `.devin/skills/`. `benchmark-batch-judge` — в OpenCode
+и в Cursor (скилл; без отдельной `.cursor/commands/`, иначе `/` дублирует
+пункт); параллельные судейские сессии, координатор сам пишет вердикты.
 Ручное судейство без skill — по шаблону [docs/judge-prompt.md](docs/judge-prompt.md),
 запись результата — через веб-сервер.
 
