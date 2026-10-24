@@ -30,6 +30,7 @@ answer_flags:
     opencode-glm-5-3-flash-free: true
     opencode-grok-4-7-xhigh: true
     opencode-hy4-preview-high: true
+    opencode-iceman-contributor-free: true
     opencode-inkling-free-max: true
     opencode-inkling-small-free-max: true
     opencode-kimi-k3-1-pro-max: true
@@ -45,3 +46,5 @@ answer_flags:
     opencode-qwen3-8-max-xhigh: true
     opencode-space-bunny-free-max: true
     opencode-step-5-preview-free-high: true
+    opencode-laguna-xs-2-1-free: true
+    opencode-laguna-s-2-1-free: true

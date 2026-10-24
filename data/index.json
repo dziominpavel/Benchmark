@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "updated": "2026-10-24",
-  "matchups_digest": "4c4ded69f428fc07f8f32870036157f98d56a5c5d5267d7cb367bc40084eaccc",
+  "updated": "2026-10-25",
+  "matchups_digest": "8716a6a8d5bd2ff9aeb9a2713ea6dbbdcf54beb03c33f768c50724f175479804",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -45,10 +45,10 @@
       "provider": "Google",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1183,
-      "games": 42,
-      "wins": 19,
-      "losses": 22,
+      "elo": 1188,
+      "games": 45,
+      "wins": 21,
+      "losses": 23,
       "draws": 1
     },
     "cursor-grok-4-6": {
@@ -69,9 +69,9 @@
       "provider": "SpaceXAI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1203,
-      "games": 40,
-      "wins": 19,
+      "elo": 1236,
+      "games": 43,
+      "wins": 22,
       "losses": 20,
       "draws": 1
     },
@@ -81,11 +81,11 @@
       "provider": "Moonshot AI",
       "added": "2026-09-06",
       "status": "active",
-      "elo": 1201,
-      "games": 40,
-      "wins": 17,
+      "elo": 1224,
+      "games": 43,
+      "wins": 19,
       "losses": 20,
-      "draws": 3
+      "draws": 4
     },
     "cursor-sonnet-5-5-1m-max": {
       "name": "Cursor Sonnet 5.5 1M Max",
@@ -117,10 +117,10 @@
       "provider": "DeepSeek",
       "added": "2026-09-10",
       "status": "active",
-      "elo": 1194,
-      "games": 41,
-      "wins": 18,
-      "losses": 21,
+      "elo": 1203,
+      "games": 44,
+      "wins": 20,
+      "losses": 22,
       "draws": 2
     },
     "devin-glm-5-2-high": {
@@ -141,9 +141,9 @@
       "provider": "Z.ai",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1229,
-      "games": 38,
-      "wins": 20,
+      "elo": 1253,
+      "games": 41,
+      "wins": 23,
       "losses": 15,
       "draws": 3
     },
@@ -213,9 +213,9 @@
       "provider": "Cognition",
       "added": "2026-09-10",
       "status": "active",
-      "elo": 1186,
-      "games": 40,
-      "wins": 19,
+      "elo": 1217,
+      "games": 43,
+      "wins": 22,
       "losses": 19,
       "draws": 2
     },
@@ -309,11 +309,11 @@
       "provider": "Z.ai",
       "added": "2026-10-16",
       "status": "active",
-      "elo": 1188,
-      "games": 40,
-      "wins": 16,
+      "elo": 1208,
+      "games": 43,
+      "wins": 18,
       "losses": 18,
-      "draws": 6
+      "draws": 7
     },
     "opencode-grok-4-7-xhigh": {
       "name": "OpenCode Grok 4.7 Xhigh",
@@ -338,6 +338,18 @@
       "wins": 20,
       "losses": 14,
       "draws": 5
+    },
+    "opencode-iceman-contributor-free": {
+      "name": "OpenCode Iceman Contributor Free",
+      "agent": "",
+      "provider": "",
+      "added": "2026-10-25",
+      "status": "active",
+      "elo": 1060,
+      "games": 11,
+      "wins": 1,
+      "losses": 10,
+      "draws": 0
     },
     "opencode-inkling-free-max": {
       "name": "OpenCode Inkling Free Max",
@@ -453,11 +465,11 @@
       "provider": "Meta",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1233,
-      "games": 40,
-      "wins": 20,
+      "elo": 1244,
+      "games": 43,
+      "wins": 22,
       "losses": 17,
-      "draws": 3
+      "draws": 4
     },
     "opencode-nemotron-3-5-super-vl-free-xhigh": {
       "name": "OpenCode Nemotron 3.5 Super VL Free Xhigh",
@@ -489,9 +501,9 @@
       "provider": "Alibaba",
       "added": "2026-10-17",
       "status": "active",
-      "elo": 1214,
-      "games": 40,
-      "wins": 18,
+      "elo": 1242,
+      "games": 43,
+      "wins": 21,
       "losses": 16,
       "draws": 6
     },
@@ -518,18 +530,42 @@
       "wins": 11,
       "losses": 25,
       "draws": 3
+    },
+    "opencode-laguna-xs-2-1-free": {
+      "name": "OpenCode Laguna XS 2.1 Free",
+      "agent": "OpenCode",
+      "provider": "Reflection AI",
+      "added": "2026-10-25",
+      "status": "active",
+      "elo": 1040,
+      "games": 11,
+      "wins": 0,
+      "losses": 11,
+      "draws": 0
+    },
+    "opencode-laguna-s-2-1-free": {
+      "name": "OpenCode Laguna S 2.1 Free",
+      "agent": "OpenCode",
+      "provider": "Reflection AI",
+      "added": "2026-10-25",
+      "status": "active",
+      "elo": 1195,
+      "games": 11,
+      "wins": 4,
+      "losses": 4,
+      "draws": 3
     }
   },
   "tasks": {
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "matchups_count": 761
+      "matchups_count": 791
     }
   },
   "matchups_summary": {
-    "total": 761,
-    "applied": 759,
+    "total": 791,
+    "applied": 789,
     "voided": 1,
     "tombstone": 1,
     "skipped": 0
@@ -14954,6 +14990,576 @@
         "before": 970,
         "after": 959,
         "delta": -11
+      }
+    },
+    {
+      "matchup": "T-001/762",
+      "seq": 762,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:15+03:00",
+      "model_a_id": "opencode-iceman-contributor-free",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 1200,
+        "after": 1180,
+        "delta": -20
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1220,
+        "delta": 20
+      }
+    },
+    {
+      "matchup": "T-001/763",
+      "seq": 763,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:15+03:00",
+      "model_a_id": "opencode-iceman-contributor-free",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1180,
+        "after": 1201,
+        "delta": 21
+      },
+      "elo_b": {
+        "before": 1200,
+        "after": 1179,
+        "delta": -21
+      }
+    },
+    {
+      "matchup": "T-001/764",
+      "seq": 764,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:15+03:00",
+      "model_a_id": "opencode-laguna-s-2-1-free",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1220,
+        "after": 1238,
+        "delta": 18
+      },
+      "elo_b": {
+        "before": 1179,
+        "after": 1161,
+        "delta": -18
+      }
+    },
+    {
+      "matchup": "T-001/765",
+      "seq": 765,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:15+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1201,
+        "after": 1213,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1201,
+        "after": 1181,
+        "delta": -20
+      }
+    },
+    {
+      "matchup": "T-001/766",
+      "seq": 766,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:15+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1213,
+        "after": 1214,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 1238,
+        "after": 1237,
+        "delta": -1
+      }
+    },
+    {
+      "matchup": "T-001/767",
+      "seq": 767,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:16+03:00",
+      "model_a_id": "cursor-kimi-k3-max",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1214,
+        "after": 1224,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1161,
+        "after": 1144,
+        "delta": -17
+      }
+    },
+    {
+      "matchup": "T-001/768",
+      "seq": 768,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:16+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1203,
+        "after": 1214,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1181,
+        "after": 1162,
+        "delta": -19
+      }
+    },
+    {
+      "matchup": "T-001/769",
+      "seq": 769,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1214,
+        "after": 1227,
+        "delta": 13
+      },
+      "elo_b": {
+        "before": 1237,
+        "after": 1216,
+        "delta": -21
+      }
+    },
+    {
+      "matchup": "T-001/770",
+      "seq": 770,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "cursor-grok-4-6-low",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1227,
+        "after": 1236,
+        "delta": 9
+      },
+      "elo_b": {
+        "before": 1144,
+        "after": 1129,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/771",
+      "seq": 771,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1194,
+        "after": 1205,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1162,
+        "after": 1144,
+        "delta": -18
+      }
+    },
+    {
+      "matchup": "T-001/772",
+      "seq": 772,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 1205,
+        "after": 1193,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1216,
+        "after": 1235,
+        "delta": 19
+      }
+    },
+    {
+      "matchup": "T-001/773",
+      "seq": 773,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-deepseek-v4-pro-max",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1193,
+        "after": 1203,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1129,
+        "after": 1113,
+        "delta": -16
+      }
+    },
+    {
+      "matchup": "T-001/774",
+      "seq": 774,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-glm-5-3-flash-free",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1188,
+        "after": 1198,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1144,
+        "after": 1127,
+        "delta": -17
+      }
+    },
+    {
+      "matchup": "T-001/775",
+      "seq": 775,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-glm-5-3-flash-free",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1198,
+        "after": 1199,
+        "delta": 1
+      },
+      "elo_b": {
+        "before": 1235,
+        "after": 1233,
+        "delta": -2
+      }
+    },
+    {
+      "matchup": "T-001/776",
+      "seq": 776,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-glm-5-3-flash-free",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1199,
+        "after": 1208,
+        "delta": 9
+      },
+      "elo_b": {
+        "before": 1113,
+        "after": 1098,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/777",
+      "seq": 777,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1186,
+        "after": 1196,
+        "delta": 10
+      },
+      "elo_b": {
+        "before": 1127,
+        "after": 1110,
+        "delta": -17
+      }
+    },
+    {
+      "matchup": "T-001/778",
+      "seq": 778,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1196,
+        "after": 1209,
+        "delta": 13
+      },
+      "elo_b": {
+        "before": 1233,
+        "after": 1211,
+        "delta": -22
+      }
+    },
+    {
+      "matchup": "T-001/779",
+      "seq": 779,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-swe-2-max",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1209,
+        "after": 1217,
+        "delta": 8
+      },
+      "elo_b": {
+        "before": 1098,
+        "after": 1084,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/780",
+      "seq": 780,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-iceman-contributor-free",
+      "model_b_id": "opencode-qwen3-8-max-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1110,
+        "after": 1096,
+        "delta": -14
+      },
+      "elo_b": {
+        "before": 1214,
+        "after": 1223,
+        "delta": 9
+      }
+    },
+    {
+      "matchup": "T-001/781",
+      "seq": 781,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-laguna-s-2-1-free",
+      "model_b_id": "opencode-qwen3-8-max-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1211,
+        "after": 1192,
+        "delta": -19
+      },
+      "elo_b": {
+        "before": 1223,
+        "after": 1235,
+        "delta": 12
+      }
+    },
+    {
+      "matchup": "T-001/782",
+      "seq": 782,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-laguna-xs-2-1-free",
+      "model_b_id": "opencode-qwen3-8-max-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1084,
+        "after": 1072,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1235,
+        "after": 1242,
+        "delta": 7
+      }
+    },
+    {
+      "matchup": "T-001/783",
+      "seq": 783,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1183,
+        "after": 1192,
+        "delta": 9
+      },
+      "elo_b": {
+        "before": 1096,
+        "after": 1081,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/784",
+      "seq": 784,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 1192,
+        "after": 1180,
+        "delta": -12
+      },
+      "elo_b": {
+        "before": 1192,
+        "after": 1212,
+        "delta": 20
+      }
+    },
+    {
+      "matchup": "T-001/785",
+      "seq": 785,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "cursor-gemini-3-8-flash-high",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1180,
+        "after": 1188,
+        "delta": 8
+      },
+      "elo_b": {
+        "before": 1072,
+        "after": 1058,
+        "delta": -14
+      }
+    },
+    {
+      "matchup": "T-001/786",
+      "seq": 786,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-iceman-contributor-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1229,
+        "after": 1236,
+        "delta": 7
+      },
+      "elo_b": {
+        "before": 1081,
+        "after": 1069,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/787",
+      "seq": 787,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-laguna-s-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1236,
+        "after": 1247,
+        "delta": 11
+      },
+      "elo_b": {
+        "before": 1212,
+        "after": 1193,
+        "delta": -19
+      }
+    },
+    {
+      "matchup": "T-001/788",
+      "seq": 788,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "devin-glm-5-3-flash-max",
+      "model_b_id": "opencode-laguna-xs-2-1-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1247,
+        "after": 1253,
+        "delta": 6
+      },
+      "elo_b": {
+        "before": 1058,
+        "after": 1048,
+        "delta": -10
+      }
+    },
+    {
+      "matchup": "T-001/789",
+      "seq": 789,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-iceman-contributor-free",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1069,
+        "after": 1060,
+        "delta": -9
+      },
+      "elo_b": {
+        "before": 1233,
+        "after": 1240,
+        "delta": 7
+      }
+    },
+    {
+      "matchup": "T-001/790",
+      "seq": 790,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-laguna-s-2-1-free",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "draw",
+      "elo_a": {
+        "before": 1193,
+        "after": 1195,
+        "delta": 2
+      },
+      "elo_b": {
+        "before": 1240,
+        "after": 1238,
+        "delta": -2
+      }
+    },
+    {
+      "matchup": "T-001/791",
+      "seq": 791,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T01:28:47+03:00",
+      "model_a_id": "opencode-laguna-xs-2-1-free",
+      "model_b_id": "opencode-muse-spark-1-3-free-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1048,
+        "after": 1040,
+        "delta": -8
+      },
+      "elo_b": {
+        "before": 1238,
+        "after": 1244,
+        "delta": 6
       }
     }
   ],

@@ -233,6 +233,13 @@ models:
     released: 2026-08-28
     added: 2026-10-17
     status: active
+  - id: opencode-iceman-contributor-free
+    name: "OpenCode Iceman Contributor Free"
+    agent:
+    provider:
+    version:
+    added: 2026-10-25
+    status: active
   - id: opencode-inkling-free-max
     name: "OpenCode Inkling Free Max"
     agent: OpenCode
@@ -340,4 +347,18 @@ models:
     provider: StepFun
     version: 
     added: 2026-10-10
+    status: active
+  - id: opencode-laguna-xs-2-1-free
+    name: "OpenCode Laguna XS 2.1 Free"
+    agent: OpenCode
+    provider: Reflection AI
+    version: free
+    added: 2026-10-25
+    status: active
+  - id: opencode-laguna-s-2-1-free
+    name: "OpenCode Laguna S 2.1 Free"
+    agent: OpenCode
+    provider: Reflection AI
+    version: free
+    added: 2026-10-25
     status: active
