@@ -188,6 +188,22 @@ models:
     version: 
     added: 2026-10-02
     status: active
+  - id: opencode-flint-free
+    name: "OpenCode Flint Free"
+    agent: OpenCode
+    provider: Recursive
+    version: free
+    released: 2026-10-21
+    added: 2026-10-24
+    status: active
+  - id: opencode-free-model-router-20261024
+    name: "OpenCode Free Model Router 20261024"
+    agent: OpenCode
+    provider: OpenCode
+    version: 20261024
+    released: 2026-10-24
+    added: 2026-10-24
+    status: active
   - id: opencode-gemini-4-argon-high
     name: "OpenCode Gemini 4 Argon High"
     agent: OpenCode
@@ -216,6 +232,22 @@ models:
     version: 4 preview
     released: 2026-08-28
     added: 2026-10-17
+    status: active
+  - id: opencode-inkling-free-max
+    name: "OpenCode Inkling Free Max"
+    agent: OpenCode
+    provider: Thinking Machines Lab
+    version: free-max
+    released: 2026-07-15
+    added: 2026-10-24
+    status: active
+  - id: opencode-inkling-small-free-max
+    name: "OpenCode Inkling Small Free Max"
+    agent: OpenCode
+    provider: Thinking Machines Lab
+    version: free-max
+    released: 2026-07-30
+    added: 2026-10-24
     status: active
   - id: opencode-kimi-k3-1-pro-max
     name: "OpenCode Kimi K3.1 Pro Max"
