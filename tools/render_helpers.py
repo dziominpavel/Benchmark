@@ -10,6 +10,8 @@ import html
 import math
 from datetime import date, timedelta
 
+from elo import expected_score, k_factor
+
 DEFAULT_ELO = 1200
 
 
@@ -590,219 +592,201 @@ def format_confidence(games: int) -> str:
     return f"±{w}" if w is not None else "—"
 
 
-TREND_WINDOW = 5
-TREND_MIN_GAMES = TREND_WINDOW + 1
-STALE_GLOBAL_GAP = 30
+MOMENTUM_WINDOW = 10
+MOMENTUM_MIN_GAMES = 16
+MOMENTUM_Z_THRESHOLD = 1.5
+MOMENTUM_MAX_AGE_DAYS = 14
 
 
-def _rank_positions(pool_ids: list[str], elo: dict[str, int]) -> dict[str, int]:
-    """Ранжирует пул: ELO по убыванию, затем id по возрастанию. Места с 1."""
-    ordered = sorted(pool_ids, key=lambda mid: (-elo.get(mid, DEFAULT_ELO), mid))
-    return {mid: i + 1 for i, mid in enumerate(ordered)}
+def _parse_iso_date(value: str) -> date | None:
+    """Разбирает дату журнала (YYYY-MM-DD); None, если формат не тот."""
+    try:
+        return date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return None
 
 
-class _Fenwick:
-    """Дерево Фенвика для порядковых статистик пула (занятые пары ELO×id)."""
-
-    def __init__(self, size: int) -> None:
-        self._n = size
-        self._tree = [0] * (size + 1)
-
-    def add(self, pos: int, delta: int) -> None:
-        """Прибавляет delta на позиции pos (0-based)."""
-        i = pos + 1
-        n = self._n
-        tree = self._tree
-        while i <= n:
-            tree[i] += delta
-            i += i & (-i)
-
-    def prefix(self, pos: int) -> int:
-        """Сумма на позициях [0, pos)."""
-        total = 0
-        i = pos
-        tree = self._tree
-        while i > 0:
-            total += tree[i]
-            i -= i & (-i)
-        return total
+def _short_date(value: str) -> str:
+    """Дата для тултипа: ДД.ММ или пустая строка."""
+    parsed = _parse_iso_date(value)
+    return parsed.strftime("%d.%m") if parsed else ""
 
 
-def compute_rank_trends(
+def _momentum_title(
+    delta: int,
+    wins: int,
+    draws: int,
+    losses: int,
+    last_date: str,
+    window: int,
+) -> str:
+    """Тултип индикатора: ΔELO, счёт окна и дата последней игры."""
+    games_word = plural_ru(window, "игра", "игры", "игр")
+    text = (
+        f"За {window} {games_word} рейтинг {delta:+d}: "
+        f"{wins} {plural_ru(wins, 'победа', 'победы', 'побед')}, "
+        f"{draws} {plural_ru(draws, 'ничья', 'ничьи', 'ничьих')}, "
+        f"{losses} {plural_ru(losses, 'поражение', 'поражения', 'поражений')}."
+    )
+    short = _short_date(last_date)
+    if short:
+        text += f" Последняя игра {short}."
+    return text
+
+
+def compute_rating_momentum(
     elo_history: list[dict],
     pool_ids: list[str],
     current_elo: dict[str, int],
-    window: int = TREND_WINDOW,
-    stale_gap: int = STALE_GLOBAL_GAP,
+    window: int = MOMENTUM_WINDOW,
+    min_games: int = MOMENTUM_MIN_GAMES,
+    z_threshold: float = MOMENTUM_Z_THRESHOLD,
+    max_age_days: int = MOMENTUM_MAX_AGE_DAYS,
 ) -> dict[str, dict]:
-    """Считает динамику позиции d5 для видимого пула (один проход по истории).
+    """Считает движение рейтинга за последние `window` личных игр.
 
-    Для модели с k играми (k >= window + 1) база — ELO-срез сразу после
-    ее (k - window)-й личной игры; rank_then — ранг в том же пуле по срезу
-    (без игр на тот момент = 1200), rank_now — текущий ранг в пуле.
-    Дельта = rank_then - rank_now. При k < window + 1 базы нет.
-    Модель без личных игр в последних stale_gap глобальных вердиктах
-    считается застоявшейся: вместо стрелки нейтраль с пояснением.
+    Δ = ELO_now − ELO до окна; место в расчёте не участвует. Заметность
+    проверяется по z = Δ / sd, где sd — разброс от удачи:
+    sqrt(Σ K_i² · E_i · (1 − E_i)) по играм окна. K_i — K-фактор перед
+    игрой (по числу личных игр модели), E_i — ожидаемый счёт против
+    соперника на момент игры. Стрелка появляется только при
+    `|z| >= z_threshold` и свежести: последняя игра не старше
+    `max_age_days` от последней даты журнала. Модель с `games < min_games`
+    значения не получает.
 
-    Ранги на моменты срезов считаются одним проходом: занятость пар
-    «(ELO-после, id)» поддерживается деревом Фенвика, запрос ранга —
-    O(log N) без перескана истории на каждую модель. Порядок рангов —
-    как в _rank_positions (ELO по убыванию, затем id по возрастанию).
+    Возвращает {id: {arrow, css, delta, z, games_in_window, wins, draws,
+    losses, last_date, has_value, title}}. `has_value` — есть ли числовое
+    значение для сортировки (достаточно игр и свежая форма); `title` —
+    тултип стрелки или пояснение, почему её нет.
     """
+    window = max(1, int(window))
+    min_games = max(1, int(min_games))
+    max_age_days = max(0, int(max_age_days))
+
     pool = list(pool_ids)
     pool_set = set(pool)
     history = sorted(elo_history or [], key=lambda e: e.get("seq", 0))
 
-    rank_now_map = _rank_positions(pool, current_elo)
+    personal: dict[str, list[dict]] = {mid: [] for mid in pool}
+    games_before: dict[str, int] = {mid: 0 for mid in pool}
+    fresh_dates: list[date] = []
 
-    personal: dict[str, list[int]] = {mid: [] for mid in pool}
-    pairs: set[tuple[int, str]] = {(-DEFAULT_ELO, mid) for mid in pool}
-    for e in history:
-        seq = e.get("seq", 0)
-        a_id = e.get("model_a_id", "")
-        if a_id in pool_set:
-            personal[a_id].append(seq)
-            val = e.get("elo_a", {}).get("after")
-            if val is not None:
-                pairs.add((-int(val), a_id))
-        b_id = e.get("model_b_id", "")
-        if b_id in pool_set:
-            personal[b_id].append(seq)
-            val = e.get("elo_b", {}).get("after")
-            if val is not None:
-                pairs.add((-int(val), b_id))
-
-    baseline: dict[str, int] = {}
-    stale: set[str] = set()
-    max_seq = max((e.get("seq", 0) for e in history), default=0)
-    for mid in pool:
-        seqs = personal[mid]
-        if len(seqs) >= window + 1:
-            if history and max_seq - seqs[-1] >= stale_gap:
-                stale.add(mid)
-            else:
-                baseline[mid] = seqs[len(seqs) - window - 1]
-
-    # Ранги на срезы: один проход по истории. Каждая модель в каждый
-    # момент занимает ровно одну пару «(ELO-после, id)»; занятость пар
-    # и число строго более высоких пар поддерживает дерево Фенвика.
-    queries: dict[int, list[str]] = {}
-    for mid, cut in baseline.items():
-        queries.setdefault(cut, []).append(mid)
-    pending = sorted(queries)
-
-    # Ключи пар — (-ELO, id): порядок сортировки совпадает с
-    # (ELO по убыванию, id по возрастанию) без key-функции.
-    ordered_pairs = sorted(pairs)
-    pos = {pair: i for i, pair in enumerate(ordered_pairs)}
-    fenwick = _Fenwick(len(ordered_pairs))
-    current: dict[str, int] = {mid: DEFAULT_ELO for mid in pool}
-    for mid in pool:
-        fenwick.add(pos[(-DEFAULT_ELO, mid)], 1)
-
-    rank_then_map: dict[str, int] = {}
-    snap_value: dict[str, int] = {}
-
-    def _answer(cut: int) -> None:
-        for mid_q in queries[cut]:
-            snap_value[mid_q] = current[mid_q]
-            rank_then_map[mid_q] = (
-                fenwick.prefix(pos[(-current[mid_q], mid_q)]) + 1
-            )
-
-    def _apply_event(e: dict) -> None:
-        for side, elo_key in (("model_a_id", "elo_a"), ("model_b_id", "elo_b")):
-            mid = e.get(side, "")
+    for event in history:
+        event_date = _parse_iso_date(event.get("date", ""))
+        if event_date is not None:
+            fresh_dates.append(event_date)
+        for side, own_key, opp_key in (
+            ("model_a_id", "elo_a", "elo_b"),
+            ("model_b_id", "elo_b", "elo_a"),
+        ):
+            mid = event.get(side, "")
             if mid not in pool_set:
                 continue
-            val = e.get(elo_key, {}).get("after")
-            if val is None:
+            own = event.get(own_key) or {}
+            opp = event.get(opp_key) or {}
+            before = own.get("before")
+            after = own.get("after")
+            if before is None or after is None:
                 continue
-            new = int(val)
-            old = current[mid]
-            if new == old:
+            winner = event.get("winner")
+            if winner == "draw":
+                result = 0.5
+            elif (winner == "a" and side == "model_a_id") or (
+                winner == "b" and side == "model_b_id"
+            ):
+                result = 1.0
+            elif winner in ("a", "b"):
+                result = 0.0
+            else:
                 continue
-            fenwick.add(pos[(-old, mid)], -1)
-            current[mid] = new
-            fenwick.add(pos[(-new, mid)], 1)
+            delta = own.get("delta")
+            if delta is None:
+                delta = int(after) - int(before)
+            personal[mid].append({
+                "seq": event.get("seq", 0),
+                "date": str(event.get("date", "") or ""),
+                "delta": int(delta),
+                "elo_before": int(before),
+                "elo_after": int(after),
+                "opp_before": int(opp.get("before", DEFAULT_ELO)),
+                "result": result,
+                "k": k_factor(games_before[mid]),
+            })
+            games_before[mid] += 1
 
-    qi = 0
-    for e in history:
-        seq = e.get("seq", 0)
-        # Срез cut полон, когда встретилось событие с seq > cut:
-        # все события с seq <= cut уже применены.
-        while qi < len(pending) and pending[qi] < seq:
-            _answer(pending[qi])
-            qi += 1
-        _apply_event(e)
-    while qi < len(pending):
-        _answer(pending[qi])
-        qi += 1
+    fresh_date = max(fresh_dates) if fresh_dates else None
 
-    trends: dict[str, dict] = {}
+    momentum: dict[str, dict] = {}
     for mid in pool:
-        rank_now = rank_now_map[mid]
-        if mid in stale:
-            gap = max_seq - personal[mid][-1]
-            trends[mid] = {
-                "delta": None,
-                "label": "–",
-                "arrow": "",
-                "num": "–",
-                "css": "history-delta-neutral",
-                "title": (
-                    f"без личных игр в последних {stale_gap} прогонах "
-                    f"(последняя: {gap} назад)"
-                ),
-                "rank_then": None,
-                "rank_now": rank_now,
-                "elo_delta": None,
-                "has_baseline": False,
-                "stale": True,
-            }
-            continue
-        if mid not in baseline:
-            trends[mid] = {
-                "delta": None,
-                "label": "–",
-                "arrow": "",
-                "num": "–",
-                "css": "history-delta-neutral",
-                "title": "мало игр для тренда: нужно 6+ личных игр",
-                "rank_then": None,
-                "rank_now": rank_now,
-                "elo_delta": None,
-                "has_baseline": False,
-            }
-            continue
-        rank_then = rank_then_map[mid]
-        delta = rank_then - rank_now
-        elo_delta = current_elo.get(mid, DEFAULT_ELO) - snap_value.get(mid, DEFAULT_ELO)
-        if delta > 0:
-            label, css = f"↑{delta}", "history-delta-up"
-            arrow, num = "↑", str(delta)
-        elif delta < 0:
-            label, css = f"↓{-delta}", "history-delta-down"
-            arrow, num = "↓", str(-delta)
-        else:
-            label, css = "=", "history-delta-neutral"
-            arrow, num = "", "="
-        trends[mid] = {
-            "delta": delta,
-            "label": label,
-            "arrow": arrow,
-            "num": num,
-            "css": css,
-            "title": (
-                f"5 личных игр · ΔELO {elo_delta:+d} · "
-                f"место {rank_then}→{rank_now}"
-            ),
-            "rank_then": rank_then,
-            "rank_now": rank_now,
-            "elo_delta": elo_delta,
-            "has_baseline": True,
+        records = personal[mid]
+        last_date = records[-1]["date"] if records else ""
+        item = {
+            "arrow": "",
+            "css": "history-delta-neutral",
+            "delta": None,
+            "z": None,
+            "games_in_window": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "last_date": last_date,
+            "has_value": False,
+            "title": "",
         }
-    return trends
+        if len(records) < min_games:
+            item["title"] = (
+                f"мало игр для тренда: нужно {min_games}+ личных игр"
+            )
+            momentum[mid] = item
+            continue
+
+        recent = records[-window:]
+        wins = sum(1 for r in recent if r["result"] == 1.0)
+        draws = sum(1 for r in recent if r["result"] == 0.5)
+        losses = sum(1 for r in recent if r["result"] == 0.0)
+        delta = int(current_elo.get(mid, recent[-1]["elo_after"])) - int(
+            recent[0]["elo_before"]
+        )
+        variance = 0.0
+        for r in recent:
+            expected = expected_score(r["elo_before"], r["opp_before"])
+            variance += (r["k"] ** 2) * expected * (1.0 - expected)
+        sd = math.sqrt(variance)
+        z = delta / sd if sd > 0 else 0.0
+
+        last_parsed = _parse_iso_date(last_date)
+        fresh = (
+            fresh_date is not None
+            and last_parsed is not None
+            and (fresh_date - last_parsed).days <= max_age_days
+        )
+        item.update({
+            "delta": delta,
+            "z": z,
+            "games_in_window": len(recent),
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "has_value": fresh,
+        })
+        if not fresh:
+            item["title"] = (
+                f"нет личных игр в последних {max_age_days} днях"
+            )
+        elif z >= z_threshold - 1e-9:
+            item["arrow"] = "↑"
+            item["css"] = "history-delta-up"
+            item["title"] = _momentum_title(
+                delta, wins, draws, losses, last_date, window,
+            )
+        elif z <= -z_threshold + 1e-9:
+            item["arrow"] = "↓"
+            item["css"] = "history-delta-down"
+            item["title"] = _momentum_title(
+                delta, wins, draws, losses, last_date, window,
+            )
+        momentum[mid] = item
+    return momentum
 
 
 # ─── Аналитика: карточка «Рейтинг» (интервалы + распределение) ──────────

@@ -893,10 +893,13 @@ def test_pagination_items_window():
     print("2.7 pagination items window: OK")
 
 
-def _history_journal(events: int, winners: str | None = None) -> str:
+def _history_journal(
+    events: int, winners: str | None = None, day: str = "2026-01-02",
+) -> str:
     """Журнал alpha vs beta с ELO-снэпшотами, посчитанными тем же реплеем.
 
     winners — строка исходов 'a'/'b' по событию (по умолчанию чередование).
+    day — дата всех событий (YYYY-MM-DD).
     """
     elo_a = elo_b = elo.DEFAULT_ELO
     games_a = games_b = 0
@@ -923,8 +926,8 @@ def _history_journal(events: int, winners: str | None = None) -> str:
             "model_a_id": "alpha",
             "model_b_id": "beta",
             "winner": winner,
-            "date": "2026-01-02",
-            "recorded_at": f"2026-01-02T10:{seq % 60:02d}:00+03:00",
+            "date": day,
+            "recorded_at": f"{day}T10:{seq % 60:02d}:00+03:00",
             "elo": {
                 "alpha": {"before": before_a, "after": new_a, "delta": new_a - before_a},
                 "beta": {"before": before_b, "after": new_b, "delta": new_b - before_b},
@@ -1450,6 +1453,22 @@ def _rating_rows(html: str) -> list[str]:
     ]
 
 
+def _row_of(html: str, model_id: str) -> str:
+    """Строка таблицы рейтинга конкретной модели (или пустая строка)."""
+    for row in _all_rating_rows(html):
+        if f'href="/model/{model_id}"' in row:
+            return row
+    return ""
+
+
+def _trend_of(html: str, model_id: str) -> str:
+    """Ячейка «Тренд» строки модели (или пустая строка)."""
+    row = _row_of(html, model_id)
+    if 'class="trend-cell">' not in row:
+        return ""
+    return row.split('class="trend-cell">', 1)[1].split("</td>", 1)[0]
+
+
 def _h2h_visible(h2h_html: str) -> str:
     """Текст видимых строк «Личных встреч» (без скрытых live-поиском)."""
     rows = re.findall(r'<tr\b[^>]*>.*?</tr>', h2h_html, re.S)
@@ -1752,6 +1771,111 @@ def test_wave3_rating_search_sort():
         assert 'src="/static/js/combobox.js"' in html
         assert "data-combobox" in html
     print("wave3 rating search and sort: OK")
+
+
+def test_rating_momentum_indicator():
+    """Главная: стрелка — заметное движение рейтинга за 10 личных игр."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Рост alpha (z > 1.5) и падение beta (z < -1.5): обе стрелки без цифр
+        _write(paths["journal"], _history_journal(16, "baaaaaaaaaaaaaaa"))
+        data_cache.clear()
+        html = client.get("/").get_data(as_text=True)
+        alpha_row = _row_of(html, "alpha")
+        beta_row = _row_of(html, "beta")
+        assert '<span class="trend-arrow">↑</span>' in alpha_row
+        assert "trend history-delta-up" in alpha_row
+        assert "За 10 игр рейтинг +78" in alpha_row, "тултип с ΔELO"
+        assert '<span class="trend-arrow">↓</span>' in beta_row
+        assert "trend history-delta-down" in beta_row
+        assert "За 10 игр рейтинг -78" in beta_row
+        assert "trend-num" not in html, "цифры у стрелки нет"
+        assert '<span class="rank-num">1</span>' in alpha_row, "место не изменилось"
+
+        # Легенда и подпись сортировки
+        assert "тренд ↑/↓ за 10 игр" in html
+        assert "за 5 личных" not in html
+        assert 'title="Сортировать по движению рейтинга"' in html
+
+        # Движение в пределах шума — стрелок нет
+        _write(paths["journal"], _history_journal(16, "abababababababab"))
+        data_cache.clear()
+        assert "trend-arrow" not in client.get("/").get_data(as_text=True)
+
+        # 15 личных игр — ниже минимума
+        _write(paths["journal"], _history_journal(15, "bbbbbaaaaaaaaaa"))
+        data_cache.clear()
+        assert "trend-arrow" not in client.get("/").get_data(as_text=True)
+
+        # Новичок в реестре не меняет чужие стрелки (та же дата журнала)
+        _write(paths["journal"], _history_journal(16, "baaaaaaaaaaaaaaa"))
+        data_cache.clear()
+        before = _trend_of(client.get("/").get_data(as_text=True), "alpha")
+        assert '<span class="trend-arrow">↑</span>' in before
+
+        _write(paths["models"], MODELS_YAML + """\
+  - id: delta
+    name: Delta
+    agent: Agent
+    provider: Prov
+    added: 2026-01-01
+    status: active
+""")
+        models_with_delta = paths["models"].read_text(encoding="utf-8")
+        _write(
+            paths["journal"],
+            _history_journal(16, "baaaaaaaaaaaaaaa")
+            + _replay_journal([("delta", "gamma", "a", "2026-01-02")] * 16),
+        )
+        data_cache.clear()
+        with_newcomer = client.get("/").get_data(as_text=True)
+        assert _trend_of(with_newcomer, "alpha") == before, (
+            "матчи новичка не должны менять индикатор alpha"
+        )
+        assert '<span class="trend-arrow">↑</span>' in _trend_of(with_newcomer, "delta")
+
+        # Свежесть: alpha играла 30 дней назад от последней даты журнала
+        _write(paths["models"], models_with_delta.replace(
+            "status: archived", "status: active",
+        ))
+        _write(
+            paths["journal"],
+            _history_journal(16, "baaaaaaaaaaaaaaa")
+            + _replay_journal(
+                [("delta", "gamma", "a", "2026-02-01")] * 16,
+                start_seq=17,
+            ),
+        )
+        data_cache.clear()
+        cooled = client.get("/").get_data(as_text=True)
+        assert "trend-arrow" not in _row_of(cooled, "alpha"), "30 дней — формы нет"
+        # Свежие 16 игр дают delta индикатор — дело в дате, а не в счётчике
+        assert '<span class="trend-arrow">↑</span>' in _row_of(cooled, "delta")
+        assert '<span class="trend-arrow">↓</span>' in _row_of(cooled, "gamma")
+
+        # Сортировка по тренду: строки без значения уходят в конец в обоих
+        # направлениях
+        def positions(html: str) -> dict[str, int]:
+            rows = _rating_rows(html)
+            return {
+                mid: next(
+                    (i for i, row in enumerate(rows) if f'/model/{mid}"' in row),
+                    -1,
+                )
+                for mid in ("alpha", "beta", "gamma", "delta")
+            }
+
+        desc_pos = positions(client.get("/?sort=trend&dir=desc").get_data(as_text=True))
+        asc_pos = positions(client.get("/?sort=trend&dir=asc").get_data(as_text=True))
+        assert desc_pos["delta"] == 0, "максимальный Δ10 — первым"
+        assert asc_pos["gamma"] == 0, "минимальный Δ10 — первым"
+        assert desc_pos["alpha"] > desc_pos["delta"]
+        assert desc_pos["beta"] > desc_pos["delta"]
+        assert asc_pos["alpha"] > asc_pos["gamma"], "без значения — в конце"
+        assert asc_pos["beta"] > asc_pos["gamma"], "без значения — в конце"
+    print("rating momentum indicator: OK")
 
 
 def test_live_search_main_contract():
@@ -2602,6 +2726,51 @@ def _profile_journal() -> str:
     return "\n".join(lines) + "\n"
 
 
+def _replay_journal(
+    plan: list[tuple[str, str, str, str]], start_seq: int = 1,
+) -> str:
+    """Журнал по плану (model_a, model_b, winner, day) со снэпшотами реплея.
+
+    Модели стартуют с 1200 и нулём игр — план не должен продолжать уже
+    сыгранную историю.
+    """
+    elo_map: dict[str, int] = {}
+    games: dict[str, int] = {}
+    lines: list[str] = []
+    for seq, (a, b, winner, day) in enumerate(plan, start=start_seq):
+        before_a = elo_map.setdefault(a, elo.DEFAULT_ELO)
+        before_b = elo_map.setdefault(b, elo.DEFAULT_ELO)
+        games.setdefault(a, 0)
+        games.setdefault(b, 0)
+        s_a, s_b = (1.0, 0.0) if winner == "a" else (0.0, 1.0)
+        e_a = elo.expected_score(before_a, before_b)
+        new_a, new_b = elo.update_elo(
+            before_a, elo.k_factor(games[a]), s_a, e_a,
+            before_b, elo.k_factor(games[b]), s_b, 1.0 - e_a,
+        )
+        elo_map[a], elo_map[b] = new_a, new_b
+        games[a] += 1
+        games[b] += 1
+        lines.append(json.dumps({
+            "version": elo.VERDICT_VERSION,
+            "seq": seq,
+            "task": "T-001",
+            "matchup": f"T-001/{seq:03d}",
+            "model_a": a,
+            "model_b": b,
+            "model_a_id": a,
+            "model_b_id": b,
+            "winner": winner,
+            "date": day,
+            "recorded_at": f"{day}T10:{seq % 60:02d}:00+03:00",
+            "elo": {
+                a: {"before": before_a, "after": new_a, "delta": new_a - before_a},
+                b: {"before": before_b, "after": new_b, "delta": new_b - before_b},
+            },
+        }, ensure_ascii=False))
+    return "\n".join(lines) + "\n"
+
+
 def test_wave4_profile():
     """Волна 4: профиль — место/тренд, последний матч, покрытие, метаданные, H2H."""
     with _temp_storage() as paths:
@@ -2663,15 +2832,58 @@ def test_wave4_profile():
         hidden = client.get("/model/alpha").get_data(as_text=True)
         assert 'id="task-coverage"' not in hidden
 
-        # 5.1: 6 игр (проигрыш, затем пять побед) — стрелка «↑1»
-        _write(paths["journal"], _history_journal(6, "baaaaa"))
+        # 5.1: 16 игр (проигрыш, затем пятнадцать побед) — стрелка «↑» без цифры
+        _write(paths["journal"], _history_journal(16, "baaaaaaaaaaaaaaa"))
         data_cache.clear()
         arrow = client.get("/model/alpha").get_data(as_text=True)
         assert "Место 1 из 2" in arrow
         assert '<span class="trend-arrow">↑</span>' in arrow
-        assert '<span class="trend-num">1</span>' in arrow
-        assert 'href="/history?v=6#v-6"' in arrow, "последний матч — seq 6"
+        assert "trend-num" not in arrow, "цифры у стрелки нет"
+        assert "За 10 игр рейтинг +" in arrow, "тултип с ΔELO"
+        assert 'href="/history?v=16#v-16"' in arrow, "последний матч — seq 16"
 
+        # 5.1: 16 игр с движением в пределах шума — стрелки нет
+        _write(paths["journal"], _history_journal(16, "abababababababab"))
+        data_cache.clear()
+        flat = client.get("/model/alpha").get_data(as_text=True)
+        assert 'class="profile-rank">Место' in flat and "из 2" in flat
+        assert 'class="trend-arrow"' not in flat, "движение в пределах шума"
+
+        # 5.1: 15 игр — ниже порога минимума, стрелки нет
+        _write(paths["journal"], _history_journal(15, "bbbbbaaaaaaaaaa"))
+        data_cache.clear()
+        short = client.get("/model/alpha").get_data(as_text=True)
+        assert 'class="trend-arrow"' not in short
+        assert "мало игр для тренда" in short
+
+        # 5.1: чужие прогоны не гасят стрелку — alpha играла 30 дней назад
+        _write(paths["journal"], _history_journal(16, "baaaaaaaaaaaaaaa"))
+        data_cache.clear()
+        stale = client.get("/model/alpha").get_data(as_text=True)
+        assert '<span class="trend-arrow">↑</span>' in stale
+
+        _write(paths["models"], MODELS_YAML + """\
+  - id: delta
+    name: Delta
+    agent: Agent
+    provider: Prov
+    added: 2026-01-01
+    status: archived
+""")
+        _write(
+            paths["journal"],
+            _history_journal(16, "baaaaaaaaaaaaaaa")
+            + _replay_journal(
+                [("gamma", "delta", "a", "2026-02-01"),
+                 ("delta", "gamma", "a", "2026-02-01")]
+            ),
+        )
+        data_cache.clear()
+        cooled = client.get("/model/alpha").get_data(as_text=True)
+        assert 'class="trend-arrow"' not in cooled, "30 дней — формы нет"
+        assert "нет личных игр в последних 14 днях" in cooled
+
+        _write(paths["models"], MODELS_YAML)
         # 5.3: поиск и сортировка «Личных встреч»
         _write(paths["journal"], _profile_journal())
         data_cache.clear()
@@ -3063,6 +3275,7 @@ if __name__ == "__main__":
     test_wave3_history_row_anchor()
     test_wave3_history_controls()
     test_wave3_rating_search_sort()
+    test_rating_momentum_indicator()
     test_live_search_main_contract()
     test_live_search_history_fragment()
     test_live_search_history_pagination()

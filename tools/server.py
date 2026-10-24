@@ -56,7 +56,7 @@ from register_task import (
 
 from render_helpers import (
     format_elo_history, format_winrate, format_confidence, get_model_detail, build_elo_svg,
-    compute_rank_trends, pagination_items,
+    compute_rating_momentum, pagination_items,
     merge_history_feed, history_task_id, plural_ru,
     interval_groups, rating_page, build_rating_svg, RATING_PAGE_SIZE,
     parse_lines_param, parse_period_param, default_line_ids,
@@ -1369,20 +1369,15 @@ def _rating_sort_value(m: dict, sort: str):
     if sort == "winrate":
         games = int(m.get("games", 0) or 0)
         return (int(m.get("wins", 0) or 0) / games) if games else None
-    num = str(m.get("trend_num", "")).strip()
-    if num == "=":
-        return 0
-    try:
-        return int(num)
-    except ValueError:
-        return None
+    return m.get("trend_value")
 
 
 def sort_rating_rows(rows: list[dict], sort: str, direction: str) -> list[dict]:
     """Порядок строк для вывода: выбранный ключ, вторичный — место.
 
-    «Нет значения» (винрейт без игр, тренд «–») — в конце при любом
-    направлении; без `sort` сохраняется исходный порядок (место по ELO).
+    «Нет значения» (винрейт без игр, тренд без свежих игр или с малым
+    числом игр) — в конце при любом направлении; без `sort` сохраняется
+    исходный порядок (место по ELO).
     """
     if not sort:
         return list(rows)
@@ -1399,7 +1394,7 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
                      provider_sel: set, highlight: bool, query: str) -> dict:
     """Пул и видимые строки рейтинга — общий конвейер страницы и экспорта.
 
-    Места и индикаторы d5 считаются по статусному пулу (копии строк,
+    Места и индикаторы движения рейтинга считаются по статусному пулу (копии строк,
     мемо-index чистый); блок «Фильтр» и поиск только сужают состав:
     в «Скрывать лишние» — сам список, в «Подсвечивать» — список при
     сохранении разметки hit. Сортировка — вызывающей стороной через
@@ -1459,22 +1454,21 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
         )
         m["matches_query"] = model_matches_query(m, query)
 
-    # Тренды d5: пул детерминирован парой (highlight, filter_mode).
+    # Движение рейтинга: пул детерминирован парой (highlight, filter_mode).
     pool_ids = [m.get("id", "") for m in models_sorted]
     current_elo = {m.get("id", ""): m.get("elo", DEFAULT_ELO) for m in models_sorted}
-    trends = data_cache.cached(
-        f"trends:{'all' if highlight else filter_mode}",
-        lambda: compute_rank_trends(
+    momentum = data_cache.cached(
+        f"momentum:{'all' if highlight else filter_mode}",
+        lambda: compute_rating_momentum(
             index_data.get("elo_history", []), pool_ids, current_elo,
         ),
     )
     for m in models_sorted:
-        t = trends.get(m.get("id", ""), {})
-        m["trend_label"] = t.get("label", "–")
+        t = momentum.get(m.get("id", ""), {})
         m["trend_arrow"] = t.get("arrow", "")
-        m["trend_num"] = t.get("num", "–")
         m["trend_class"] = t.get("css", "history-delta-neutral")
         m["trend_title"] = t.get("title", "")
+        m["trend_value"] = t.get("delta") if t.get("has_value") else None
 
     return {
         "models_sorted": models_sorted,
@@ -1735,7 +1729,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
     {% if not read_only() %}
     <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
     {% endif %}
-    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 5 личных</div>
+    <div class="legend">Старт 1200 · K 40/32/24 · ничья 0.5 · ± = 400/√игр · прогрев &lt;10 игр · тренд ↑/↓ за 10 игр</div>
     {% call filter_panel() %}
       <span class="filter-label">Показывать</span>
       <div class="segmented" role="radiogroup" aria-label="Показывать">
@@ -1768,7 +1762,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             <thead>
               <tr>
                 <th scope="col"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}#{% else %}<a class="sort-link" data-live-link href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" data-live-link href="{{ sort_url('trend') }}" title="Сортировать по тренду d5">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" data-live-link href="{{ sort_url('trend') }}" title="Сортировать по движению рейтинга">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
                 <th scope="col"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Модель{% else %}<a class="sort-link" data-live-link href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
                 <th scope="col"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}ELO{% else %}<a class="sort-link" data-live-link href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
                 <th scope="col">±</th>
@@ -1783,7 +1777,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               {% for m in models_pool %}
               <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit else 'filter-miss' }}{% endif %}"{% if not read_only() %} data-search="{{ m.search_text }}"{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if not m.matches_query %} hidden{% endif %}{% endif %}>
                 <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span></td>
-                <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span><span class="trend-num">{{ m.trend_num }}</span></span>{% endif %}</td>
+                <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span></span>{% endif %}</td>
                 <td class="model-cell">
                   <div>
                     <a href="/model/{{ m.id }}" class="edit-link">{{ m.name }}</a>
@@ -2154,7 +2148,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
       {% if rank %}
       <div class="profile-rank-row">
         <span class="profile-rank">Место {{ rank }} из {{ pool_size }}</span>
-        {% if trend.arrow %}<span class="trend {{ trend.css }}" title="{{ trend.title }}"><span class="trend-arrow">{{ trend.arrow }}</span><span class="trend-num">{{ trend.num }}</span></span>{% endif %}
+        {% if trend.arrow %}<span class="trend {{ trend.css }}" title="{{ trend.title }}"><span class="trend-arrow">{{ trend.arrow }}</span></span>{% endif %}
         {% if trend.title and not trend.arrow %}<span class="hint">{{ trend.title }}</span>{% endif %}
       </div>
       {% else %}
@@ -3578,14 +3572,14 @@ def model_page(model_id: str):
     pool_rows.sort(key=lambda m: (-m["elo"], m["id"]))
     pool_ids = [m["id"] for m in pool_rows]
     current_elo = {m["id"]: m["elo"] for m in pool_rows}
-    trends = data_cache.cached(
-        "trends:profile",
-        lambda: compute_rank_trends(
+    momentum = data_cache.cached(
+        "momentum:profile",
+        lambda: compute_rating_momentum(
             index_data.get("elo_history", []), pool_ids, current_elo,
         ),
     )
     rank = pool_ids.index(model_id) + 1 if model_id in pool_ids else None
-    trend = trends.get(model_id, {})
+    trend = momentum.get(model_id, {})
 
     # Покрытие по таскам: применённые матчи модели в каждом активном таске.
     task_games = memo_task_model_games()
@@ -3976,7 +3970,7 @@ def leaderboard():
     filter_view = filter_ctx["filter_view"]
     highlight = state["highlight"]
 
-    # Пул, места/медали/d5 и видимые строки — общий конвейер с экспортом
+    # Пул, места/медали/тренд и видимые строки — общий конвейер с экспортом
     # (rating_selection); сортировка по клику только переупорядочивает
     # вывод, места и медали не пересчитываются.
     selection = rating_selection(
@@ -4069,8 +4063,9 @@ def leaderboard():
     for info in archived_list:
         info["caption"] = page_caption(info)
 
-    # Тренды позиций d5 (пул детерминирован парой highlight/filter_mode)
-    # проставлены rating_selection; здесь только представление.
+    # Индикаторы движения рейтинга (пул детерминирован парой
+    # highlight/filter_mode) проставлены rating_selection; здесь только
+    # представление.
 
     # Прогресс прогона: все активные пары, а не только готовые к прогону
     # (task_options/current_task уже выше). ready — пары с обоими ответами.

@@ -644,7 +644,6 @@ tbody tr:hover { background: var(--surface-2); }
 .trend.history-delta-down { background: var(--neg-tint); }
 
 .trend-arrow { font-size: 1.3em; line-height: 1; font-weight: 800; }
-.trend-num { font-size: 0.78em; font-weight: 700; margin-left: 3px; }
 
 /* колонка «Тренд» и сортируемые заголовки (change console-wave3-data-scale) */
 .trend-cell { color: var(--muted); }
