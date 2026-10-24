@@ -393,6 +393,15 @@ def _fmt_axis_date(ts: str) -> str:
     return ts
 
 
+def _wrap_chart(svg: str) -> str:
+    """SVG в обёртке с горизонтальной прокруткой на узких экранах.
+
+    Ширину графика задаёт viewBox; на телефоне он не сжимается ниже
+    800 px (CSS), а излишек прокручивается внутри карточки.
+    """
+    return f'<div class="chart-scroll">{svg}</div>'
+
+
 def build_elo_svg(
     points: list[int],
     dates: tuple[str, str] | None = None,
@@ -512,7 +521,7 @@ def build_elo_svg(
         + "".join(f"<span>{p}</span>" for p in legend_parts)
         + "</div>"
     )
-    return svg + legend
+    return _wrap_chart(svg) + legend
 
 
 def build_elo_scale(elos: list[int]) -> list[tuple[float, int]]:
@@ -1098,7 +1107,7 @@ def build_rating_svg(
         )
 
     visible_groups = len({int(r.get("group") or 0) for r in rows if r.get("group")})
-    return (
+    return _wrap_chart(
         f'<svg viewBox="0 0 {width} {height}" class="chart chart-rating" '
         f'role="img" aria-label="Рейтинг: {len(rows)} моделей, '
         f'групп неразличимых мест: {visible_groups}">'
@@ -1590,7 +1599,7 @@ def build_elo_multiline_svg(
         else:
             lines += visible + end_dot
 
-    return (
+    return _wrap_chart(
         f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
         f'aria-label="Динамика ELO: линий {len(drawn)}, '
         f'матчей {total_matches}, дней {day_count}">'

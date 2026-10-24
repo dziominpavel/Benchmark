@@ -81,6 +81,9 @@
   --sp-12: 48px;
   --sp-16: 64px;
 
+  /* горизонтальные отступы страницы: на телефоне ужимаются */
+  --page-pad: clamp(24px, 4%, 32px);
+
   /* типографика */
   --fs-xs: 12px;
   --fs-sm: 13px;
@@ -204,7 +207,7 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
   align-items: center;
   justify-content: center;
   gap: var(--sp-2) var(--sp-4);
-  padding: var(--sp-2) clamp(24px, 4%, 32px);
+  padding: var(--sp-2) var(--page-pad);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
   border-bottom: 1px solid var(--border);
   font-size: var(--fs-sm);
@@ -228,7 +231,7 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
 .site-header-inner {
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--sp-3) clamp(24px, 4%, 32px);
+  padding: var(--sp-3) var(--page-pad);
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
@@ -350,7 +353,7 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--sp-6) clamp(24px, 4%, 32px) var(--sp-8);
+  padding: var(--sp-6) var(--page-pad) var(--sp-8);
 }
 
 .header {
@@ -389,7 +392,7 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
 .site-footer {
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--sp-6) clamp(24px, 4%, 32px) var(--sp-8);
+  padding: var(--sp-6) var(--page-pad) var(--sp-8);
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -670,8 +673,8 @@ tbody tr:hover { background: var(--surface-2); }
 
 .table-wrap {
   overflow-x: auto;
-  margin: 0 calc(-1 * var(--sp-6));
-  padding: 0 var(--sp-6);
+  margin: 0 calc(-1 * var(--page-pad));
+  padding: 0 var(--page-pad);
 }
 
 .table-wrap table { width: 100%; min-width: 0; }
@@ -1353,7 +1356,7 @@ tr[data-search][hidden],
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: var(--sp-5);
   align-items: stretch;
 }
@@ -1484,6 +1487,13 @@ tr[data-search][hidden],
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* мобильная читаемость: SVG не сжимается ниже 800 px, излишек
+   прокручивается внутри карточки и не расширяет страницу */
+.chart-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .chart-line { stroke: var(--chart-line); stroke-width: 2; fill: none; }
@@ -2050,7 +2060,7 @@ body.captions-off .history-divider { display: none; }
 .history-vs { grid-area: vs; color: var(--muted); font-weight: 400; }
 
 /* самодостаточная строка истории (change console-wave3-data-scale) */
-.history-item { scroll-margin-top: 84px; }
+.history-item { scroll-margin-top: 72px; }
 
 .history-item:target {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -2137,12 +2147,12 @@ a.matchup-chip:hover {
     grid-template-columns: 1fr;
     grid-template-areas: "rating" "sidebar";
   }
-  .page { padding: var(--sp-4) clamp(24px, 4%, 32px) var(--sp-8); }
-  .site-header-inner { padding: var(--sp-3) clamp(24px, 4%, 32px); }
-  .site-footer { padding: var(--sp-5) clamp(24px, 4%, 32px) var(--sp-8); }
-  .table-wrap { margin: 0 calc(-1 * var(--sp-6)); padding: 0 var(--sp-6); }
-  th:first-child, td:first-child { padding-left: var(--sp-6); }
-  th:last-child, td:last-child { padding-right: var(--sp-6); }
+  .page { padding: var(--sp-4) var(--page-pad) var(--sp-8); }
+  .site-header-inner { padding: var(--sp-3) var(--page-pad); }
+  .site-footer { padding: var(--sp-5) var(--page-pad) var(--sp-8); }
+  .table-wrap { margin: 0 calc(-1 * var(--page-pad)); padding: 0 var(--page-pad); }
+  th:first-child, td:first-child { padding-left: var(--page-pad); }
+  th:last-child, td:last-child { padding-right: var(--page-pad); }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -2362,6 +2372,131 @@ a.dist-name:hover { fill: var(--accent); }
   font-size: var(--fs-md);
   font-weight: 700;
   margin: var(--sp-4) 0 var(--sp-2);
+}
+
+/* --- мобильная адаптация --------------------------------------------------- */
+
+@media (max-width: 600px) {
+  :root { --page-pad: 12px; }
+
+  /* оболочка: одна строка шапки и компактные отступы */
+  .site-header-inner {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px var(--page-pad);
+  }
+
+  .brand {
+    gap: 8px;
+    min-width: 0;
+    font-size: var(--fs-sm);
+  }
+
+  .site-nav {
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+
+  .site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: var(--fs-sm);
+  }
+
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* плашка зеркала: две строки вместо трёх, не выше 48 px */
+  .mirror-banner {
+    padding: 4px var(--page-pad);
+    gap: 2px var(--sp-3);
+    font-size: var(--fs-xs);
+    line-height: 1.4;
+  }
+
+  /* фильтр: компактная карточка, контролы остаются видимыми */
+  .filter-card { padding: var(--sp-3); }
+  .filter-head { margin-bottom: var(--sp-2); }
+  .filter-head-actions { width: auto; }
+  .filter-rows { gap: var(--sp-2); }
+  .filter-row { gap: 6px var(--sp-2); }
+  .filter-label { min-width: 0; font-size: var(--fs-xs); }
+  .filter-row select,
+  .filter-row input[type="search"],
+  .filter-row input[type="text"],
+  .filter-row input[type="date"] {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+  .filter-search, .filter-pair { min-width: 0; }
+  /* чипы — одна строка с горизонтальной прокруткой: 22 компании
+     иначе растягивают фильтр на 250 px */
+  .filter-chips {
+    flex: 1 1 160px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .filter-chips .chip { flex: 0 0 auto; }
+  .chip > span { padding: 4px 10px; }
+  .filter-preset { padding: 4px 8px; }
+
+  /* история ELO: стек вместо пяти колонок, имена не схлопываются */
+  .history-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "badge badge"
+      "a     aelo"
+      "b     belo"
+      "meta  meta";
+    gap: 2px var(--sp-3);
+  }
+
+  .history-item-no-task {
+    grid-template-areas:
+      "a    aelo"
+      "b    belo"
+      "meta meta";
+  }
+
+  .history-vs { display: none; }
+  .history-elo-group { justify-content: flex-end; }
+  .history-meta { justify-content: flex-start; flex-wrap: wrap; }
+  .outcome { min-width: 0; }
+
+  /* таблицы: уже отступы ячеек, прокрутка остаётся в .table-wrap */
+  th, td { padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}
+
+@media (max-width: 900px) {
+  .chart { min-width: 800px; }
+}
+
+/* название консоли уходит из строки, остаётся доступным скринридеру */
+@media (max-width: 520px) {
+  .brand { position: relative; }
+
+  .brand-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 400px) {
+  .site-nav a {
+    padding: 0 6px;
+    font-size: var(--fs-xs);
+  }
 }
 
 /* --- аналитика волны 4: A6 «Взлёты и падения», A7 ----------------------- */
