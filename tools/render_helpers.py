@@ -634,6 +634,102 @@ def _momentum_title(
     return text
 
 
+def _window_metrics(
+    records: list[dict], window: int, delta: int | None = None,
+) -> tuple[int, float]:
+    """Δ и z по последним `window` записям.
+
+    По умолчанию Δ — сумма дельт окна; `delta` позволяет подставить
+    authoritative-значение (ELO_now − ELO до окна).
+    """
+    recent = records[-window:]
+    if delta is None:
+        delta = sum(r["delta"] for r in recent)
+    variance = sum(r["var"] for r in recent)
+    sd = math.sqrt(variance)
+    return delta, (delta / sd if sd > 0 else 0.0)
+
+
+def _state_metrics(
+    records: list[dict],
+    end: int,
+    window: int,
+    final_delta: int | None,
+    last_index: int,
+) -> tuple[int, float]:
+    """Δ и z окна, заканчивающегося на индексе `end`."""
+    start = max(0, end + 1 - window)
+    delta = 0
+    variance = 0.0
+    for index in range(start, end + 1):
+        delta += records[index]["delta"]
+        variance += records[index]["var"]
+    if final_delta is not None and end == last_index:
+        delta = final_delta
+    sd = math.sqrt(variance)
+    return delta, (delta / sd if sd > 0 else 0.0)
+
+
+def _momentum_state(
+    records: list[dict],
+    window: int,
+    min_games: int,
+    z_threshold: float,
+    max_age_days: int,
+    final_delta: int | None = None,
+) -> str:
+    """Состояние стрелки: вход по двум срезам, удержание пока |z| >= порога.
+
+    Считается от конца: находится непрерывный ряд последних игр, где
+    |z| >= порога в одну сторону (с учётом пауз не больше
+    `max_age_days`); если в ряду есть игра после самой старой, на которой
+    направление подтверждено дельтой, стрелка горит. Ряд короче двух игр
+    стрелку не даёт — так вход требует двух подряд заметных срезов.
+    `final_delta` — authoritative-дельта последнего окна.
+    """
+    total = len(records)
+    if total < min_games:
+        return ""
+    last_index = total - 1
+    _, z = _state_metrics(records, last_index, window, final_delta, last_index)
+    if z >= z_threshold - 1e-9:
+        sign = 1
+    elif z <= -z_threshold + 1e-9:
+        sign = -1
+    else:
+        return ""
+
+    run: list[int] = [last_index]
+    index = last_index
+    while index > 0:
+        prev = index - 1
+        current_day = records[index].get("day")
+        prev_day = records[prev].get("day")
+        if (
+            current_day is not None
+            and prev_day is not None
+            and (current_day - prev_day).days > max_age_days
+        ):
+            break
+        _, z_prev = _state_metrics(records, prev, window, final_delta, last_index)
+        if sign > 0 and z_prev < z_threshold - 1e-9:
+            break
+        if sign < 0 and z_prev > -z_threshold + 1e-9:
+            break
+        run.append(prev)
+        index = prev
+
+    if len(run) < 2:
+        return ""
+    for position in run[:-1]:
+        if position + 1 < min_games:
+            continue
+        delta = records[position]["delta"]
+        if (sign > 0 and delta > 0) or (sign < 0 and delta < 0):
+            return "↑" if sign > 0 else "↓"
+    return ""
+
+
 def compute_rating_momentum(
     elo_history: list[dict],
     pool_ids: list[str],
@@ -649,10 +745,15 @@ def compute_rating_momentum(
     проверяется по z = Δ / sd, где sd — разброс от удачи:
     sqrt(Σ K_i² · E_i · (1 − E_i)) по играм окна. K_i — K-фактор перед
     игрой (по числу личных игр модели), E_i — ожидаемый счёт против
-    соперника на момент игры. Стрелка появляется только при
-    `|z| >= z_threshold` и свежести: последняя игра не старше
-    `max_age_days` от последней даты журнала. Модель с `games < min_games`
-    значения не получает.
+    соперника на момент игры.
+
+    Стрелка не пересчитывается с нуля на каждой игре: `↑` загорается,
+    когда |z| >= z_threshold на текущем и предыдущем срезе и последняя
+    личная игра повысила рейтинг; горит, пока |z| не опустится ниже
+    порога; после паузы больше `max_age_days` между личными играми
+    состояние сбрасывается. `↓` — зеркально. Модель с `games < min_games`
+    значения не получает; стрелка скрывается, если последняя игра старше
+    `max_age_days` от последней даты журнала.
 
     Возвращает {id: {arrow, css, delta, z, games_in_window, wins, draws,
     losses, last_date, has_value, title}}. `has_value` — есть ли числовое
@@ -702,15 +803,21 @@ def compute_rating_momentum(
             delta = own.get("delta")
             if delta is None:
                 delta = int(after) - int(before)
+            k = k_factor(games_before[mid])
+            expected = expected_score(
+                int(before), int(opp.get("before", DEFAULT_ELO)),
+            )
             personal[mid].append({
                 "seq": event.get("seq", 0),
                 "date": str(event.get("date", "") or ""),
+                "day": event_date,
                 "delta": int(delta),
                 "elo_before": int(before),
                 "elo_after": int(after),
                 "opp_before": int(opp.get("before", DEFAULT_ELO)),
                 "result": result,
-                "k": k_factor(games_before[mid]),
+                "k": k,
+                "var": (k ** 2) * expected * (1.0 - expected),
             })
             games_before[mid] += 1
 
@@ -747,12 +854,11 @@ def compute_rating_momentum(
         delta = int(current_elo.get(mid, recent[-1]["elo_after"])) - int(
             recent[0]["elo_before"]
         )
-        variance = 0.0
-        for r in recent:
-            expected = expected_score(r["elo_before"], r["opp_before"])
-            variance += (r["k"] ** 2) * expected * (1.0 - expected)
-        sd = math.sqrt(variance)
-        z = delta / sd if sd > 0 else 0.0
+        _, z = _window_metrics(records, window, delta)
+        state = _momentum_state(
+            records, window, min_games, z_threshold, max_age_days,
+            final_delta=delta,
+        )
 
         last_parsed = _parse_iso_date(last_date)
         fresh = (
@@ -773,15 +879,11 @@ def compute_rating_momentum(
             item["title"] = (
                 f"нет личных игр в последних {max_age_days} днях"
             )
-        elif z >= z_threshold - 1e-9:
-            item["arrow"] = "↑"
-            item["css"] = "history-delta-up"
-            item["title"] = _momentum_title(
-                delta, wins, draws, losses, last_date, window,
+        elif state:
+            item["arrow"] = state
+            item["css"] = (
+                "history-delta-up" if state == "↑" else "history-delta-down"
             )
-        elif z <= -z_threshold + 1e-9:
-            item["arrow"] = "↓"
-            item["css"] = "history-delta-down"
             item["title"] = _momentum_title(
                 delta, wins, draws, losses, last_date, window,
             )

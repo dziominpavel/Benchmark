@@ -29,6 +29,7 @@ from render_helpers import (
     MOMENTUM_MIN_GAMES,
     MOMENTUM_WINDOW,
     MOMENTUM_Z_THRESHOLD,
+    _momentum_state,
     compute_rating_momentum,
 )
 
@@ -38,6 +39,67 @@ def _parse_date(value: str) -> date | None:
         return date.fromisoformat(str(value or "")[:10])
     except ValueError:
         return None
+
+
+def naive_momentum_state(
+    records: list[dict],
+    window: int,
+    min_games: int,
+    z_threshold: float,
+    max_age_days: int,
+    final_delta: int | None = None,
+) -> str:
+    """Эталон: вход по двум подряд заметным срезам + удержание."""
+    state = ""
+    prev_z: float | None = None
+    prev_date: date | None = None
+    for index, record in enumerate(records):
+        recent = records[max(0, index + 1 - window):index + 1]
+        if final_delta is not None and index == len(records) - 1:
+            delta = final_delta
+        else:
+            delta = sum(r["delta"] for r in recent)
+        variance = sum(
+            (r["k"] ** 2)
+            * expected_score(r["elo_before"], r["opp_before"])
+            * (1.0 - expected_score(r["elo_before"], r["opp_before"]))
+            for r in recent
+        )
+        sd = variance ** 0.5
+        z = delta / sd if sd > 0 else 0.0
+        current = _parse_date(record.get("date", ""))
+        if index + 1 >= min_games:
+            if (
+                prev_date is not None
+                and current is not None
+                and (current - prev_date).days > max_age_days
+            ):
+                state = ""
+                prev_z = None
+            if state == "↑" and z >= z_threshold - 1e-9:
+                pass
+            elif state == "↓" and z <= -z_threshold + 1e-9:
+                pass
+            elif (
+                z >= z_threshold - 1e-9
+                and prev_z is not None
+                and prev_z >= z_threshold - 1e-9
+                and record["delta"] > 0
+            ):
+                state = "↑"
+            elif (
+                z <= -z_threshold + 1e-9
+                and prev_z is not None
+                and prev_z <= -z_threshold + 1e-9
+                and record["delta"] < 0
+            ):
+                state = "↓"
+            else:
+                state = ""
+        prev_z = z
+        if current is not None:
+            prev_date = current
+    return state
 
 
 def naive_rating_momentum(
@@ -136,6 +198,10 @@ def naive_rating_momentum(
         )
         sd = variance ** 0.5
         z = delta / sd if sd > 0 else 0.0
+        state = naive_momentum_state(
+            records, window, min_games, z_threshold, max_age_days,
+            final_delta=delta,
+        )
         last_parsed = _parse_date(last_date)
         fresh = (
             fresh_date is not None
@@ -153,13 +219,11 @@ def naive_rating_momentum(
         })
         if not fresh:
             item["title"] = f"нет личных игр в последних {max_age_days} днях"
-        elif z >= z_threshold - 1e-9:
-            item["arrow"] = "↑"
-            item["css"] = "history-delta-up"
-            item["title"] = "tooltip"
-        elif z <= -z_threshold + 1e-9:
-            item["arrow"] = "↓"
-            item["css"] = "history-delta-down"
+        elif state:
+            item["arrow"] = state
+            item["css"] = (
+                "history-delta-up" if state == "↑" else "history-delta-down"
+            )
             item["title"] = "tooltip"
         out[mid] = item
     return out
@@ -392,31 +456,18 @@ def test_min_games_boundary():
 
 
 def test_z_threshold_boundary():
-    positive, elo_pos = _fixed_history(["b"] * 6 + ["a"] * 10)
-    base = compute_rating_momentum(positive, ["m0"], elo_pos)["m0"]
-    z_pos = base["z"]
-    assert z_pos > 0, "ожидался положительный z"
-    at = compute_rating_momentum(
-        positive, ["m0"], elo_pos, z_threshold=z_pos,
-    )["m0"]
-    below = compute_rating_momentum(
-        positive, ["m0"], elo_pos, z_threshold=z_pos + 1e-6,
-    )["m0"]
-    assert at["arrow"] == "↑", "z ровно на пороге должен давать стрелку"
-    assert below["arrow"] == "", "z ниже порога не должен давать стрелку"
+    # 10 игр по +6: z = 1.581 на текущем срезе и 1.500 на предыдущем.
+    positive = _state_records([6] * 10)
+    assert _momentum_state(positive, 10, 1, 1.5, 14) == "↑", (
+        "порог ровно 1.5 должен давать стрелку"
+    )
+    assert _momentum_state(positive, 10, 1, 1.5 + 1e-6, 14) == "", (
+        "порог выше z не должен давать стрелку"
+    )
 
-    negative, elo_neg = _fixed_history(["a"] * 6 + ["b"] * 10)
-    base_neg = compute_rating_momentum(negative, ["m0"], elo_neg)["m0"]
-    z_neg = base_neg["z"]
-    assert z_neg < 0, "ожидался отрицательный z"
-    at_neg = compute_rating_momentum(
-        negative, ["m0"], elo_neg, z_threshold=abs(z_neg),
-    )["m0"]
-    below_neg = compute_rating_momentum(
-        negative, ["m0"], elo_neg, z_threshold=abs(z_neg) + 1e-6,
-    )["m0"]
-    assert at_neg["arrow"] == "↓", "отрицательный z на пороге"
-    assert below_neg["arrow"] == "", "отрицательный z ниже порога"
+    negative = _state_records([-6] * 10)
+    assert _momentum_state(negative, 10, 1, 1.5, 14) == "↓"
+    assert _momentum_state(negative, 10, 1, 1.5 + 1e-6, 14) == ""
     print("momentum z threshold boundary: OK")
 
 
@@ -438,7 +489,7 @@ def test_freshness_boundary():
 
 
 def test_counts_and_title():
-    results = ["b"] * 6 + ["a"] * 7 + ["draw"] * 2 + ["b"]
+    results = ["b"] * 6 + ["a"] * 6 + ["draw"] * 2 + ["b"] + ["a"]
     history, elo = _fixed_history(results, last_date="2026-10-24")
     got = compute_rating_momentum(history, ["m0"], elo)["m0"]
     assert (got["wins"], got["draws"], got["losses"]) == (7, 2, 1)
@@ -447,6 +498,108 @@ def test_counts_and_title():
     assert "Последняя игра 24.10." in got["title"]
     assert got["title"].startswith("За 10 игр рейтинг +")
     print("momentum counts and title: OK")
+
+
+def test_last_game_confirmation():
+    # Заметный рост, но последняя игра — поражение: стрелки нет.
+    up_then_loss, elo_up = _fixed_history(["b"] * 6 + ["a"] * 9 + ["b"])
+    got = compute_rating_momentum(up_then_loss, ["m0"], elo_up)["m0"]
+    assert got["z"] > 1.5, "движение окна должно оставаться заметным"
+    assert got["arrow"] == "", "рост без подтверждения последней игрой"
+    assert got["last_date"] == "2026-01-02"
+
+    # Та же серия, но последняя игра — победа: стрелка возвращается.
+    up_confirmed, elo_up2 = _fixed_history(["b"] * 6 + ["a"] * 10)
+    got2 = compute_rating_momentum(up_confirmed, ["m0"], elo_up2)["m0"]
+    assert got2["arrow"] == "↑"
+
+    # Симметрия: заметное падение, последняя игра — победа.
+    down_then_win, elo_down = _fixed_history(["a"] * 6 + ["b"] * 9 + ["a"])
+    got3 = compute_rating_momentum(down_then_win, ["m0"], elo_down)["m0"]
+    assert got3["z"] < -1.5
+    assert got3["arrow"] == "", "падение без подтверждения последней игрой"
+
+    down_confirmed, elo_down2 = _fixed_history(["a"] * 6 + ["b"] * 10)
+    got4 = compute_rating_momentum(down_confirmed, ["m0"], elo_down2)["m0"]
+    assert got4["arrow"] == "↓"
+
+    # Нулевая дельта не подтверждает вход.
+    history, _ = _fixed_history(["a"] * 15)
+    last_after = history[-1]["elo_a"]["after"]
+    zero_event = {
+        "seq": 16,
+        "date": "2026-01-02",
+        "model_a_id": "m0",
+        "model_b_id": "x0",
+        "winner": "draw",
+        "elo_a": {"before": last_after, "after": last_after, "delta": 0},
+        "elo_b": {"before": 1200, "after": 1200, "delta": 0},
+    }
+    got5 = compute_rating_momentum(
+        history + [zero_event], ["m0"], {"m0": last_after}, z_threshold=1.0,
+    )["m0"]
+    assert got5["z"] >= 1.0 and got5["delta"] > 0
+    assert got5["arrow"] == "", "дельта 0 не подтверждает вход"
+    print("momentum last-game confirmation: OK")
+
+
+def _state_records(deltas: list[int], start_day: date | None = None) -> list[dict]:
+    """Записи для проверки автомата состояний без реплея ELO."""
+    start = start_day or date(2026, 1, 1)
+    return [
+        {
+            "delta": d,
+            "elo_before": 1200,
+            "opp_before": 1200,
+            "k": 24,
+            "var": (24 ** 2) * 0.25,
+            "day": start + timedelta(days=i),
+            "date": (start + timedelta(days=i)).isoformat(),
+        }
+        for i, d in enumerate(deltas)
+    ]
+
+
+def test_hold_and_no_blink():
+    """Удержание при |z| >= 1.5 и вход только по двум подряд срезам."""
+    # Окно 3: три игры по +20 сразу дают вход (z = 2.89, предыдущий 2.36).
+    assert _momentum_state(_state_records([20] * 3), 3, 1, 1.5, 14) == "↑"
+    # Малая потеря -2: z = 1.83 — стрелка держится, не мигает.
+    assert _momentum_state(
+        _state_records([20] * 4 + [-2]), 3, 1, 1.5, 14,
+    ) == "↑"
+    # Провал -100: z = -3.95 — стрелка гаснет.
+    assert _momentum_state(
+        _state_records([20] * 4 + [-2, -100]), 3, 1, 1.5, 14,
+    ) == ""
+    # Возврат: первый и второй плюсы не зажигают, только третий подряд.
+    assert _momentum_state(
+        _state_records([20] * 4 + [-2, -100, 100]), 3, 1, 1.5, 14,
+    ) == ""
+    assert _momentum_state(
+        _state_records([20] * 4 + [-2, -100, 100, 100]), 3, 1, 1.5, 14,
+    ) == ""
+    assert _momentum_state(
+        _state_records([20] * 4 + [-2, -100, 100, 100, 100]), 3, 1, 1.5, 14,
+    ) == "↑"
+    # Нулевая дельта не подтверждает вход...
+    assert _momentum_state(_state_records([7] * 9 + [0]), 10, 10, 1.5, 14) == ""
+    # ...но не гасит уже горящую стрелку.
+    assert _momentum_state(
+        _state_records([12] * 10 + [0]), 10, 1, 1.5, 14,
+    ) == "↑"
+    # Пауза больше 14 дней сбрасывает состояние и требует нового входа.
+    pause = _state_records([20] * 3) + [{
+        "delta": 20,
+        "elo_before": 1200,
+        "opp_before": 1200,
+        "k": 24,
+        "var": (24 ** 2) * 0.25,
+        "day": date(2026, 1, 1) + timedelta(days=20),
+        "date": (date(2026, 1, 1) + timedelta(days=20)).isoformat(),
+    }]
+    assert _momentum_state(pause, 3, 1, 1.5, 14) == ""
+    print("momentum hold and no 1-game blink: OK")
 
 
 def test_newcomer_does_not_change_others():
@@ -486,5 +639,7 @@ if __name__ == "__main__":
     test_z_threshold_boundary()
     test_freshness_boundary()
     test_counts_and_title()
+    test_last_game_confirmation()
+    test_hold_and_no_blink()
     test_newcomer_does_not_change_others()
     print("\nALL TRENDS TESTS PASSED")
