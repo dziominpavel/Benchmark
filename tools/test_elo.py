@@ -338,6 +338,81 @@ def test_get_coverage_answer_aware():
     print("get_coverage answer-aware: OK")
 
 
+def test_get_run_progress():
+    """Общий прогресс: активные пары считаются независимо от флагов ответов."""
+    from elo import get_run_progress
+    models = [{"id": "A", "status": "active"}, {"id": "B", "status": "active"},
+              {"id": "C", "status": "active"}]
+    settings = {"current_task": "T-001",
+                "tasks": {"T-001": "active", "T-002": "active"}}
+    mus = [
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-001/001"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/002"},
+        {"task": "T-001", "model_a_id": "B", "model_b_id": "C", "winner": "a", "_matchup_id": "T-001/003"},
+        {"task": "T-002", "model_a_id": "A", "model_b_id": "B", "winner": "a", "_matchup_id": "T-002/001"},
+    ]
+    flags = {"T-001": {"A": True, "B": True, "C": True},
+             "T-002": {"A": True, "B": True}}  # C x T-002 = BLOCKED
+    run = get_run_progress(settings, mus, models, flags)
+    # Все активные пары: 2 таска × C(3,2) = 6; DONE 3 + 1 = 4;
+    # READY 0; BLOCKED 2 (C в T-002) → 4/6, а не 4/4.
+    assert run["total"] == 6, run
+    assert run["filled"] == 4, run
+    assert run["ready"] == 0, run
+    assert run["blocked"] == 2, run
+    assert abs(run["percent"] - 100 * 4 / 6) < 0.01, run
+    assert run["filled"] + run["ready"] + run["blocked"] == run["total"], run
+
+    # Новая модель D без ответов сразу входит в знаменатель: 12 ячеек.
+    models_d = models + [{"id": "D", "status": "active"}]
+    run_d = get_run_progress(settings, mus, models_d, flags)
+    assert (run_d["filled"], run_d["total"]) == (4, 12), run_d
+    assert run_d["blocked"] == 8, run_d
+    assert abs(run_d["percent"] - 100 * 4 / 12) < 0.01, run_d
+
+    # Флаг D x T-001 открывает 3 READY-ячейки, прогресс не прыгает.
+    flags_d = {"T-001": {"A": True, "B": True, "C": True, "D": True},
+               "T-002": {"A": True, "B": True}}
+    run_d2 = get_run_progress(settings, mus, models_d, flags_d)
+    assert (run_d2["filled"], run_d2["total"]) == (4, 12), run_d2
+    assert run_d2["ready"] == 3, run_d2
+    assert run_d2["blocked"] == 5, run_d2
+    assert abs(run_d2["percent"] - 100 * 4 / 12) < 0.01, run_d2
+
+    # Вердикт D-A в T-001 становится DONE независимо от флага.
+    mus_played = mus + [
+        {"task": "T-001", "model_a_id": "D", "model_b_id": "A", "winner": "a", "_matchup_id": "T-001/004"},
+    ]
+    run_d3 = get_run_progress(settings, mus_played, models_d, flags_d)
+    assert (run_d3["filled"], run_d3["ready"], run_d3["blocked"]) == (5, 2, 5), run_d3
+    assert abs(run_d3["percent"] - 100 * 5 / 12) < 0.01, run_d3
+
+    # Снятие всех флагов не прячет работу: 0 READY, остальное BLOCKED.
+    run_no_flags = get_run_progress(settings, mus, models, {})
+    assert (run_no_flags["filled"], run_no_flags["total"]) == (4, 6), run_no_flags
+    assert run_no_flags["ready"] == 0, run_no_flags
+    assert run_no_flags["blocked"] == 2, run_no_flags
+    assert run_no_flags["percent"] is not None, run_no_flags
+
+    # Повторные вердикты не увеличивают вклад ячейки.
+    mus_rematch = mus + [
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "b", "_matchup_id": "T-001/010"},
+        {"task": "T-001", "model_a_id": "A", "model_b_id": "B", "winner": "draw", "_matchup_id": "T-001/011"},
+    ]
+    run_re = get_run_progress(settings, mus_rematch, models, flags)
+    assert (run_re["filled"], run_re["total"]) == (4, 6), run_re
+
+    # Неопределённость: <2 активных моделей или нет активных тасков.
+    run_one = get_run_progress(settings, mus, [{"id": "A", "status": "active"}], flags)
+    assert run_one["percent"] is None and run_one["total"] == 0, run_one
+    run_no_tasks = get_run_progress(
+        {"current_task": "", "tasks": {"T-001": "inactive", "T-002": "inactive"}},
+        mus, models, flags,
+    )
+    assert run_no_tasks["percent"] is None and run_no_tasks["total"] == 0, run_no_tasks
+    print("get_run_progress: OK")
+
+
 def test_format_model_roundtrip():
     """parse_existing↔format_model сохраняют agent/provider и не добавляют мусор."""
     from register_model import format_model, parse_existing
@@ -892,6 +967,7 @@ if __name__ == "__main__":
     test_active_and_current_task()
     test_get_coverage()
     test_get_coverage_answer_aware()
+    test_get_run_progress()
     test_format_model_roundtrip()
     test_index_stale_agent_provider()
     test_elo_dist_scale()

@@ -44,7 +44,7 @@ from elo import (
     generate_index, save_index, load_models_yaml, load_matchups,
     is_index_stale, record_verdict, void_matchup,
     load_settings, save_settings, known_tasks, active_tasks, is_task_active,
-    resolve_current_task, get_coverage, is_valid_task_id,
+    resolve_current_task, get_coverage, get_run_progress, is_valid_task_id,
     load_answer_flags, save_answer_flags, get_answer_matrix,
     DEFAULT_ELO,
     TASKS_DIR, INDEX_PATH, MODELS_PATH,
@@ -702,6 +702,19 @@ def memo_coverage() -> dict:
     )
 
 
+def memo_run_progress() -> dict:
+    """Общий прогресс прогона: все активные пары, включая ждущие ответов."""
+    return data_cache.cached(
+        "run_progress",
+        lambda: get_run_progress(
+            matchups=get_journal_events(),
+            models=memo_models(),
+            verdicts=get_pair_task_verdicts(),
+            tasks=memo_active_tasks(),
+        ),
+    )
+
+
 def memo_answer_matrix() -> dict:
     """Матрица наличия ответов (memo)."""
     return data_cache.cached(
@@ -763,11 +776,12 @@ def get_task_progress(task_id: str) -> dict:
 
 
 def _build_task_progress(task_id: str) -> dict:
-    """Считает прогресс задачи по index.json, флагам ответов и memo-парам.
+    """Считает прогресс задачи по index.json и memo-парам.
 
-    Пары — как в покрытии прогона: T — видимые пары активных моделей с
-    флагами ответа на таск (C(k,2) без перечисления пар), F — из них пары
-    с неаннулированным вердиктом по таску (карта pair_scan).
+    Пары — как в общем прогрессе прогона: T — все пары активных моделей
+    (C(n,2) без перечисления пар), F — из них пары с неаннулированным
+    вердиктом по таску (карта pair_scan). Флаги ответов на прогресс не
+    влияют: незакрытая пара без ответа — тоже оставшаяся работа.
     """
     index_data = ensure_index()
     applied = [
@@ -779,18 +793,18 @@ def _build_task_progress(task_id: str) -> dict:
         if history_task_id(h) == task_id
     ]
 
-    active_ids = {m.get("id", "") for m in memo_models() if is_model_active(m)}
-    flags = data_cache.cached("answer_flags", load_answer_flags)
-    task_flags = flags.get(task_id) or {}
-    flagged = {mid for mid in active_ids if task_flags.get(mid)}
-    k = len(flagged)
+    active_ids = {
+        m["id"] for m in memo_models()
+        if m.get("id") and is_model_active(m)
+    }
+    n_active = len(active_ids)
 
     filled = 0
     for pair, pair_tasks in get_pair_task_verdicts().items():
         if task_id not in pair_tasks:
             continue
         a, b = tuple(pair)
-        if a in flagged and b in flagged:
+        if a in active_ids and b in active_ids:
             filled += 1
 
     participants = set()
@@ -802,7 +816,7 @@ def _build_task_progress(task_id: str) -> dict:
     return {
         "verdicts": len(applied),
         "filled": filled,
-        "total": k * (k - 1) // 2,
+        "total": n_active * (n_active - 1) // 2,
         "models": len(participants),
         "voided": len(voided),
     }
@@ -1708,7 +1722,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
       <span>Нет данных о покрытии</span>
       {% else %}
       <span>закрыто {{ coverage.filled }} из {{ coverage.total }}</span>
-      <span>осталось {{ remaining }}</span>
+      <span{% if ready != remaining %} title="Готовы к прогону — пары с ответами обеих моделей; остальные ещё ждут ответов"{% endif %}>осталось {{ remaining }}{% if ready != remaining %} · готовы к прогону {{ ready }}{% endif %}</span>
       {% endif %}
     </div>
     {% endif %}
@@ -1716,7 +1730,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="controls">
     <div class="stats stats-summary"{% if not read_only() %} data-live-count{% endif %}>
-      {% if filter_view == 'highlight' %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> · подсвечено <span{% if not read_only() %} data-live-hits-value{% endif %}>{{ highlight_hits }}</span>{% else %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> из {{ models_count }}{% endif %} · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="/settings#recommendation-queue">{{ coverage.filled }}/{{ coverage.total }}</a> · Таски: <a href="/settings#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a> · Обновлено: {{ updated }}
+      {% if filter_view == 'highlight' %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> · подсвечено <span{% if not read_only() %} data-live-hits-value{% endif %}>{{ highlight_hits }}</span>{% else %}Моделей: <a href="/settings#models"{% if not read_only() %} data-live-count-value{% endif %}>{{ filtered_count }}</a> из {{ models_count }}{% endif %} · Вердиктов: <a href="/history">{{ matchups_count }}</a>{% if rematch_count %} (рематчей: {{ rematch_count }}){% endif %} · Пары: <a href="/settings#recommendation-queue">{{ coverage.filled }}/{{ coverage.total }}</a>{% if ready != remaining %} (готовы: {{ ready }}){% endif %} · Таски: <a href="/settings#tasks">{{ active_tasks_count }} из {{ known_tasks_count }}</a> · Обновлено: {{ updated }}
     </div>
     {% if not read_only() %}
     <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
@@ -3037,15 +3051,17 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
   <div class="card" id="recommendation-queue">
     <h2>Очередь рекомендаций</h2>
     {% if queue_has_coverage %}
-    <div class="stats"{% if queue_breakdown_legend %} title="{{ queue_breakdown_legend }}"{% endif %}>открытых: {{ queue_remaining }}{% if queue_breakdown_str %} ({{ queue_breakdown_str }}){% endif %}{% if queue_rematch_count %} · рематчей: {{ queue_rematch_count }}{% endif %} · закрыто {{ queue_filled }} из {{ queue_total }}</div>
+    <div class="stats"{% if queue_breakdown_legend %} title="{{ queue_breakdown_legend }}"{% endif %}>готовы к прогону: {{ queue_remaining }}{% if queue_breakdown_str %} ({{ queue_breakdown_str }}){% endif %}{% if queue_rematch_count %} · рематчей: {{ queue_rematch_count }}{% endif %} · закрыто {{ queue_filled }} из {{ queue_total }}{% if queue_blocked %} · <a href="#answer-coverage">ждут ответов: {{ queue_blocked }}</a>{% endif %}</div>
     {% if queue_breakdown_legend %}
     <div class="hint">в скобках — остаток по таскам: {{ queue_breakdown_legend }}</div>
     {% endif %}
+    {% elif queue_blocked %}
+    <div class="stats">готовы к прогону: 0 · закрыто {{ queue_filled }} из {{ queue_total }} · ждут ответов: {{ queue_blocked }}</div>
     {% else %}
     <div class="stats">очередь: — (нет активных моделей, активных тасков или видимых ячеек)</div>
     {% endif %}
     <div class="hint">
-      Порядок совпадает с кнопкой «Прогнать» на главной. Пары без обоих ответов скрыты.
+      Порядок совпадает с кнопкой «Прогнать» на главной. «Закрыто» — все активные пары; «готовы к прогону» — пары с обоими ответами. Пары без обоих ответов скрыты и учтены в «ждут ответов».
     </div>
     {% if queue %}
     <div class="table-wrap queue-wrap">
@@ -4056,8 +4072,9 @@ def leaderboard():
     # Тренды позиций d5 (пул детерминирован парой highlight/filter_mode)
     # проставлены rating_selection; здесь только представление.
 
-    # Настройки: прогресс покрытия (memo; task_options/current_task уже выше)
-    coverage = memo_coverage()
+    # Прогресс прогона: все активные пары, а не только готовые к прогону
+    # (task_options/current_task уже выше). ready — пары с обоими ответами.
+    coverage = memo_run_progress()
     coverage_pct = None
     coverage_done = False
     if coverage["percent"] is not None:
@@ -4065,6 +4082,7 @@ def leaderboard():
         # Незавершённый прогресс не округляем до «100%» — показываем 99
         coverage_pct = 100 if coverage_done else min(99, round(coverage["percent"]))
     remaining = coverage["total"] - coverage["filled"]
+    ready = coverage.get("ready", 0)
 
     # Единая сводка: вердикты журнала и рематчи (memo по дайджесту)
     matchups_count = matchups_count_of(index_data)
@@ -4102,6 +4120,7 @@ def leaderboard():
         coverage_pct=coverage_pct,
         coverage_done=coverage_done,
         remaining=remaining,
+        ready=ready,
         filter=filter_mode,
         **filter_ctx,
         error=request.args.get("error", ""),
@@ -4555,6 +4574,8 @@ def settings_page():
         r["caption"] = page_caption(models.get(r["id"], {}))
     answer_inactive = [t for t in matrix["tasks"] if t not in matrix["active_tasks"]]
     coverage = memo_coverage()
+    run_progress = memo_run_progress()
+    queue_blocked = run_progress.get("blocked", 0)
     active_task_ids = memo_active_tasks()
     n_active_models = sum(1 for info in models.values() if is_model_active(info))
     n_active_tasks = len(active_task_ids)
@@ -4626,7 +4647,7 @@ def settings_page():
         queue_breakdown = [{"task": t, "count": counts[t]} for t in ordered]
         queue_breakdown_str = "+".join(str(counts[t]) for t in ordered)
         queue_breakdown_legend = " + ".join(f"{t}: {counts[t]}" for t in ordered)
-    queue_has_coverage = coverage.get("percent") is not None
+    queue_has_coverage = run_progress.get("percent") is not None
 
     # Единая сводка: вердикты журнала и рематчи (memo по дайджесту)
     matchups_count = matchups_count_of(index_data)
@@ -4677,9 +4698,10 @@ def settings_page():
         queue_page_start=queue_page_start,
         queue_items=pagination_items(queue_page, queue_pages),
         queue_page_url=_queue_page_url,
-        queue_filled=coverage.get("filled", 0),
-        queue_total=coverage.get("total", 0),
+        queue_filled=run_progress.get("filled", 0),
+        queue_total=run_progress.get("total", 0),
         queue_remaining=coverage.get("total", 0) - coverage.get("filled", 0),
+        queue_blocked=queue_blocked,
         queue_breakdown=queue_breakdown,
         queue_breakdown_str=queue_breakdown_str,
         queue_breakdown_legend=queue_breakdown_legend,

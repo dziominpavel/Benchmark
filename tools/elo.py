@@ -1181,6 +1181,108 @@ def get_coverage(
     }
 
 
+def get_run_progress(
+    settings: dict | None = None,
+    matchups: list[dict] | None = None,
+    models: list[dict] | None = None,
+    flags: dict | None = None,
+    verdicts: dict | None = None,
+    tasks: list[str] | None = None,
+) -> dict:
+    """Общий прогресс прогона: все активные пары во всех активных тасках.
+
+    В отличие от get_coverage (видимые ячейки для очереди рекомендаций),
+    знаменатель здесь не зависит от answer_flags: активная модель без
+    ответа — не «невидимая» пара, а незакрытая работа. DONE — ячейка с
+    неаннулированным вердиктом (флаги не важны); READY — открытая ячейка
+    с обоими флагами (её можно рекомендовать); BLOCKED — открытая ячейка,
+    где хотя бы одного ответа ещё нет. Инвариант:
+    filled + ready + blocked == total.
+
+    Возвращает {"filled", "total", "percent", "ready", "blocked"};
+    percent=None, если метрика не определена (нет активных тасков или
+    <2 активных моделей). При наличии работы percent всегда число,
+    включая 0.0 (все ячейки открыты).
+    """
+    if settings is None:
+        settings = load_settings()
+    if models is None:
+        models = load_models_yaml()
+    if matchups is None:
+        matchups = load_matchups()
+    if flags is None:
+        flags = load_answer_flags()
+
+    active_model_ids = {
+        m["id"] for m in models if m.get("status", "active") != "archived"
+    }
+    empty = {"filled": 0, "total": 0, "percent": None,
+             "ready": 0, "blocked": 0}
+    if len(active_model_ids) < 2:
+        return empty
+    if tasks is None:
+        tasks = active_tasks(settings, matchups)
+    if not tasks:
+        return empty
+
+    n = len(active_model_ids)
+    total = n * (n - 1) // 2 * len(tasks)
+    if total == 0:
+        return empty
+
+    done_cells: set[tuple[str, frozenset]] = set()
+    if verdicts is None:
+        model_ids = {m["id"] for m in models}
+        voided = {mu["void_of"] for mu in matchups if mu.get("void_of")}
+        for mu in matchups:
+            if mu.get("void_of") or mu.get("_matchup_id") in voided:
+                continue
+            task = mu.get("task") or str(
+                mu.get("_matchup_id", "")
+            ).split("/", 1)[0]
+            if task not in tasks:
+                continue
+            a, b = resolve_matchup_models(mu, model_ids)
+            if (
+                not a or not b
+                or a not in active_model_ids
+                or b not in active_model_ids
+            ):
+                continue
+            done_cells.add((task, frozenset((a, b))))
+    else:
+        for pair, pair_tasks in verdicts.items():
+            a, b = tuple(pair)
+            if a not in active_model_ids or b not in active_model_ids:
+                continue
+            for task in pair_tasks:
+                if task in tasks:
+                    done_cells.add((task, pair))
+
+    done_by_task: dict[str, list[frozenset]] = {}
+    for task, pair in done_cells:
+        done_by_task.setdefault(task, []).append(pair)
+
+    ready = 0
+    for task in tasks:
+        task_flags = flags.get(task) or {}
+        flagged = {mid for mid in active_model_ids if task_flags.get(mid)}
+        k = len(flagged)
+        done_visible = sum(
+            1 for pair in done_by_task.get(task, ()) if pair <= flagged
+        )
+        ready += k * (k - 1) // 2 - done_visible
+
+    filled = len(done_cells)
+    return {
+        "filled": filled,
+        "total": total,
+        "percent": min(100.0, filled / total * 100),
+        "ready": ready,
+        "blocked": total - filled - ready,
+    }
+
+
 def get_answer_matrix(
     settings: dict | None = None,
     models: list[dict] | None = None,

@@ -327,7 +327,7 @@ def test_perf_budgets() -> None:
         resp, dt = _timed(lambda: client.get("/settings"))
         html = resp.get_data(as_text=True)
         assert resp.status_code == 200, f"GET /settings → {resp.status_code}"
-        assert "открытых" in html and "queue_page=2" in html, "очередь /settings не построена"
+        assert "готовы к прогону" in html and "queue_page=2" in html, "очередь /settings не построена"
         _check("/settings, холодная (очередь, стр. 1)", dt, BUDGET_PAGE)
 
         resp, dt = _timed(lambda: client.get("/settings?queue_page=2"))

@@ -413,7 +413,7 @@ def test_routes_smoke():
 
         # Пустая очередь при полном покрытии объясняет рематч
         settings_html = client.get("/settings").get_data(as_text=True)
-        assert "открытых: 0" in settings_html
+        assert "готовы к прогону: 0" in settings_html
         assert "рематчей: 1" in settings_html
         assert "Открытых пар нет. Ниже — матч для доп. точности (рематч)." in settings_html
 
@@ -1008,7 +1008,7 @@ def test_settings_queue_pagination():
         resp = client.get("/settings")
         html = resp.get_data(as_text=True)
         assert resp.status_code == 200
-        assert "открытых: 105" in html, "счётчик должен показывать все открытые ячейки"
+        assert "готовы к прогону: 105" in html, "счётчик должен показывать все открытые ячейки"
         assert "Очередь рекомендаций (" not in html, "суффикс (N) остался в заголовке"
         assert "Обоснование</th>" in html, "нет колонки «Обоснование» в очереди"
         assert "queue_page=2" in html, "нет перехода на следующую страницу"
@@ -1342,6 +1342,41 @@ def test_progress_card_states():
         assert "осталось 1" in html2
         assert "все пары закрыты" not in html2
     print("3.3 progress card states: OK")
+
+
+def test_progress_card_counts_unanswered_models():
+    """Плашка считает все активные пары, даже если у модели нет флага ответа."""
+    with _temp_storage() as paths:
+        # gamma активна, но флага ответа у неё нет: пара не должна исчезать
+        # из знаменателя прогресса (в очереди рекомендаций она ещё BLOCKED).
+        _write(
+            paths["models"],
+            MODELS_YAML.replace(
+                "    status: archived", "    status: active", 1,
+            ),
+        )
+        data_cache.clear()
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        html = client.get("/").get_data(as_text=True)
+        assert "закрыто 1 из 3" in html, html
+        assert "осталось 2" in html
+        assert "готовы к прогону 0" in html
+        assert "Пары: <a href=\"/settings#recommendation-queue\">1/3</a> (готовы: 0)" in html
+        assert "все пары закрыты" not in html
+
+        # Флаг открывает READY-ячейки, но DONE не меняется.
+        _write(
+            paths["flags"],
+            FLAGS_YAML + "    gamma: true\n",
+        )
+        data_cache.clear()
+        html2 = client.get("/").get_data(as_text=True)
+        assert "закрыто 1 из 3" in html2
+        assert "осталось 2" in html2
+        assert "готовы к прогону" not in html2, "READY совпадает с остатком"
+    print("3.4 progress card counts unanswered models: OK")
 
 
 def _wave3_journal() -> str:
@@ -3023,6 +3058,7 @@ if __name__ == "__main__":
     test_rematch_count_unit()
     test_summary_line()
     test_progress_card_states()
+    test_progress_card_counts_unanswered_models()
     test_wave3_history_filters()
     test_wave3_history_row_anchor()
     test_wave3_history_controls()
