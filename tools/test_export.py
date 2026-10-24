@@ -347,6 +347,8 @@ def test_export_links_and_markers():
             assert 'href="../static/css/console.css"' in history
             model = (Path(out) / "model" / "alpha" / "index.html").read_text(encoding="utf-8")
             assert 'src="../../static/js/theme.js"' in model
+            assert 'data-mirror-root="../../"' in model, \
+                "страница модели без корня слепка для клиентских ссылок"
 
             # Кнопка «Настройки фильтра» и её скрипт есть на всех уровнях слепка
             for name, page, src in (
@@ -463,8 +465,13 @@ def test_export_mirror_layer():
             script = (root / "static" / "js" / "mirror.js").read_text(encoding="utf-8")
             for marker in ("mirror-archived-rows", "mirror-table-wrap",
                            "mirror-stats-data", "HISTORY_PAGE_SIZE",
-                           "rating-legend"):
+                           "rating-legend", "MIRROR_ROOT", "modelHref"):
                 assert marker in script, f"mirror.js: нет маркера {marker}"
+            # Клиентский слой строит ссылки моделей от корня слепка, а не от
+            # корня домена: на витрине «/model/…» уводит за пределы слепка.
+            assert 'href="/model/' not in script, "mirror.js: корневая ссылка модели"
+            assert 'data-mirror-root=""' in index, "главная без корня слепка"
+            assert 'data-mirror-root="../"' in stats, "аналитика без корня слепка"
 
             # Навигационные onchange фильтров сняты (их роль играет mirror.js)
             for name, page in (("главная", index), ("история", history),
@@ -678,6 +685,11 @@ def test_check_output_violations():
             "маркер __root__",
             encoding="utf-8",
         )
+        (root / "static" / "js").mkdir(parents=True)
+        (root / "static" / "js" / "mirror.js").write_text(
+            'var html = \'<a href="/model/alpha">Alpha</a>\';',
+            encoding="utf-8",
+        )
         errors = export_web.check_output(root, 2)
         text = "\n".join(errors)
         assert "корневой адрес" in text
@@ -685,7 +697,8 @@ def test_check_output_violations():
         assert "файл не найден" in text
         assert "POST-форма" in text
         assert "остаточный маркер" in text
-        assert len(errors) >= 5, errors
+        assert "mirror.js" in text and "клиентском слое" in text
+        assert len(errors) >= 6, errors
     print("2.3 check violations: OK")
 
 

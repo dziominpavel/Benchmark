@@ -60,6 +60,25 @@ CATALOG_MARKER = "__catalog__"
 # Абсолютные адреса консоли в разметке: корневые ссылки и ресурсы
 _ATTR_RE = re.compile(r'(?P<attr>href|src|action)="(?P<value>/[^"]*)"')
 
+# Ассеты, которые shell.html подключает в read-only слепке. Клиентский слой
+# строит часть разметки сам, поэтому корневые адреса в этих файлах не ловятся
+# проверкой HTML — их надо сканировать отдельно.
+_MIRROR_ASSETS = (
+    "static/css/console.css",
+    "static/js/theme.js",
+    "static/js/mirror.js",
+    "static/js/filter-panel.js",
+)
+_ROOT_URL_IN_ASSET_RE = re.compile(
+    r"""(?:
+        (?:href|src|action)\s*=\s*["']/
+        | url\(\s*["']?/
+        | fetch\(\s*["']/
+        | location\.(?:href|assign|replace)\s*=\s*["']/
+    )""",
+    re.X,
+)
+
 # Строка истории: внутри .history-item нет вложенных div (только span/ссылки);
 # после class допускаются атрибуты (якорь id="v-<seq>" для постоянных ссылок).
 _HISTORY_ROW_RE = re.compile(r'<div class="history-item[^"]*"[^>]*>.*?</div>', re.S)
@@ -542,9 +561,26 @@ class _LinkCollector(HTMLParser):
                 self.links.append((name, data[name]))
 
 
+def _check_client_assets(out_root: Path) -> list[str]:
+    """Корневые адреса в клиентском слое, который строит разметку сам."""
+    errors: list[str] = []
+    for rel in _MIRROR_ASSETS:
+        path = out_root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in _ROOT_URL_IN_ASSET_RE.finditer(text):
+            line = text.count("\n", 0, match.start()) + 1
+            errors.append(
+                f"{rel}:{line}: корневой адрес {match.group(0)!r} в клиентском слое"
+            )
+    return errors
+
+
 def check_output(out_root: Path, catalog_depth: int) -> list[str]:
-    """Проход по HTML слепка: корневые адреса, внешние ресурсы, POST-формы,
-    остаточные маркеры, неразрешимые ссылки. Возвращает список нарушений.
+    """Проход по HTML и клиентским ассетам слепка: корневые адреса, внешние
+    ресурсы, POST-формы, остаточные маркеры, неразрешимые ссылки. Возвращает
+    список нарушений.
     """
     errors: list[str] = []
     for path in sorted(out_root.rglob("*.html")):
@@ -553,6 +589,7 @@ def check_output(out_root: Path, catalog_depth: int) -> list[str]:
         catalog_href = "../" * (catalog_depth + depth)
         html = path.read_text(encoding="utf-8")
         errors.extend(_check_file(html, out_file, out_root, catalog_href))
+    errors.extend(_check_client_assets(out_root))
     return errors
 
 

@@ -33,6 +33,17 @@
   const MODELS = readIsland("mirror-models") || readIsland("mirror-stats-data") || {};
   const MODEL_IDS = Object.keys(MODELS);
 
+  // Корень слепка относительно текущей страницы: экспорт подставляет «../»
+  // нужной глубины. Клиентские ссылки обязаны быть относительными — корневые
+  // «/model/…» на витрине уводят за пределы слепка и дают 404.
+  const MIRROR_ROOT = document.body
+    ? document.body.getAttribute("data-mirror-root") || ""
+    : "";
+
+  function modelHref(mid) {
+    return MIRROR_ROOT + "model/" + encodeURIComponent(mid) + "/";
+  }
+
   function modelName(mid) {
     const info = MODELS[mid];
     return info && info.n ? info.n : mid;
@@ -934,7 +945,7 @@
         '" width="' + Math.max(1.0, x(elo) - x(lo)).toFixed(1) + '" height="' +
         barH + '" rx="4" class="' + cls + '" style="' + style + '">' +
         "<title>" + tip + "</title></rect>";
-      if (mid) bar = '<a href="/model/' + esc(mid) + '" class="dist-link">' + bar + "</a>";
+      if (mid) bar = '<a href="' + esc(modelHref(mid)) + '" class="dist-link">' + bar + "</a>";
       parts.push(bar);
 
       if (row.hasInterval) {
@@ -960,7 +971,7 @@
       );
       parts.push(
         '<text x="' + nameX + '" y="' + (cy + 4).toFixed(1) + '">' +
-          '<a href="/model/' + esc(mid) + '" class="dist-name">' + esc(rawName) +
+          '<a href="' + esc(modelHref(mid)) + '" class="dist-name">' + esc(rawName) +
           "<title>" + tip + "</title></a></text>"
       );
       if (caption) {
