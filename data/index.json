@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-10-25",
-  "matchups_digest": "07bd0b7ce8f5d113e9b81b42c1a413260be006ac9472c61fa5d7707b93d91ab1",
+  "matchups_digest": "92d742e4611a982e8e3d94b292ed5d52125bbb344d299f93de91edf137ea8f84",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",
@@ -9,9 +9,9 @@
       "provider": "OpenAI",
       "added": "2026-09-08",
       "status": "active",
-      "elo": 1034,
-      "games": 43,
-      "wins": 11,
+      "elo": 1046,
+      "games": 44,
+      "wins": 12,
       "losses": 32,
       "draws": 0
     },
@@ -105,9 +105,9 @@
       "provider": "DeepSeek",
       "added": "2026-09-11",
       "status": "active",
-      "elo": 1360,
-      "games": 40,
-      "wins": 26,
+      "elo": 1372,
+      "games": 41,
+      "wins": 27,
       "losses": 8,
       "draws": 6
     },
@@ -153,9 +153,9 @@
       "provider": "OpenAI",
       "added": "2026-09-05",
       "status": "active",
-      "elo": 1377,
-      "games": 37,
-      "wins": 28,
+      "elo": 1389,
+      "games": 38,
+      "wins": 29,
       "losses": 7,
       "draws": 2
     },
@@ -249,10 +249,10 @@
       "provider": "Anthropic",
       "added": "2026-10-25",
       "status": "active",
-      "elo": 1349,
-      "games": 20,
-      "wins": 14,
-      "losses": 2,
+      "elo": 1336,
+      "games": 25,
+      "wins": 16,
+      "losses": 5,
       "draws": 4
     },
     "opencode-deepseek-v4-1-flash-1017-max": {
@@ -273,10 +273,10 @@
       "provider": "DeepSeek",
       "added": "2026-10-15",
       "status": "active",
-      "elo": 1364,
-      "games": 43,
+      "elo": 1351,
+      "games": 44,
       "wins": 27,
-      "losses": 7,
+      "losses": 8,
       "draws": 9
     },
     "opencode-fledge-alpha-free": {
@@ -297,10 +297,10 @@
       "provider": "Recursive",
       "added": "2026-10-24",
       "status": "active",
-      "elo": 1024,
-      "games": 19,
+      "elo": 989,
+      "games": 21,
       "wins": 5,
-      "losses": 14,
+      "losses": 16,
       "draws": 0
     },
     "opencode-free-model-router-20261024": {
@@ -381,10 +381,10 @@
       "provider": "Thinking Machines Lab",
       "added": "2026-10-24",
       "status": "active",
-      "elo": 970,
-      "games": 24,
+      "elo": 952,
+      "games": 25,
       "wins": 4,
-      "losses": 18,
+      "losses": 19,
       "draws": 2
     },
     "opencode-inkling-small-free-max": {
@@ -393,10 +393,10 @@
       "provider": "Thinking Machines Lab",
       "added": "2026-10-24",
       "status": "active",
-      "elo": 1047,
-      "games": 24,
+      "elo": 1030,
+      "games": 25,
       "wins": 7,
-      "losses": 16,
+      "losses": 17,
       "draws": 1
     },
     "opencode-kimi-k3-1-pro-max": {
@@ -429,10 +429,10 @@
       "provider": "Reflection AI",
       "added": "2026-10-25",
       "status": "active",
-      "elo": 876,
-      "games": 25,
+      "elo": 858,
+      "games": 26,
       "wins": 1,
-      "losses": 24,
+      "losses": 25,
       "draws": 0
     },
     "opencode-ling-3-0-flash-fin-free": {
@@ -441,9 +441,9 @@
       "provider": "Ant Group",
       "added": "2026-09-22",
       "status": "active",
-      "elo": 934,
-      "games": 40,
-      "wins": 4,
+      "elo": 947,
+      "games": 41,
+      "wins": 5,
       "losses": 34,
       "draws": 2
     },
@@ -465,9 +465,9 @@
       "provider": "Meituan",
       "added": "2026-09-30",
       "status": "active",
-      "elo": 980,
-      "games": 42,
-      "wins": 7,
+      "elo": 993,
+      "games": 43,
+      "wins": 8,
       "losses": 34,
       "draws": 1
     },
@@ -489,10 +489,10 @@
       "provider": "Xiaomi",
       "added": "2026-09-22",
       "status": "active",
-      "elo": 1359,
-      "games": 40,
+      "elo": 1347,
+      "games": 41,
       "wins": 26,
-      "losses": 7,
+      "losses": 8,
       "draws": 7
     },
     "opencode-minimax-m3-1-flash-free-max": {
@@ -501,9 +501,9 @@
       "provider": "MiniMax",
       "added": "2026-10-19",
       "status": "active",
-      "elo": 1383,
-      "games": 37,
-      "wins": 25,
+      "elo": 1394,
+      "games": 38,
+      "wins": 26,
       "losses": 5,
       "draws": 7
     },
@@ -525,9 +525,9 @@
       "provider": "NVIDIA",
       "added": "2026-10-15",
       "status": "active",
-      "elo": 988,
-      "games": 42,
-      "wins": 8,
+      "elo": 1001,
+      "games": 43,
+      "wins": 9,
       "losses": 34,
       "draws": 0
     },
@@ -537,9 +537,9 @@
       "provider": "Cohere",
       "added": "2026-10-24",
       "status": "active",
-      "elo": 833,
-      "games": 30,
-      "wins": 0,
+      "elo": 851,
+      "games": 31,
+      "wins": 1,
       "losses": 30,
       "draws": 0
     },
@@ -584,12 +584,12 @@
     "T-001": {
       "slug": "T-001-recurrence-bugs",
       "title": "Bug Hunt — RecurrenceCalculator",
-      "matchups_count": 904
+      "matchups_count": 914
     }
   },
   "matchups_summary": {
-    "total": 904,
-    "applied": 902,
+    "total": 914,
+    "applied": 912,
     "voided": 1,
     "tombstone": 1,
     "skipped": 0
@@ -17731,6 +17731,196 @@
         "before": 1368,
         "after": 1349,
         "delta": -19
+      }
+    },
+    {
+      "matchup": "T-001/905",
+      "seq": 905,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "opencode-claude-haiku-5-5-max",
+      "model_b_id": "opencode-mimo-v2-6-flash-free",
+      "winner": "a",
+      "elo_a": {
+        "before": 1349,
+        "after": 1365,
+        "delta": 16
+      },
+      "elo_b": {
+        "before": 1359,
+        "after": 1347,
+        "delta": -12
+      }
+    },
+    {
+      "matchup": "T-001/906",
+      "seq": 906,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "devin-deepseek-v4-1-flash-max",
+      "model_b_id": "opencode-claude-haiku-5-5-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1360,
+        "after": 1372,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1365,
+        "after": 1349,
+        "delta": -16
+      }
+    },
+    {
+      "matchup": "T-001/907",
+      "seq": 907,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "codex-gpt-5-6-terra-09-2026",
+      "model_b_id": "opencode-inkling-small-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1034,
+        "after": 1046,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1047,
+        "after": 1030,
+        "delta": -17
+      }
+    },
+    {
+      "matchup": "T-001/908",
+      "seq": 908,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "opencode-claude-haiku-5-5-max",
+      "model_b_id": "opencode-deepseek-v4-1-flash-free-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1349,
+        "after": 1366,
+        "delta": 17
+      },
+      "elo_b": {
+        "before": 1364,
+        "after": 1351,
+        "delta": -13
+      }
+    },
+    {
+      "matchup": "T-001/909",
+      "seq": 909,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "devin-gpt-5-6-sol-max",
+      "model_b_id": "opencode-claude-haiku-5-5-max",
+      "winner": "a",
+      "elo_a": {
+        "before": 1377,
+        "after": 1389,
+        "delta": 12
+      },
+      "elo_b": {
+        "before": 1366,
+        "after": 1351,
+        "delta": -15
+      }
+    },
+    {
+      "matchup": "T-001/910",
+      "seq": 910,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "opencode-claude-haiku-5-5-max",
+      "model_b_id": "opencode-minimax-m3-1-flash-free-max",
+      "winner": "b",
+      "elo_a": {
+        "before": 1351,
+        "after": 1336,
+        "delta": -15
+      },
+      "elo_b": {
+        "before": 1383,
+        "after": 1394,
+        "delta": 11
+      }
+    },
+    {
+      "matchup": "T-001/911",
+      "seq": 911,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "opencode-flint-free",
+      "model_b_id": "opencode-nemotron-3-5-super-vl-free-xhigh",
+      "winner": "b",
+      "elo_a": {
+        "before": 1024,
+        "after": 1006,
+        "delta": -18
+      },
+      "elo_b": {
+        "before": 988,
+        "after": 1001,
+        "delta": 13
+      }
+    },
+    {
+      "matchup": "T-001/912",
+      "seq": 912,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:23+03:00",
+      "model_a_id": "opencode-inkling-free-max",
+      "model_b_id": "opencode-ling-3-0-flash-fin-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 970,
+        "after": 952,
+        "delta": -18
+      },
+      "elo_b": {
+        "before": 934,
+        "after": 947,
+        "delta": 13
+      }
+    },
+    {
+      "matchup": "T-001/913",
+      "seq": 913,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:24+03:00",
+      "model_a_id": "opencode-laguna-xs-2-1-free",
+      "model_b_id": "opencode-north-mini-code-free-thinking",
+      "winner": "b",
+      "elo_a": {
+        "before": 876,
+        "after": 858,
+        "delta": -18
+      },
+      "elo_b": {
+        "before": 833,
+        "after": 851,
+        "delta": 18
+      }
+    },
+    {
+      "matchup": "T-001/914",
+      "seq": 914,
+      "date": "2026-10-25",
+      "recorded_at": "2026-10-25T23:21:24+03:00",
+      "model_a_id": "opencode-flint-free",
+      "model_b_id": "opencode-longcat-2-5-preview-free",
+      "winner": "b",
+      "elo_a": {
+        "before": 1006,
+        "after": 989,
+        "delta": -17
+      },
+      "elo_b": {
+        "before": 980,
+        "after": 993,
+        "delta": 13
       }
     }
   ],
