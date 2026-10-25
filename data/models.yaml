@@ -235,9 +235,10 @@ models:
     status: active
   - id: opencode-iceman-contributor-free
     name: "OpenCode Iceman Contributor Free"
-    agent:
-    provider:
+    agent: OpenCode
+    provider: OpenCode
     version:
+    released: 2026-10-24
     added: 2026-10-25
     status: active
   - id: opencode-inkling-free-max
@@ -262,6 +263,20 @@ models:
     provider: Moonshot AI
     version: 
     added: 2026-10-23
+    status: active
+  - id: opencode-laguna-s-2-1-free
+    name: "OpenCode Laguna S 2.1 Free"
+    agent: OpenCode
+    provider: Reflection AI
+    version: free
+    added: 2026-10-25
+    status: active
+  - id: opencode-laguna-xs-2-1-free
+    name: "OpenCode Laguna XS 2.1 Free"
+    agent: OpenCode
+    provider: Reflection AI
+    version: free
+    added: 2026-10-25
     status: active
   - id: opencode-ling-3-0-flash-fin-free
     name: "OpenCode Ling 3.0 Flash Fin Free"
@@ -322,10 +337,11 @@ models:
   - id: opencode-north-mini-code-free-thinking
     name: "OpenCode North Mini Code Free Thinking"
     agent: OpenCode
-    provider: 
+    provider: Cohere
     version: 
+    released: 2026-06-09
     added: 2026-10-24
-    status: active
+    status: archived
   - id: opencode-qwen3-8-max-xhigh
     name: "OpenCode Qwen3.8 Max Xhigh"
     agent: OpenCode
@@ -347,18 +363,4 @@ models:
     provider: StepFun
     version: 
     added: 2026-10-10
-    status: active
-  - id: opencode-laguna-xs-2-1-free
-    name: "OpenCode Laguna XS 2.1 Free"
-    agent: OpenCode
-    provider: Reflection AI
-    version: free
-    added: 2026-10-25
-    status: active
-  - id: opencode-laguna-s-2-1-free
-    name: "OpenCode Laguna S 2.1 Free"
-    agent: OpenCode
-    provider: Reflection AI
-    version: free
-    added: 2026-10-25
     status: active
