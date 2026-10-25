@@ -21,7 +21,8 @@ test_export.py — статический слепок витрины: read-only
     (нет кнопки, task.md, форм аннулирования); аналитика A1–A8 в слепке без
     live-контролов (линии/период, ссылки ячеек матрицы, разбивка по таскам
     только при 2+ активных); профиль — место/последний матч/покрытие, ссылки
-    вердиктов, поиск и сортировка «Личных встреч» вырезаны вместе с aria-sort.
+    вердиктов, поиск и сортировка «Личных встреч» остаются в слепке (read-only),
+    aria-sort обновляется клиентом.
   * Версия и сборка консоли: маркеры `.footer-version` (тег релиза) и
     `.footer-build` (время коммита) в подвале слепка.
 
@@ -249,6 +250,8 @@ def test_read_only_inert_controls():
         assert 'onclick="usePair(' not in home, "кнопка запуска осталась активной"
         assert "function validate" not in home, "скрипт записи отрендерен в read-only"
         assert 'aria-disabled="true"' in model_html, "«Изменить» не обезврежена"
+        assert 'title="Запись доступна только администратору."' in model_html
+        assert 'title="Запись доступна только администратору."' in settings
     print("1.2 read-only inert controls: OK")
 
 
@@ -367,28 +370,49 @@ def test_export_links_and_markers():
                 assert version_mark in page, f"слепок {name} без версии в подвале"
                 assert build_mark in page, f"слепок {name} без сборки в подвале"
 
-            # Волна 3: live-only элементы и мёртвые ссылки в слепок не попадают
-            assert 'name="q"' not in html
-            for marker in ("export-links", "sort-link", "aria-sort",
-                           "data-combobox", "combobox.js"):
+            # Волна 3: read-only фильтры, сортировка и клиентский экспорт
+            # остаются, live-only элементы — нет
+            assert 'name="q"' in html and "filter-search" in html
+            assert "data-search=" in html
+            assert "export-links" in html and 'data-export="rating"' in html
+            assert "/export/rating" not in html
+            assert "sort-link" in html
+            for marker in ("data-combobox", "combobox.js"):
                 assert marker not in html, f"слепок главной: live-only {marker}"
-            for marker in ("export-links", "data-combobox", "combobox.js",
-                           "page-jump", 'name="task"', 'name="from"',
-                           'name="outcome"', 'name="pair"', 'name="only_voided"'):
+            assert "export-links" in history and 'data-export="history"' in history
+            assert "/export/history" not in history
+            assert 'name="pair"' in history, "слепок истории: пропал поиск по паре"
+            assert 'name="task"' in history
+            assert 'name="from"' in history and 'name="to"' in history
+            assert 'name="outcome"' in history
+            assert 'name="only_voided"' in history
+            for marker in ("data-combobox", "combobox.js"):
                 assert marker not in history, f"слепок истории: live-only {marker}"
+            assert 'name="h2h_q"' in model, "слепок модели: пропал поиск соперника"
+            assert "data-h2h-empty" in model
+            assert "sort-link" in model and "aria-sort" in model
             assert 'class="badge-task" href="../task/T-001/"' in history
             assert "matchup-chip" in history and "/history?v=" not in history
 
-            # Живой поиск: скрипт не подключён, поисковых полей нет,
-            # служебных data-атрибутов в разметке слепка нет.
+            # Живой поиск: скрипт не подключён, live-разметки нет,
+            # но сами поля поиска и data-search в слепке остаются.
             for name, page in (("главной", html), ("истории", history),
                                ("модели", model)):
                 assert "live-search.js" not in page, f"слепок {name}: подключён live-search.js"
                 for marker in ("data-live-search", "data-live-input",
                                "data-live-count", "data-live-empty",
-                               "data-live-reset", "data-live-link",
-                               "data-search="):
+                               "data-live-reset", "data-live-link"):
                     assert marker not in page, f"слепок {name}: live-only {marker}"
+            assert "data-search=" in html
+            assert "data-search=" in model
+            assert "data-a=" in history, "слепок истории: строки без пары для поиска"
+
+            # Клиентский слой ищет те же поля локально, без сервера
+            mirror_js = (Path(out) / "static" / "js" / "mirror.js").read_text(
+                encoding="utf-8")
+            for marker in ('input[name="q"]', 'input[name="pair"]',
+                           'input[name="h2h_q"]', "dataset.search"):
+                assert marker in mirror_js, f"mirror.js: нет поиска {marker}"
     print("2.2 links and markers: OK")
 
 
@@ -600,6 +624,7 @@ def test_export_task_pages():
             # Шапка и прогресс на месте, действий записи нет
             assert "Smoke" in task and "Benchmark" in task
             assert 'aria-disabled="true">Записать вердикт по таску' in task
+            assert 'title="Запись доступна только администратору."' in task
             assert 'href="/?task=' not in task and 'href="/task' not in task
             assert "task/T-001/md" not in task, "ссылка task.md просочилась в слепок"
             assert "void-form-open" not in task and "Аннулировать" not in task
@@ -749,11 +774,12 @@ def test_export_profile():
             # 5.2: покрытие по таскам ведёт на экспортированные страницы задач
             assert 'href="../../task/T-001/"' in page
 
-            # 5.3: поиск и сортировка H2H в слепке не рендерятся,
-            # таблица — в порядке по умолчанию
-            assert "h2h-controls" not in page
-            assert "sort-link" not in page
-            assert "aria-sort" not in page
+            # 5.3: поиск H2H и сортировка — read-only, они остаются в слепке
+            assert "h2h-controls" in page
+            assert 'name="h2h_q"' in page
+            assert 'method="GET"' in page
+            assert "sort-link" in page
+            assert "aria-sort" in page
     print("wave4 export profile: OK")
 
 

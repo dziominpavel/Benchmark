@@ -174,7 +174,14 @@ a { color: var(--accent); }
    обезвреженные действия выглядят кнопками, но не кликабельны. */
 fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 
-.btn[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.btn[aria-disabled="true"] {
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
 h1, h2, h3 {
   line-height: var(--lh-tight);
@@ -577,6 +584,14 @@ h2 { font-size: var(--fs-lg); font-weight: 700; }
   border-color: var(--border);
   opacity: 0.75;
   cursor: not-allowed;
+}
+
+/* Обезвреженные действия в read-only: hover не должен подсвечивать кнопку */
+.btn[aria-disabled="true"]:hover,
+.btn[aria-disabled="true"]:focus-visible {
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--border);
 }
 
 .btn-sm { padding: 6px 12px; font-size: var(--fs-xs); }

@@ -1747,10 +1747,8 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         <label><input type="radio" name="filter" value="all" {% if filter == 'all' %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
         <label><input type="radio" name="filter" value="inactive" {% if filter == 'inactive' %}checked{% endif %} onchange="this.form.submit()"><span>Неактивные</span></label>
       </div>
-      {% if not read_only() %}
       <span class="filter-label">Поиск</span>
-      <input type="search" name="q" value="{{ search_query }}" class="filter-search" placeholder="имя или id" aria-label="Поиск по имени или id" data-live-input onchange="this.form.submit()">
-      {% endif %}
+      <input type="search" name="q" value="{{ search_query }}" class="filter-search" placeholder="имя или id" aria-label="Поиск по имени или id"{% if not read_only() %} data-live-input onchange="this.form.submit()"{% endif %}>
     {% endcall %}
   </div>
 
@@ -1759,10 +1757,15 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
       <div class="card rating-card">
         <div class="card-head">
           <h2>Рейтинг</h2>
-          {% if not read_only() and export_rating_urls %}
+          {% if export_rating_urls %}
           <span class="export-links" aria-label="Экспорт выборки">
+            {% if read_only() %}
+            <button type="button" class="btn btn-secondary btn-sm" data-export="rating" data-format="csv">Скачать CSV</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="rating" data-format="json">Скачать JSON</button>
+            {% else %}
             <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.csv }}" data-live-link>Скачать CSV</a>
             <a class="btn btn-secondary btn-sm" href="{{ export_rating_urls.json }}" data-live-link>Скачать JSON</a>
+            {% endif %}
           </span>
           {% endif %}
         </div>
@@ -1771,21 +1774,21 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
           <table>
             <thead>
               <tr>
-                <th scope="col"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}#{% else %}<a class="sort-link" data-live-link href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Тренд{% else %}<a class="sort-link" data-live-link href="{{ sort_url('trend') }}" title="Сортировать по движению рейтинга">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Модель{% else %}<a class="sort-link" data-live-link href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}ELO{% else %}<a class="sort-link" data-live-link href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col" data-sort-col="rank"{% if sort == 'rank' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('rank') }}" title="Сортировать по месту">#{% if sort == 'rank' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+                <th scope="col" data-sort-col="trend"{% if sort == 'trend' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('trend') }}" title="Сортировать по движению рейтинга">Тренд{% if sort == 'trend' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+                <th scope="col" data-sort-col="name"{% if sort == 'name' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('name') }}" title="Сортировать по имени">Модель{% if sort == 'name' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+                <th scope="col" data-sort-col="elo"{% if sort == 'elo' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('elo') }}" title="Сортировать по ELO">ELO{% if sort == 'elo' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
                 <th scope="col">±</th>
                 <th scope="col">Побед</th>
                 <th scope="col">Поражений</th>
                 <th scope="col">Ничьих</th>
-                <th scope="col"{% if sort == 'games' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Всего{% else %}<a class="sort-link" data-live-link href="{{ sort_url('games') }}" title="Сортировать по числу игр">Всего{% if sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-                <th scope="col"{% if sort == 'winrate' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт, %{% else %}<a class="sort-link" data-live-link href="{{ sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт, %{% if sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+                <th scope="col" data-sort-col="games"{% if sort == 'games' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('games') }}" title="Сортировать по числу игр">Всего{% if sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+                <th scope="col" data-sort-col="winrate"{% if sort == 'winrate' %} aria-sort="{{ 'ascending' if sort_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт, %{% if sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
               </tr>
             </thead>
             <tbody>
               {% for m in models_pool %}
-              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit and m.matches_query else 'filter-miss' }}{% endif %}"{% if not read_only() %} data-search="{{ m.search_text }}"{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if filter_view != 'highlight' and not m.matches_query %} hidden{% endif %}{% endif %}>
+              <tr class="{{ 'archived' if m.status == 'archived' }}{{ (' top-%d' % medals[m.id]) if m.id in medals and show_medals }}{% if filter_view == 'highlight' and highlight_hits %} {{ 'filter-hit' if m.hit and m.matches_query else 'filter-miss' }}{% endif %}" data-search="{{ m.search_text }}" data-rank="{{ m.rank }}" data-elo="{{ m.elo }}" data-games="{{ m.games }}" data-wins="{{ m.wins }}" data-trend="{{ m.trend_value if m.trend_value is not none else '' }}"{% if not read_only() %}{% if filter_view == 'highlight' and m.hit %} data-hit="1"{% endif %}{% if filter_view != 'highlight' and not m.matches_query %} hidden{% endif %}{% endif %}>
                 <td class="rank">{% if m.id in medals and show_medals %}<span class="medal">{{ medal_icons[medals[m.id] - 1] }}</span>{% endif %}<span class="rank-num">{{ m.rank }}</span></td>
                 <td class="trend-cell">{% if m.trend_arrow %}<span class="trend {{ m.trend_class }}" title="{{ m.trend_title }}"><span class="trend-arrow">{{ m.trend_arrow }}</span></span>{% endif %}</td>
                 <td class="model-cell">
@@ -2075,33 +2078,31 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <option value="{{ m.id }}" data-agent="{{ m.agent }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
         {% endfor %}
       </select>
-      {% if not read_only() %}
       <span class="filter-label">Таск</span>
-      <select name="task" id="historyTask" onchange="this.form.submit()">
+      <select name="task" id="historyTask"{% if not read_only() %} onchange="this.form.submit()"{% endif %}>
         <option value="">— все таски —</option>
         {% for t in history_tasks %}
         <option value="{{ t.id }}" {% if t.selected %}selected{% endif %}>{{ t.id }}</option>
         {% endfor %}
       </select>
       <span class="filter-label">Даты</span>
-      <input type="date" name="from" value="{{ history_from }}" aria-label="Начало периода" onchange="this.form.submit()">
+      <input type="date" name="from" value="{{ history_from }}" aria-label="Начало периода"{% if not read_only() %} onchange="this.form.submit()"{% endif %}>
       <span class="filter-dash" aria-hidden="true">—</span>
-      <input type="date" name="to" value="{{ history_to }}" aria-label="Конец периода" onchange="this.form.submit()">
+      <input type="date" name="to" value="{{ history_to }}" aria-label="Конец периода"{% if not read_only() %} onchange="this.form.submit()"{% endif %}>
       <span class="filter-presets" role="group" aria-label="Пресеты периода">
-        <a class="filter-preset{% if history_preset_active == '7' %} is-active{% endif %}" href="{{ history_preset_urls['7'] }}">7 дней</a>
-        <a class="filter-preset{% if history_preset_active == '30' %} is-active{% endif %}" href="{{ history_preset_urls['30'] }}">30 дней</a>
-        <a class="filter-preset{% if history_preset_active == 'all' %} is-active{% endif %}" href="{{ history_preset_urls['all'] }}">всё</a>
+        <a class="filter-preset{% if history_preset_active == '7' %} is-active{% endif %}" href="{{ history_preset_urls['7'] }}" data-history-preset="7">7 дней</a>
+        <a class="filter-preset{% if history_preset_active == '30' %} is-active{% endif %}" href="{{ history_preset_urls['30'] }}" data-history-preset="30">30 дней</a>
+        <a class="filter-preset{% if history_preset_active == 'all' %} is-active{% endif %}" href="{{ history_preset_urls['all'] }}" data-history-preset="all">всё</a>
       </span>
       <span class="filter-label">Исход</span>
       <div class="segmented" role="radiogroup" aria-label="Исход">
-        <label><input type="radio" name="outcome" value="" {% if not history_outcome %}checked{% endif %} onchange="this.form.submit()"><span>Все</span></label>
-        <label><input type="radio" name="outcome" value="a" {% if history_outcome == 'a' %}checked{% endif %} onchange="this.form.submit()"><span>Победила A</span></label>
-        <label><input type="radio" name="outcome" value="b" {% if history_outcome == 'b' %}checked{% endif %} onchange="this.form.submit()"><span>Победила B</span></label>
-        <label><input type="radio" name="outcome" value="draw" {% if history_outcome == 'draw' %}checked{% endif %} onchange="this.form.submit()"><span>Ничья</span></label>
+        <label><input type="radio" name="outcome" value="" {% if not history_outcome %}checked{% endif %}{% if not read_only() %} onchange="this.form.submit()"{% endif %}><span>Все</span></label>
+        <label><input type="radio" name="outcome" value="a" {% if history_outcome == 'a' %}checked{% endif %}{% if not read_only() %} onchange="this.form.submit()"{% endif %}><span>Победила A</span></label>
+        <label><input type="radio" name="outcome" value="b" {% if history_outcome == 'b' %}checked{% endif %}{% if not read_only() %} onchange="this.form.submit()"{% endif %}><span>Победила B</span></label>
+        <label><input type="radio" name="outcome" value="draw" {% if history_outcome == 'draw' %}checked{% endif %}{% if not read_only() %} onchange="this.form.submit()"{% endif %}><span>Ничья</span></label>
       </div>
       <span class="filter-label">Пара</span>
-      <input type="text" name="pair" value="{{ history_pair }}" class="filter-pair" placeholder="id или имя" aria-label="Поиск по паре моделей" data-live-input onchange="this.form.submit()">
-      {% endif %}
+      <input type="text" name="pair" value="{{ history_pair }}" class="filter-pair" placeholder="id или имя" aria-label="Поиск по паре моделей"{% if not read_only() %} data-live-input onchange="this.form.submit()"{% endif %}>
       <label class="chip">
         <input type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
         <span>Включать неактивные</span>
@@ -2110,12 +2111,10 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
         <input type="checkbox" name="include_voided" value="1" {% if include_voided %}checked{% endif %} onchange="this.form.submit()">
         <span>Показывать аннулированные</span>
       </label>
-      {% if not read_only() %}
       <label class="chip">
-        <input type="checkbox" name="only_voided" value="1" {% if only_voided %}checked{% endif %} onchange="this.form.submit()">
+        <input type="checkbox" name="only_voided" value="1" {% if only_voided %}checked{% endif %}{% if not read_only() %} onchange="this.form.submit()"{% endif %}>
         <span>Только аннулированные</span>
       </label>
-      {% endif %}
     {% endcall %}
   </div>
 
@@ -2137,7 +2136,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
     </span>
     <span class="detail-elo">{{ detail.elo }}</span>
     {% if detail.status == 'archived' %}<span class="status-pill status-archived">неактивна</span>{% endif %}
-    {% if read_only() %}<span class="btn btn-secondary" aria-disabled="true">Изменить</span>{% else %}<a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>{% endif %}
+    {% if read_only() %}<span class="btn btn-secondary" title="Запись доступна только администратору." aria-disabled="true">Изменить</span>{% else %}<a href="/edit/{{ detail.id }}" class="btn btn-secondary">Изменить</a>{% endif %}
   </div>
 
   {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
@@ -2189,32 +2188,30 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
 
   <div class="card" id="h2h">
     <h2>Личные встречи</h2>
-    {% if not read_only() %}
     <form method="GET" action="/model/{{ detail.id }}" class="h2h-controls">
-      <input class="h2h-input" type="search" name="h2h_q" value="{{ h2h_q }}" placeholder="Поиск соперника по имени или id" aria-label="Поиск соперника" data-live-input>
+      <input class="h2h-input" type="search" name="h2h_q" value="{{ h2h_q }}" placeholder="Поиск соперника по имени или id" aria-label="Поиск соперника"{% if not read_only() %} data-live-input{% endif %}>
       <input type="hidden" name="h2h_sort" value="{{ h2h_sort }}">
       <input type="hidden" name="h2h_dir" value="{{ h2h_dir }}">
       <button type="submit" class="btn btn-secondary btn-sm">Найти</button>
-      <a href="{{ h2h_reset_url }}" class="edit-link" data-live-reset data-live-clear{% if not h2h_q %} hidden{% endif %}>сбросить</a>
-      <span class="visually-hidden" data-live-status role="status" aria-live="polite"></span>
+      <a href="{{ h2h_reset_url }}" class="edit-link" data-h2h-reset{% if not read_only() %} data-live-reset data-live-clear{% endif %}{% if not h2h_q %} hidden{% endif %}>сбросить</a>
+      <span class="visually-hidden"{% if not read_only() %} data-live-status role="status" aria-live="polite"{% endif %}></span>
     </form>
-    {% endif %}
     {% if h2h_rows %}
     <div class="table-wrap"{% if not read_only() %} data-live-table{% if not h2h_visible %} hidden{% endif %}{% endif %}>
       <table>
         <thead>
           <tr>
             <th scope="col">Соперник</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'games' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Встреч{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('games') }}" title="Сортировать по числу встреч">Встреч{% if not read_only() and h2h_sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'w' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}W{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('w') }}" title="Сортировать по победам">W{% if not read_only() and h2h_sort == 'w' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'l' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}L{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('l') }}" title="Сортировать по поражениям">L{% if not read_only() and h2h_sort == 'l' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'd' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}D{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('d') }}" title="Сортировать по ничьим">D{% if not read_only() and h2h_sort == 'd' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
-            <th scope="col"{% if not read_only() and h2h_sort == 'winrate' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}>{% if read_only() %}Винрейт{% else %}<a class="sort-link" data-live-link href="{{ h2h_sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт{% if not read_only() and h2h_sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a>{% endif %}</th>
+            <th scope="col" data-sort-col="games"{% if h2h_sort == 'games' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ h2h_sort_url('games') }}" title="Сортировать по числу встреч">Встреч{% if h2h_sort == 'games' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+            <th scope="col" data-sort-col="w"{% if h2h_sort == 'w' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ h2h_sort_url('w') }}" title="Сортировать по победам">W{% if h2h_sort == 'w' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+            <th scope="col" data-sort-col="l"{% if h2h_sort == 'l' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ h2h_sort_url('l') }}" title="Сортировать по поражениям">L{% if h2h_sort == 'l' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+            <th scope="col" data-sort-col="d"{% if h2h_sort == 'd' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ h2h_sort_url('d') }}" title="Сортировать по ничьим">D{% if h2h_sort == 'd' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
+            <th scope="col" data-sort-col="winrate"{% if h2h_sort == 'winrate' %} aria-sort="{{ 'ascending' if h2h_dir == 'asc' else 'descending' }}"{% endif %}><a class="sort-link"{% if not read_only() %} data-live-link{% endif %} href="{{ h2h_sort_url('winrate') }}" title="Сортировать по винрейту">Винрейт{% if h2h_sort == 'winrate' %}<span class="sort-arrow" aria-hidden="true">{{ '▲' if h2h_dir == 'asc' else '▼' }}</span>{% endif %}</a></th>
           </tr>
         </thead>
         <tbody>
           {% for r in h2h_rows %}
-          <tr{% if not read_only() %} data-search="{{ r.search_text }}"{% if not r.matches_query %} hidden{% endif %}{% endif %}>
+          <tr data-search="{{ r.search_text }}" data-games="{{ r.games }}" data-w="{{ r.w }}" data-l="{{ r.l }}" data-d="{{ r.d }}" data-winrate="{{ r.winrate }}"{% if not read_only() %}{% if not r.matches_query %} hidden{% endif %}{% endif %}>
             <td><a href="/model/{{ r.id }}" class="edit-link">{{ r.name }}</a></td>
             <td>{{ r.games }}</td>
             <td class="wld w">{{ r.w }}</td>
@@ -2226,9 +2223,7 @@ MODEL_TEMPLATE = """{% extends "shell.html" %}
         </tbody>
       </table>
     </div>
-    {% if not read_only() %}
-    <div class="empty-state" data-live-empty{% if h2h_visible or not h2h_q %} hidden{% endif %}>Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link" data-live-clear>Сбросить поиск</a></div>
-    {% endif %}
+    <div class="empty-state"{% if not read_only() %} data-live-empty{% else %} data-h2h-empty{% endif %}{% if h2h_visible or not h2h_q %} hidden{% endif %}>Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link" data-h2h-reset{% if not read_only() %} data-live-clear{% endif %}>Сбросить поиск</a></div>
     {% else %}
     <div class="empty-state">{% if h2h_q %}Никого не найдено. <a href="{{ h2h_reset_url }}" class="edit-link">Сбросить поиск</a>{% else %}Пока нет встреч{% endif %}</div>
     {% endif %}
@@ -2306,7 +2301,7 @@ TASK_TEMPLATE = """{% extends "shell.html" %}
     {% if task_active %}<span class="status-pill status-active">активна</span>{% else %}<span class="status-pill status-archived">неактивна</span>{% endif %}
     {% if task_current %}<span class="status-pill status-active">текущая</span>{% endif %}
     {% if read_only() %}
-    <span class="btn btn-primary" aria-disabled="true">Записать вердикт по таску</span>
+    <span class="btn btn-primary" title="Запись доступна только администратору." aria-disabled="true">Записать вердикт по таску</span>
     {% else %}
     <a class="btn btn-primary" href="{{ url_for('leaderboard', task=task.id) }}">Записать вердикт по таску</a>
     {% endif %}
@@ -2920,7 +2915,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         «Изменить» в списке моделей.
       </div>
       <div class="card-actions">
-        {% if read_only() %}<span class="btn btn-primary" aria-disabled="true">+ Добавить модель</span>{% else %}<a href="/add" class="btn btn-primary">+ Добавить модель</a>{% endif %}
+        {% if read_only() %}<span class="btn btn-primary" title="Запись доступна только администратору." aria-disabled="true">+ Добавить модель</span>{% else %}<a href="/add" class="btn btn-primary">+ Добавить модель</a>{% endif %}
       </div>
     </div>
 
@@ -2953,7 +2948,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
                   {% if t.active %}Деактивировать{% else %}Активировать{% endif %}
                 </button>
               {% if read_only() %}</fieldset>{% else %}</form>{% endif %}
-              {% if read_only() %}<span class="btn btn-secondary btn-sm ms-1" aria-disabled="true">Изменить</span>{% else %}<a href="/edit_task/{{ t.id }}" class="btn btn-secondary btn-sm ms-1">Изменить</a>{% endif %}
+              {% if read_only() %}<span class="btn btn-secondary btn-sm ms-1" title="Запись доступна только администратору." aria-disabled="true">Изменить</span>{% else %}<a href="/edit_task/{{ t.id }}" class="btn btn-secondary btn-sm ms-1">Изменить</a>{% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -2969,7 +2964,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         файлы задачи остаются.
       </div>
       <div class="card-actions">
-        {% if read_only() %}<span class="btn btn-primary" aria-disabled="true">+ Добавить таску</span>{% else %}<a href="/add_task" class="btn btn-primary">+ Добавить таску</a>{% endif %}
+        {% if read_only() %}<span class="btn btn-primary" title="Запись доступна только администратору." aria-disabled="true">+ Добавить таску</span>{% else %}<a href="/add_task" class="btn btn-primary">+ Добавить таску</a>{% endif %}
       </div>
     </div>
   </div>

@@ -6,7 +6,7 @@
 
 {% macro verdict_row(item, show_task=True, extra_class="", void_next=None) %}
 {% set has_badge = show_task and item.task %}
-<div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}{% if not has_badge %} history-item-no-task{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %}>
+<div class="history-item{% if item.voided %} history-item-voided{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}{% if not has_badge %} history-item-no-task{% endif %}"{% if item.seq %} id="v-{{ item.seq }}"{% endif %} data-seq="{{ item.seq or '' }}" data-task="{{ item.task or '' }}" data-date="{{ item.date_raw }}" data-recorded-at="{{ item.recorded_at_raw }}" data-winner="{{ item.winner }}" data-voided="{{ '1' if item.voided else '0' }}"{% if item.voided %} data-void-date="{{ item.void_date_raw }}" data-void-reason="{{ item.void_reason }}"{% endif %}>
   {% if has_badge %}
   <a class="badge-task" href="{{ url_for('task_page', task_id=item.task) }}" title="Открыть страницу задачи {{ item.task }}">{{ item.task }}</a>
   {% endif %}

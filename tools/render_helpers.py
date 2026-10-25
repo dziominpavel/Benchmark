@@ -315,17 +315,20 @@ def format_elo_history(history: list[dict], name_map: dict,
 
         voided = bool(item.get("voided"))
         void_str = ""
+        void_date_raw = ""
+        void_reason = ""
         if voided:
             void = item.get("void") or {}
+            void_date_raw = str(void.get("date") or void.get("recorded_at") or "")
             void_date = format_recorded_at(
                 void.get("recorded_at", ""), void.get("date", "")
             )
             void_str = "аннулировано"
             if void_date:
                 void_str += f" {void_date}"
-            reason = str(void.get("reason", "")).strip()
-            if reason:
-                void_str += f" · {reason}"
+            void_reason = str(void.get("reason", "")).strip()
+            if void_reason:
+                void_str += f" · {void_reason}"
 
         captions = caption_map or {}
         winner = str(item.get("winner") or "")
@@ -356,6 +359,8 @@ def format_elo_history(history: list[dict], name_map: dict,
             "elo_b_delta_str": b_delta_str,
             "elo_b_delta_class": b_delta_class,
             "date_str": date_str,
+            "date_raw": str(item.get("date") or "")[:10],
+            "recorded_at_raw": str(item.get("recorded_at") or ""),
             "hit": bool(item.get("hit")) if highlight else False,
             "matchup": item.get("matchup", ""),
             "task": history_task_id(item),
@@ -365,6 +370,8 @@ def format_elo_history(history: list[dict], name_map: dict,
             "winner_aria": winner_aria,
             "voided": voided,
             "void_str": void_str,
+            "void_date_raw": void_date_raw,
+            "void_reason": void_reason,
         })
     return items
 

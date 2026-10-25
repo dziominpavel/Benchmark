@@ -92,9 +92,9 @@ _OPPOSITION_ROW_RE = re.compile(r'<tr>\s*<td><a href="/model/[^"]*">.*?</tr>', r
 # встречаются div-ы ячеек, поэтому границей служит </table>).
 _TABLE_WRAP_RE = re.compile(r'<div class="table-wrap">.*?</table>\s*</div>', re.S)
 # Строка рейтинга (первая ячейка — ранг) и её архивная разновидность
-_RATING_ROW_RE = re.compile(r'<tr class="[^"]*">\s*<td class="rank">.*?</tr>', re.S)
+_RATING_ROW_RE = re.compile(r'<tr class="[^"]*"[^>]*>\s*<td class="rank">.*?</tr>', re.S)
 _ARCHIVED_RATING_ROW_RE = re.compile(
-    r'<tr class="archived[^"]*">\s*<td class="rank">.*?</tr>', re.S)
+    r'<tr class="archived[^"]*"[^>]*>\s*<td class="rank">.*?</tr>', re.S)
 # Строка матрицы ответов (первая ячейка — модель) и её архивная разновидность
 _FLAGS_ROW_RE = re.compile(r'<tr class="[^"]*">\s*<td class="model-cell">.*?</tr>', re.S)
 _ARCHIVED_FLAGS_ROW_RE = re.compile(

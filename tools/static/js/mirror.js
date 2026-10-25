@@ -101,6 +101,62 @@
     return true;
   }
 
+  // Поиск по имени/id: в слепке та же семантика, что у `q` консоли —
+  // регистронезависимая подстрока (сервер отдаёт готовый data-search).
+  function casefold(value) {
+    return String(value || "").toLowerCase();
+  }
+
+  function matchesSearch(haystack, needle) {
+    return !needle || casefold(haystack).indexOf(needle) !== -1;
+  }
+
+  const SORT_DEFAULTS = {
+    rank: "asc", name: "asc", elo: "desc", games: "desc",
+    winrate: "desc", trend: "desc",
+  };
+
+  function pad2(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function isoDate(d) {
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+
+  function isoToday() {
+    return isoDate(new Date());
+  }
+
+  function isoNow() {
+    const d = new Date();
+    return isoToday() + "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) +
+      ":" + pad2(d.getSeconds());
+  }
+
+  function csvEscape(value) {
+    const text = String(value == null ? "" : value);
+    return /[;"\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+
+  function csvText(header, rows) {
+    const lines = [header.map(csvEscape).join(";")];
+    for (const row of rows) lines.push(row.map(csvEscape).join(";"));
+    return "\ufeff" + lines.join("\r\n") + "\r\n";
+  }
+
+  function downloadFile(name, mime, body) {
+    const blob = new Blob([body], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function splitCsv(raw) {
     return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   }
@@ -139,7 +195,11 @@
   }
 
   function setShown(el, shown) {
-    if (el) el.style.display = shown ? "" : "none";
+    if (!el) return;
+    el.style.display = shown ? "" : "none";
+    // Серверный `hidden` (например, пустое состояние слепка) сильнее
+    // инлайнового display: при показе атрибут снимаем.
+    if (shown) el.removeAttribute("hidden");
   }
 
   function htmlToNode(html) {
@@ -238,7 +298,7 @@
   // Переносит фильтры из адреса в контролы формы (до первого рендера).
   function syncFromUrl(form, tagNames, selectNames = []) {
     const params = new URLSearchParams(location.search);
-    for (const name of ["filter", "answer_filter", "view", "chips"]) {
+    for (const name of ["filter", "answer_filter", "view", "chips", "outcome"]) {
       const inputs = [...form.querySelectorAll('input[name="' + name + '"]')];
       if (!inputs.length) continue;
       const wanted = (params.get(name) || "").toLowerCase();
@@ -248,7 +308,7 @@
         });
       }
     }
-    for (const name of ["only_debts", "include_inactive", "include_voided"]) {
+    for (const name of ["only_debts", "include_inactive", "include_voided", "only_voided"]) {
       const inputs = [...form.querySelectorAll('input[name="' + name + '"]')];
       if (!inputs.length || params.get(name) === null) continue;
       inputs.forEach((el) => {
@@ -270,6 +330,22 @@
     for (const name of selectNames) {
       const select = form.querySelector('select[name="' + name + '"]');
       if (select && params.get(name)) select.value = params.get(name);
+    }
+    // Текстовый поиск — такой же read-only фильтр, как чипы: в слепке он
+    // применяется клиентом (главная `q`, история `pair`).
+    for (const name of ["q", "pair"]) {
+      const box = form.querySelector('input[name="' + name + '"]');
+      if (box) box.value = params.get(name) || "";
+    }
+    const taskSelect = form.querySelector('select[name="task"]');
+    if (taskSelect && params.get("task")) {
+      const wanted = params.get("task");
+      const option = [...taskSelect.options].find((item) => item.value === wanted);
+      if (option) taskSelect.value = wanted;
+    }
+    for (const name of ["from", "to"]) {
+      const box = form.querySelector('input[name="' + name + '"]');
+      if (box) box.value = params.get(name) || "";
     }
     return params;
   }
@@ -363,16 +439,37 @@
     // Кандидаты строк: базовый пул страницы и архив из шаблона.
     const actives = new Map();
     const archived = new Map();
+    const meta = new Map();
     const addRow = (row) => {
       const mid = modelIdFromLink(row);
       if (!mid) return;
       const store = isArchived(mid) ? archived : actives;
       if (!store.has(mid)) store.set(mid, row.outerHTML);
+      if (!meta.has(mid)) {
+        const trend = row.dataset.trend;
+        meta.set(mid, {
+          elo: Number(row.dataset.elo) || modelElo(mid),
+          games: Number(row.dataset.games) || 0,
+          wins: Number(row.dataset.wins) || 0,
+          trend: trend === undefined || trend === "" ? null : Number(trend),
+        });
+      }
     };
     [...body.rows].forEach(addRow);
     templateRows("mirror-archived-rows").forEach(addRow);
 
+    // Сортировка — read-only: состояние живёт в адресе, как в консоли.
+    const urlParams = new URLSearchParams(location.search);
+    let sortKey = (urlParams.get("sort") || "").toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(SORT_DEFAULTS, sortKey)) {
+      sortKey = "";
+    }
+    let sortDir = (urlParams.get("dir") || "").toLowerCase();
+    if (sortDir !== "asc" && sortDir !== "desc") sortDir = "";
+    if (sortKey && !sortDir) sortDir = SORT_DEFAULTS[sortKey];
+
     const statsEl = document.querySelector(".controls .stats");
+    const qInput = form.querySelector('input[name="q"]');
     let statsTail = "";
     if (statsEl) {
       const text = (statsEl.textContent || "").replace(/\s+/g, " ").trim();
@@ -387,9 +484,80 @@
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
       captions: isChecked(form, "captions"),
+      qRaw: qInput ? qInput.value.trim() : "",
+      q: casefold(qInput ? qInput.value.trim() : ""),
+      sort: sortKey,
+      dir: sortKey ? (sortDir || SORT_DEFAULTS[sortKey]) : "",
     });
 
     const byRank = (a, b) => ALL_RANKS.get(a) - ALL_RANKS.get(b);
+
+    // Место — по статусному пулу, как на сервере: фильтры и сортировка его
+    // не меняют, а смена «Показывать» пересчитывает пул.
+    const rankCache = new Map();
+    function ranksFor(mode) {
+      if (!rankCache.has(mode)) {
+        const pool = MODEL_IDS.filter((mid) => statusMatches(mode, mid));
+        pool.sort((a, b) => modelElo(b) - modelElo(a) || (a < b ? -1 : a > b ? 1 : 0));
+        const map = new Map();
+        pool.forEach((mid, index) => map.set(mid, index + 1));
+        rankCache.set(mode, map);
+      }
+      return rankCache.get(mode);
+    }
+
+    function sortValue(mid, sort, ranks) {
+      const info = meta.get(mid) || {};
+      if (sort === "rank") return ranks.get(mid) || null;
+      if (sort === "name") return modelName(mid).toLowerCase();
+      if (sort === "elo") return info.elo === undefined ? modelElo(mid) : info.elo;
+      if (sort === "games") return info.games || 0;
+      if (sort === "winrate") {
+        return info.games ? (info.wins || 0) / info.games : null;
+      }
+      if (sort === "trend") {
+        return info.trend === null || Number.isNaN(info.trend) ? null : info.trend;
+      }
+      return null;
+    }
+
+    function orderIds(ids, st, ranks) {
+      if (!st.sort) {
+        return ids.slice().sort((a, b) => (ranks.get(a) || 0) - (ranks.get(b) || 0));
+      }
+      const withValue = [];
+      const without = [];
+      for (const mid of ids) {
+        const value = sortValue(mid, st.sort, ranks);
+        if (value === null || value === undefined) without.push(mid);
+        else withValue.push([mid, value]);
+      }
+      withValue.sort((a, b) => {
+        if (a[1] < b[1]) return st.dir === "desc" ? 1 : -1;
+        if (a[1] > b[1]) return st.dir === "desc" ? -1 : 1;
+        return (ranks.get(a[0]) || 0) - (ranks.get(b[0]) || 0);
+      });
+      return withValue.map((pair) => pair[0]).concat(without);
+    }
+
+    function syncSortUi(st) {
+      for (const th of card.querySelectorAll("th[data-sort-col]")) {
+        th.removeAttribute("aria-sort");
+        const old = th.querySelector(".sort-arrow");
+        if (old) old.remove();
+      }
+      if (!st.sort) return;
+      const th = card.querySelector('th[data-sort-col="' + st.sort + '"]');
+      if (!th) return;
+      th.setAttribute("aria-sort", st.dir === "asc" ? "ascending" : "descending");
+      const link = th.querySelector("a.sort-link");
+      if (!link) return;
+      const span = document.createElement("span");
+      span.className = "sort-arrow";
+      span.setAttribute("aria-hidden", "true");
+      span.textContent = st.dir === "asc" ? "▲" : "▼";
+      link.appendChild(span);
+    }
 
     function emptyMessage(mode) {
       if (mode === "inactive") return "Нет неактивных (архивных) моделей.";
@@ -413,32 +581,38 @@
     }
 
     function render(st) {
-      // Пул: активные — в порядке консоли, архивные — по полному рангу.
+      const highlight = st.view === "highlight";
+      const ranks = ranksFor(highlight ? "all" : st.mode);
       let ids;
-      if (st.mode === "active") ids = [...actives.keys()];
-      else if (st.mode === "inactive") ids = [...archived.keys()].sort(byRank);
-      else ids = [...actives.keys(), ...archived.keys()].sort(byRank);
+      if (highlight) ids = [...actives.keys(), ...archived.keys()];
+      else if (st.mode === "active") ids = [...actives.keys()];
+      else if (st.mode === "inactive") ids = [...archived.keys()];
+      else ids = [...actives.keys(), ...archived.keys()];
+      ids = orderIds(ids, st, ranks);
       body.innerHTML = ids
         .map((mid) => actives.get(mid) || archived.get(mid))
         .join("\n");
-      [...body.rows].forEach((row, index) => {
+      for (const row of body.rows) {
+        const mid = modelIdFromLink(row);
         const num = row.querySelector(".rank-num");
-        if (num) num.textContent = String(index + 1);
-      });
+        if (num && ranks.has(mid)) num.textContent = String(ranks.get(mid));
+      }
+      syncSortUi(st);
 
-      const highlight = st.view === "highlight";
       const all = [...body.rows];
+      const q = st.q;
       let visible = 0;
       let hits = 0;
       const marks = all.map((row) => {
         const mid = modelIdFromLink(row);
         const tags = passesTags(mid, st.agentSel, st.providerSel);
-        if (tags) visible += 1;
-        if (tags && statusMatches(st.mode, mid)) {
+        const found = matchesSearch(row.dataset.search || "", q);
+        if (tags && found) visible += 1;
+        if (tags && found && statusMatches(st.mode, mid)) {
           if (highlight) hits += 1;
-          return { row, tags, hit: true };
+          return { row, tags, found, hit: true };
         }
-        return { row, tags, hit: false };
+        return { row, tags, found, hit: false };
       });
       const anyHits = highlight && hits > 0;
       for (const mark of marks) {
@@ -447,7 +621,7 @@
           mark.row.classList.toggle("filter-hit", anyHits && mark.hit);
           mark.row.classList.toggle("filter-miss", anyHits && !mark.hit);
         } else {
-          setShown(mark.row, mark.tags);
+          setShown(mark.row, mark.tags && mark.found);
           mark.row.classList.remove("filter-hit", "filter-miss");
         }
       }
@@ -466,8 +640,9 @@
       if (!highlight) {
         if (!all.length) message = emptyMessage(st.mode);
         else if (!visible) {
-          message =
-            "Под выбранный фильтр не попала ни одна модель. Сбросьте фильтр, чтобы увидеть список.";
+          message = st.q
+            ? "Ничего не найдено по запросу «" + st.qRaw + "». Сбросьте поиск, чтобы увидеть список."
+            : "Под выбранный фильтр не попала ни одна модель. Сбросьте фильтр, чтобы увидеть список.";
         }
       }
       setShown(card.querySelector(".table-wrap"), !message);
@@ -485,6 +660,64 @@
       updateArchivedSection(st);
     }
 
+    // Экспорт выборки: тот же состав, что видно в таблице (в подсветке —
+    // весь пул), и тот же порядок. Форматы повторяют серверные.
+    function exportRating(format) {
+      const st = state();
+      const ranks = ranksFor(st.view === "highlight" ? "all" : st.mode);
+      const rows = [...body.rows]
+        .filter((row) => row.style.display !== "none")
+        .map((row) => {
+          const mid = modelIdFromLink(row);
+          const info = MODELS[mid] || {};
+          const cells = row.cells;
+          const cell = (index) => (cells[index] ? cells[index].textContent.trim() : "");
+          return {
+            place: ranks.get(mid) || "",
+            id: mid,
+            name: modelName(mid),
+            provider: info.p || "",
+            agent: info.a || "",
+            elo: Number(row.dataset.elo) || modelElo(mid),
+            confidence: cell(4),
+            games: Number(row.dataset.games) || 0,
+            wins: Number(cell(5)) || 0,
+            losses: Number(cell(6)) || 0,
+            draws: Number(cell(7)) || 0,
+            winrate: cell(9),
+          };
+        });
+      const today = isoToday();
+      if (format === "csv") {
+        const header = ["Место", "id", "Имя", "Компания", "Агент", "ELO", "±",
+                        "Игры", "Победы", "Поражения", "Ничьи", "Винрейт, %"];
+        downloadFile(
+          "rating-" + today + ".csv",
+          "text/csv;charset=utf-8",
+          csvText(header, rows.map((row) => Object.values(row)))
+        );
+        return;
+      }
+      const payload = {
+        generated_at: isoNow(),
+        filters: {
+          filter: st.mode,
+          agents: [...st.agentSel].sort(),
+          providers: [...st.providerSel].sort(),
+          q: st.qRaw,
+        },
+        sort: st.sort || "rank",
+        dir: st.dir || "asc",
+        count: rows.length,
+        rows: rows,
+      };
+      downloadFile(
+        "rating-" + today + ".json",
+        "application/json;charset=utf-8",
+        JSON.stringify(payload, null, 2)
+      );
+    }
+
     const apply = () => {
       const st = state();
       chipsOrder(form, st.chips);
@@ -492,16 +725,49 @@
       applyCaptions(st.captions);
       render(st);
       writeUrl([
+        ["q", st.qRaw],
         ["filter", st.mode !== "active" ? st.mode : ""],
         ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
         ["captions", st.captions ? "show" : ""],
+        ["sort", st.sort],
+        ["dir", st.sort ? st.dir : ""],
       ]);
     };
 
+    card.addEventListener("click", (event) => {
+      const link = event.target.closest("th[data-sort-col] a.sort-link");
+      if (link) {
+        event.preventDefault();
+        const col = link.closest("th").dataset.sortCol;
+        if (sortKey === col) {
+          sortDir = sortDir === "desc" ? "asc" : "desc";
+        } else {
+          sortKey = col;
+          sortDir = SORT_DEFAULTS[col] || "asc";
+        }
+        apply();
+        return;
+      }
+      const button = event.target.closest("[data-export]");
+      if (button) {
+        event.preventDefault();
+        exportRating(button.dataset.format);
+      }
+    });
+
     syncFromUrl(form, ["agents", "providers"]);
+    // Живой поиск: локальная фильтрация без сервера, как `data-live-input`
+    // консоли. Перерисовка отложена, чтобы не дёргать DOM на каждый символ.
+    let qTimer = null;
+    if (qInput) {
+      qInput.addEventListener("input", () => {
+        window.clearTimeout(qTimer);
+        qTimer = window.setTimeout(apply, 120);
+      });
+    }
     form.addEventListener("change", apply);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -518,7 +784,10 @@
     if (!card || !form) return;
     const rows = [...card.querySelectorAll(".history-item")];
     const select = form.querySelector('select[name="model"]');
-    const statsEl = document.querySelector(".controls .stats");
+    const pairInput = form.querySelector('input[name="pair"]');
+    const statsEl =
+      (card.closest(".history-results") || card).querySelector(".stats") ||
+      document.querySelector(".controls .stats");
 
     const params = syncFromUrl(form, ["agents", "providers"], ["model"]);
     // Выбранная из адреса модель могла не попасть в опции (архивная или под
@@ -534,6 +803,7 @@
     }
 
     let currentPage = 1;
+    let lastPages = 1;
     {
       const raw = parseInt((params.get("page") || "1").trim(), 10);
       if (!Number.isNaN(raw)) currentPage = Math.max(1, raw);
@@ -543,11 +813,18 @@
       model: select ? select.value : "",
       includeInactive: isChecked(form, "include_inactive"),
       includeVoided: isChecked(form, "include_voided"),
+      onlyVoided: isChecked(form, "only_voided"),
+      task: (form.querySelector('select[name="task"]') || {}).value || "",
+      from: (form.querySelector('input[name="from"]') || {}).value || "",
+      to: (form.querySelector('input[name="to"]') || {}).value || "",
+      outcome: checkedValue(form, "outcome", ""),
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       agentSel: formTags(form, "agents"),
       providerSel: formTags(form, "providers"),
       captions: isChecked(form, "captions"),
+      pairRaw: pairInput ? pairInput.value.trim() : "",
+      pair: casefold(pairInput ? pairInput.value.trim() : ""),
     });
 
     function rebuildDropdown(st) {
@@ -621,21 +898,61 @@
     function render(st) {
       rebuildDropdown(st);
       const keepAll = st.view === "highlight";
+      // Точная пара `idA:idB`, как в консоли: оба id из реестра.
+      let pairIds = null;
+      if (st.pairRaw.split(":").length === 2) {
+        const parts = st.pairRaw.split(":").map((part) => part.trim());
+        if (parts[0] && parts[1] && parts[0] !== parts[1] &&
+            MODELS[parts[0]] && MODELS[parts[1]]) {
+          pairIds = parts.sort();
+        }
+      }
       const states = rows.map((row) => {
         const a = row.dataset.a || "";
         const b = row.dataset.b || "";
-        const voided = row.classList.contains("history-item-voided");
+        const voided = row.dataset.voided === "1" ||
+          row.classList.contains("history-item-voided");
+        const date = (row.dataset.date || "").slice(0, 10);
         const modelMatch = Boolean(st.model) && (a === st.model || b === st.model);
         const tagMatch =
           passesTags(a, st.agentSel, st.providerSel) ||
           passesTags(b, st.agentSel, st.providerSel);
         const matches = keepAll || (st.model ? modelMatch : tagMatch);
-        const shown = matches && (!voided || st.includeVoided);
-        return { row, shown, hit: keepAll && (st.model ? modelMatch : tagMatch), voided };
+        // Поиск по паре — как в консоли: подстрока в id и имени обеих моделей.
+        let pairMatch;
+        if (pairIds) {
+          const pair = [a, b].sort();
+          pairMatch = pair[0] === pairIds[0] && pair[1] === pairIds[1];
+        } else {
+          pairMatch = matchesSearch(
+            a + " " + modelName(a) + " " + b + " " + modelName(b),
+            st.pair
+          );
+        }
+        const taskOk = !st.task || (row.dataset.task || "") === st.task;
+        const fromOk = !st.from || (date && date >= st.from);
+        const toOk = !st.to || (date && date <= st.to);
+        const outcomeOk = !st.outcome || (row.dataset.winner || "") === st.outcome;
+        const voidOk = (!voided || st.includeVoided || st.onlyVoided);
+        const onlyVoidedOk = !st.onlyVoided || voided;
+        const base = matches && voidOk;
+        const shown = base && pairMatch && taskOk && fromOk && toOk &&
+          outcomeOk && onlyVoidedOk;
+        return {
+          row,
+          shown,
+          base,
+          hit: keepAll && (st.model ? modelMatch : tagMatch),
+          voided,
+        };
       });
+      const searchActive = Boolean(
+        st.task || st.from || st.to || st.outcome || st.pairRaw
+      );
       const visible = states.filter((s) => s.shown).length;
+      const baseVisible = states.filter((s) => s.base).length;
       const voidedVisible = states.filter((s) => s.shown && s.voided).length;
-      const hits = keepAll ? states.filter((s) => s.hit).length : 0;
+      const hits = keepAll ? states.filter((s) => s.shown && s.hit).length : 0;
       const pages = Math.max(1, Math.ceil(visible / HISTORY_PAGE_SIZE));
       currentPage = Math.max(1, Math.min(currentPage, pages));
 
@@ -651,20 +968,27 @@
             pos < currentPage * HISTORY_PAGE_SIZE;
         }
         setShown(s.row, s.shown && onPage);
+        s.row.dataset.mirrorMatch = s.shown ? "1" : "0";
         s.row.classList.toggle("filter-hit", anyHits && s.hit);
         s.row.classList.toggle("filter-miss", anyHits && !s.hit);
       }
 
       if (statsEl) {
-        let text = "Всего записей: " + visible;
+        let text = "Всего записей: " + baseVisible;
         if (st.includeVoided) text += " · аннулированных: " + voidedVisible;
+        if (searchActive) text += " · найдено: " + visible;
         if (keepAll) text += " · подсвечено: " + hits;
         else if (st.model) text += " · Фильтр: " + modelName(st.model);
         statsEl.textContent = text;
       }
 
       const empty = emptyBox(card);
-      const message = visible ? "" : "Нет истории";
+      let message = "";
+      if (!visible) {
+        message = searchActive
+          ? "По выбранным условиям записей не найдено."
+          : "Нет истории";
+      }
       setShown(empty, Boolean(message));
       if (message) empty.textContent = message;
 
@@ -677,6 +1001,104 @@
       }
 
       navigation(pages);
+      lastPages = pages;
+      const jump = document.querySelector(".page-jump");
+      if (jump) setShown(jump, pages > 1);
+    }
+
+    function exportHistory(format) {
+      const st = state();
+      const data = rows
+        .filter((row) => row.dataset.mirrorMatch === "1")
+        .map((row) => {
+          const aEl = row.querySelector('.history-side[data-side="a"] .history-model-link');
+          const bEl = row.querySelector('.history-side[data-side="b"] .history-model-link');
+          const aElo = row.querySelector('.history-elo-group[data-side="a"] .history-elo');
+          const bElo = row.querySelector('.history-elo-group[data-side="b"] .history-elo');
+          const aDelta = row.querySelector('.history-elo-group[data-side="a"] [class^="history-delta"]');
+          const bDelta = row.querySelector('.history-elo-group[data-side="b"] [class^="history-delta"]');
+          const numbers = (el) => {
+            const found = ((el && el.textContent) || "").match(/-?\d+/g) || [];
+            return found.map((value) => Number(value));
+          };
+          const delta = (el) => {
+            const text = ((el && el.textContent) || "")
+              .replace("±", "")
+              .replace("+", "")
+              .replace("\u2212", "-")
+              .trim();
+            const value = Number(text);
+            return Number.isNaN(value) ? 0 : value;
+          };
+          const aNumbers = numbers(aElo);
+          const bNumbers = numbers(bElo);
+          const voided = row.dataset.voided === "1";
+          return {
+            seq: Number(row.dataset.seq) || "",
+            matchup: ((row.querySelector(".matchup-chip") || {}).textContent || "").trim(),
+            task: row.dataset.task || "",
+            date: row.dataset.date || "",
+            recorded_at: row.dataset.recordedAt || "",
+            model_a_id: row.dataset.a || "",
+            model_a_name: (aEl && aEl.textContent || "").trim(),
+            model_b_id: row.dataset.b || "",
+            model_b_name: (bEl && bEl.textContent || "").trim(),
+            winner: row.dataset.winner || "",
+            elo_a_before: aNumbers[0] === undefined ? 1200 : aNumbers[0],
+            elo_a_after: aNumbers[1] === undefined ? 1200 : aNumbers[1],
+            delta_a: delta(aDelta),
+            elo_b_before: bNumbers[0] === undefined ? 1200 : bNumbers[0],
+            elo_b_after: bNumbers[1] === undefined ? 1200 : bNumbers[1],
+            delta_b: delta(bDelta),
+            voided: voided ? "1" : "0",
+            void_date: row.dataset.voidDate || "",
+            void_reason: row.dataset.voidReason || "",
+          };
+        });
+      const today = isoToday();
+      if (format === "csv") {
+        const header = ["seq", "matchup", "task", "date", "recorded_at",
+                        "model_a_id", "model_a_name", "model_b_id", "model_b_name",
+                        "winner", "elo_a_before", "elo_a_after", "delta_a",
+                        "elo_b_before", "elo_b_after", "delta_b", "voided",
+                        "void_date", "void_reason"];
+        downloadFile(
+          "history-" + today + ".csv",
+          "text/csv;charset=utf-8",
+          csvText(header, data.map((row) => Object.values(row)))
+        );
+        return;
+      }
+      let pairIds = [];
+      const parts = st.pairRaw.split(":");
+      if (parts.length === 2) {
+        const left = parts[0].trim();
+        const right = parts[1].trim();
+        if (left && right && left !== right && MODELS[left] && MODELS[right]) {
+          pairIds = [left, right];
+        }
+      }
+      const payload = {
+        generated_at: isoNow(),
+        filters: {
+          model: st.model,
+          include_voided: st.includeVoided,
+          task: st.task.replace(/\/.*$/, ""),
+          from: st.from,
+          to: st.to,
+          outcome: st.outcome,
+          pair: pairIds.length ? "" : st.pairRaw,
+          pair_ids: pairIds,
+          only_voided: st.onlyVoided,
+        },
+        count: data.length,
+        rows: data,
+      };
+      downloadFile(
+        "history-" + today + ".json",
+        "application/json;charset=utf-8",
+        JSON.stringify(payload, null, 2)
+      );
     }
 
     const apply = (resetPage) => {
@@ -688,6 +1110,12 @@
       render(st);
       writeUrl([
         ["model", st.model],
+        ["pair", st.pairRaw],
+        ["task", st.task],
+        ["from", st.from],
+        ["to", st.to],
+        ["outcome", st.outcome],
+        ["only_voided", st.onlyVoided ? "1" : ""],
         ["include_inactive", st.includeInactive ? "1" : ""],
         ["include_voided", st.includeVoided ? "1" : ""],
         ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
@@ -699,12 +1127,207 @@
       ]);
     };
 
+    function goPage(page) {
+      const target = Number(page);
+      if (Number.isNaN(target)) return;
+      currentPage = Math.max(1, Math.min(target, lastPages));
+      apply(false);
+      card.scrollIntoView({ block: "start" });
+    }
+
+    // Живой поиск по паре: локальная фильтрация, страница сбрасывается на первую.
+    let pairTimer = null;
+    if (pairInput) {
+      pairInput.addEventListener("input", () => {
+        window.clearTimeout(pairTimer);
+        pairTimer = window.setTimeout(() => apply(true), 150);
+      });
+    }
+
+    // Пресеты периода — те же границы, что у сервера: сегодня минус N дней.
+    form.querySelectorAll("[data-history-preset]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const preset = link.dataset.historyPreset;
+        const fromInput = form.querySelector('input[name="from"]');
+        const toInput = form.querySelector('input[name="to"]');
+        if (!fromInput || !toInput) return;
+        if (preset === "all") {
+          fromInput.value = "";
+          toInput.value = "";
+        } else {
+          const days = Number(preset) || 0;
+          toInput.value = isoToday();
+          fromInput.value = isoDate(new Date(Date.now() - days * 86400000));
+        }
+        apply(true);
+      });
+    });
+
+    // «Страница №» и «в конец» — без сервера, как клиентское листание.
+    const jumpForm = document.querySelector("form.page-jump");
+    const jumpInput = jumpForm ? jumpForm.querySelector('input[name="page"]') : null;
+    if (jumpForm && jumpInput) {
+      jumpForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        goPage(jumpInput.value);
+      });
+    }
+    const lastLink = document.querySelector("a[data-page-last]");
+    if (lastLink) {
+      lastLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        goPage(lastPages);
+      });
+    }
+
+    // Экспорт текущей выборки — из тех же строк, что видны на странице.
+    const results = card.closest(".history-results") || document;
+    results.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-export]");
+      if (!button) return;
+      event.preventDefault();
+      exportHistory(button.dataset.format);
+    });
+
     form.addEventListener("change", () => apply(true));
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       apply(true);
     });
     apply(false);
+  }
+
+  /* ── Страница модели: поиск в «Личных встречах» ──────────────────── */
+
+  function initModelH2H() {
+    const card = document.getElementById("h2h");
+    if (!card) return;
+    const form = card.querySelector("form.h2h-controls");
+    const input = form ? form.querySelector('input[name="h2h_q"]') : null;
+    const tableWrap = card.querySelector(".table-wrap");
+    const body = tableWrap ? tableWrap.querySelector("tbody") : null;
+    if (!form || !input || !body) return;
+
+    const rows = [...body.rows];
+    const empty = card.querySelector("[data-h2h-empty]");
+    const reset = form.querySelector("[data-h2h-reset]");
+    const params = new URLSearchParams(location.search);
+    input.value = params.get("h2h_q") || "";
+    const H2H_KEYS = ["games", "w", "l", "d", "winrate"];
+    let sortKey = (params.get("h2h_sort") || "games").toLowerCase();
+    if (H2H_KEYS.indexOf(sortKey) === -1) sortKey = "games";
+    let sortDir = (params.get("h2h_dir") || "desc").toLowerCase();
+    if (sortDir !== "asc" && sortDir !== "desc") sortDir = "desc";
+
+    function sortValue(row) {
+      if (sortKey === "winrate") {
+        const games = Number(row.dataset.games) || 0;
+        if (!games) return null;
+        const raw = (row.dataset.winrate || "").replace("%", "").replace(",", ".");
+        const value = Number(raw);
+        return Number.isNaN(value) ? null : value / 100;
+      }
+      return Number(row.dataset[sortKey]) || 0;
+    }
+
+    function orderRows() {
+      const sign = sortDir === "desc" ? -1 : 1;
+      const valued = [];
+      const nones = [];
+      for (const row of rows) {
+        const value = sortValue(row);
+        if (value === null || Number.isNaN(value)) nones.push(row);
+        else valued.push([row, value]);
+      }
+      const key = (row) => {
+        const link = row.querySelector("a.edit-link");
+        return ((link && link.textContent) || "").toLowerCase();
+      };
+      valued.sort((a, b) => {
+        if (a[1] !== b[1]) return sign * (a[1] < b[1] ? -1 : 1);
+        const ka = key(a[0]);
+        const kb = key(b[0]);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      nones.sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      for (const pair of valued) body.appendChild(pair[0]);
+      for (const row of nones) body.appendChild(row);
+    }
+
+    function syncSortUi() {
+      for (const th of card.querySelectorAll("th[data-sort-col]")) {
+        const col = th.dataset.sortCol;
+        th.removeAttribute("aria-sort");
+        const old = th.querySelector(".sort-arrow");
+        if (old) old.remove();
+        if (col !== sortKey) continue;
+        th.setAttribute("aria-sort", sortDir === "asc" ? "ascending" : "descending");
+        const link = th.querySelector("a.sort-link");
+        if (!link) continue;
+        const span = document.createElement("span");
+        span.className = "sort-arrow";
+        span.setAttribute("aria-hidden", "true");
+        span.textContent = sortDir === "asc" ? "▲" : "▼";
+        link.appendChild(span);
+      }
+    }
+
+    function render() {
+      const needle = casefold(input.value.trim());
+      orderRows();
+      let shown = 0;
+      for (const row of rows) {
+        const ok = matchesSearch(row.dataset.search || "", needle);
+        setShown(row, ok);
+        if (ok) shown += 1;
+      }
+      syncSortUi();
+      setShown(tableWrap, shown > 0);
+      setShown(empty, shown === 0);
+      setShown(reset, Boolean(needle));
+      writeUrl([
+        ["h2h_q", needle ? input.value.trim() : ""],
+        ["h2h_sort", sortKey],
+        ["h2h_dir", sortDir],
+      ]);
+    }
+
+    let timer = null;
+    input.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(render, 120);
+    });
+    // В слепке нет сервера: «Найти» и Enter не должны перезагружать страницу.
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      render();
+    });
+    card.addEventListener("click", (event) => {
+      const sortLink = event.target.closest("th[data-sort-col] a.sort-link");
+      if (sortLink) {
+        event.preventDefault();
+        const col = sortLink.closest("th").dataset.sortCol;
+        if (sortKey === col) sortDir = sortDir === "desc" ? "asc" : "desc";
+        else {
+          sortKey = col;
+          sortDir = "desc";
+        }
+        render();
+        return;
+      }
+      const link = event.target.closest("[data-h2h-reset]");
+      if (!link) return;
+      event.preventDefault();
+      input.value = "";
+      render();
+      input.focus();
+    });
+    render();
   }
 
   /* ── Страница «Аналитика» ───────────────────────────────────────── */
@@ -1351,6 +1974,7 @@
   applyCaptions(captionsFromUrl());
   initRating();
   initHistory();
+  initModelH2H();
   initStats();
   initSettings();
 })();

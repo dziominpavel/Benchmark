@@ -1688,7 +1688,7 @@ def test_wave3_history_controls():
 
         # Пресеты дат сохраняют прочие фильтры; активный — по from/to
         html = client.get("/history?model=alpha").get_data(as_text=True)
-        assert '<a class="filter-preset is-active" href="/history?model=alpha">всё</a>' in html
+        assert '<a class="filter-preset is-active" href="/history?model=alpha" data-history-preset="all">всё</a>' in html
         week_ago = (date.today() - timedelta(days=7)).isoformat()
         today = date.today().isoformat()
         assert (
@@ -1697,7 +1697,8 @@ def test_wave3_history_controls():
         html = client.get(f"/history?from={week_ago}&to={today}").get_data(as_text=True)
         assert (
             f'<a class="filter-preset is-active" '
-            f'href="/history?from={week_ago}&amp;to={today}">7 дней</a>' in html
+            f'href="/history?from={week_ago}&amp;to={today}" '
+            f'data-history-preset="7">7 дней</a>' in html
         )
     print("wave3 history controls: OK")
 
@@ -1956,15 +1957,16 @@ def test_live_search_main_contract():
         html = client.get("/?q=alpha").get_data(as_text=True)
         assert "/export/rating.csv?q=alpha" in html
 
-        # Read-only: поисковых полей и live-разметки нет
+        # Read-only: поиск — read-only фильтр, он остаётся; live-разметки нет
         saved = bool(server.app.config.get("READ_ONLY"))
         server.app.config["READ_ONLY"] = True
         try:
             html = client.get("/").get_data(as_text=True)
-            assert 'name="q"' not in html
+            assert 'name="q"' in html and "filter-search" in html
+            assert "data-search=" in html
             assert "data-live-input" not in html
             assert "data-live-search" not in html
-            assert "data-search=" not in html
+            assert "live-search.js" not in html
         finally:
             server.app.config["READ_ONLY"] = saved
     print("live-search main contract: OK")
@@ -2039,13 +2041,14 @@ def test_live_search_history_fragment():
         assert 'name="pair"' in page
         assert "this.form.submit()" in page, "серверный onchange для no-JS убран"
 
-        # Read-only: поисковых полей нет
+        # Read-only: поиск по паре — read-only фильтр, live-разметки нет
         saved = bool(server.app.config.get("READ_ONLY"))
         server.app.config["READ_ONLY"] = True
         try:
             page = client.get("/history").get_data(as_text=True)
-            assert 'name="pair"' not in page
+            assert 'name="pair"' in page and "filter-pair" in page
             assert "data-live-input" not in page
+            assert "data-live-search" not in page
         finally:
             server.app.config["READ_ONLY"] = saved
     print("live-search history fragment: OK")
@@ -2142,7 +2145,7 @@ def test_wave3_export_routes():
 
 
 def test_wave3_read_only_degrade():
-    """Волна 3: в слепке нет поиска, сортировки, комбобокса и экспорта."""
+    """Волна 3: в слепке нет комбобокса; фильтры, сортировка, экспорт и поиск остаются."""
     with _temp_storage() as paths:
         server.app.config["TESTING"] = True
         client = server.app.test_client()
@@ -2152,18 +2155,21 @@ def test_wave3_read_only_degrade():
         server.app.config["READ_ONLY"] = True
         try:
             html = client.get("/").get_data(as_text=True)
-            assert 'name="q"' not in html
-            assert "export-links" not in html and "/export/rating" not in html
-            assert "sort-link" not in html and "aria-sort" not in html
+            assert 'name="q"' in html and "data-search=" in html
+            assert "data-live-input" not in html
+            assert "export-links" in html and 'data-export="rating"' in html
+            assert "/export/rating" not in html
+            assert "sort-link" in html
             assert "data-combobox" not in html
             assert "combobox.js" not in html
 
             html = client.get("/history").get_data(as_text=True)
-            assert 'name="task"' not in html
-            assert 'name="from"' not in html and 'name="to"' not in html
-            assert 'name="outcome"' not in html and 'name="pair"' not in html
-            assert 'name="only_voided"' not in html
-            assert 'class="page-jump"' not in html
+            assert 'name="task"' in html
+            assert 'name="from"' in html and 'name="to"' in html
+            assert 'name="outcome"' in html
+            assert 'name="pair"' in html and "filter-pair" in html
+            assert 'name="only_voided"' in html
+            assert 'data-export="history"' in html
             assert "/export/history" not in html
             assert "data-combobox" not in html
         finally:

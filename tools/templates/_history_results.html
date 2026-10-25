@@ -5,12 +5,15 @@
   <div class="stats" data-history-stats>
     Всего записей: {{ history_total }}{% if include_voided or only_voided %} · аннулированных: {{ history_voided }}{% endif %}{% if history_search_active %} · найдено: {{ history_found }}{% endif %}{% if filter_view == 'highlight' %} · подсвечено: {{ history_hits }}{% elif model %} · Фильтр: {{ model_name }}{% endif %}
   </div>
-  {% if not read_only() %}
   <div class="export-links" aria-label="Экспорт выборки">
+    {% if read_only() %}
+    <button type="button" class="btn btn-secondary btn-sm" data-export="history" data-format="csv">Скачать CSV</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-export="history" data-format="json">Скачать JSON</button>
+    {% else %}
     <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.csv }}">Скачать CSV</a>
     <a class="btn btn-secondary btn-sm" href="{{ history_export_urls.json }}">Скачать JSON</a>
+    {% endif %}
   </div>
-  {% endif %}
   <div class="card" id="history-list">
     <h2 class="hidden">История</h2>
     {% if history %}
@@ -23,16 +26,14 @@
     {% if history_pages > 1 %}
     <div class="history-pagination">
       {{ pagination(history_page, history_pages, history_items, history_page_url) }}
-      {% if not read_only() %}
-      <form method="GET" action="/history" class="page-jump">
+      <form method="GET" action="/history" class="page-jump" data-page-jump>
         {{ filter_hidden() }}
         {% for h in history_hidden_fields %}<input type="hidden" name="{{ h.name }}" value="{{ h.value }}">{% endfor %}
         <label class="page-jump-label" for="historyPageInput">Страница</label>
         <input class="page-jump-input" type="number" id="historyPageInput" name="page" min="1" max="{{ history_pages }}" value="{{ history_page }}" inputmode="numeric">
         <button type="submit" class="btn btn-secondary btn-sm">Перейти</button>
-        <a class="page-last" href="{{ history_page_url(history_pages) }}">в конец</a>
+        <a class="page-last" href="{{ history_page_url(history_pages) }}" data-page-last>в конец</a>
       </form>
-      {% endif %}
     </div>
     {% endif %}
     {% else %}
