@@ -160,6 +160,14 @@ models:
     version: 
     added: 2026-09-10
     status: active
+  - id: nemotron-3-ultra-free-high
+    name: "Nemotron 3 Ultra Free High"
+    agent: OpenCode
+    provider: NVIDIA
+    version: 
+    added: 2026-10-25
+    status: active
+    notes: "OpenRouter free tier"
   - id: opencode-beam-free-max
     name: "OpenCode Beam Free Max"
     agent: OpenCode
@@ -237,7 +245,7 @@ models:
     name: "OpenCode Iceman Contributor Free"
     agent: OpenCode
     provider: OpenCode
-    version:
+    version: 
     released: 2026-10-24
     added: 2026-10-25
     status: active
