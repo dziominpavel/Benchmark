@@ -21,9 +21,21 @@ pidFile = logDir & "\server.pid"
 ' Создаём папку для логов
 If Not fso.FolderExists(logDir) Then fso.CreateFolder(logDir)
 
-' Очищаем старые файлы
-If fso.FileExists(logFile) Then fso.DeleteFile(logFile)
-If fso.FileExists(pidFile) Then fso.DeleteFile(pidFile)
+' Останавливаем предыдущий запуск (иначе DeleteFile лога даёт Permission denied)
+Call KillExistingServer()
+WScript.Sleep 300
+
+' Очищаем старые файлы (лог может быть ещё на мгновение залочен — повторяем)
+If Not SafeDelete(logFile) Then
+    MsgBox "Не удалось очистить server.log — файл занят другим процессом." & vbCrLf & _
+           "Закройте сервер через stop.bat и повторите запуск.", vbExclamation, "ELO Benchmark"
+    WScript.Quit 1
+End If
+If fso.FileExists(pidFile) Then
+    On Error Resume Next
+    fso.DeleteFile pidFile
+    On Error GoTo 0
+End If
 
 ' Запускаем сервер в скрытой консоли через cmd /c.
 ' cmd ждёт завершения python, а stdout/stderr пишутся в data/logs/server.log.
@@ -77,3 +89,55 @@ End If
 ' Ждём, пока сервер стартует, и открываем браузер
 WScript.Sleep 2000
 WshShell.Run "http://localhost:5000", 1, False
+
+' --- helpers ---
+
+Sub KillExistingServer()
+    Dim sh, pid, line, procs, proc
+    Set sh = CreateObject("WScript.Shell")
+
+    ' По pid-файлу
+    If fso.FileExists(pidFile) Then
+        Set line = fso.OpenTextFile(pidFile, 1)
+        If Not line.AtEndOfStream Then pid = Trim(line.ReadAll)
+        line.Close
+        If Len(pid) > 0 Then
+            On Error Resume Next
+            sh.Run "cmd /c taskkill /PID " & pid & " /T /F", 0, True
+            On Error GoTo 0
+        End If
+    End If
+
+    ' Сироты без pid-файла / после неудачного stop
+    On Error Resume Next
+    Set procs = GetObject("winmgmts:\\.\root\cimv2").ExecQuery( _
+        "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='cmd.exe' OR Name='python.exe'")
+    For Each proc In procs
+        If Not IsNull(proc.CommandLine) Then
+            If InStr(proc.CommandLine, "BENCHMARK_SILENT_LAUNCHER") > 0 _
+               Or InStr(proc.CommandLine, "tools/server.py") > 0 _
+               Or InStr(proc.CommandLine, "tools\server.py") > 0 Then
+                sh.Run "cmd /c taskkill /PID " & proc.ProcessId & " /T /F", 0, True
+            End If
+        End If
+    Next
+    On Error GoTo 0
+End Sub
+
+Function SafeDelete(path)
+    Dim n
+    SafeDelete = True
+    If Not fso.FileExists(path) Then Exit Function
+    For n = 1 To 10
+        On Error Resume Next
+        fso.DeleteFile path
+        If Err.Number = 0 Then
+            On Error GoTo 0
+            Exit Function
+        End If
+        Err.Clear
+        On Error GoTo 0
+        WScript.Sleep 200
+    Next
+    SafeDelete = False
+End Function

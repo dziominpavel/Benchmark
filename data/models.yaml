@@ -40,7 +40,7 @@ models:
     provider: OpenAI
     version: 
     added: 2026-09-08
-    status: archived
+    status: active
   - id: cursor-composer-2-5
     name: "Cursor Composer 2.5"
     agent: Cursor
@@ -292,7 +292,7 @@ models:
     provider: Ant Group
     version: 
     added: 2026-09-22
-    status: archived
+    status: active
   - id: opencode-ling-3-1-flash-free
     name: "OpenCode Ling 3.1 Flash Free"
     agent: OpenCode
@@ -306,14 +306,14 @@ models:
     provider: Meituan
     version: 
     added: 2026-09-30
-    status: archived
+    status: active
   - id: opencode-mimo-v2-5-free
     name: "OpenCode MiMo V2.5 Free"
     agent: OpenCode
     provider: Xiaomi
     version: 
     added: 2026-09-05
-    status: archived
+    status: active
   - id: opencode-mimo-v2-6-flash-free
     name: "OpenCode MiMo V2.6 Flash Free"
     agent: OpenCode
@@ -341,7 +341,7 @@ models:
     provider: NVIDIA
     version: 
     added: 2026-10-15
-    status: archived
+    status: active
   - id: opencode-north-mini-code-free-thinking
     name: "OpenCode North Mini Code Free Thinking"
     agent: OpenCode
@@ -349,7 +349,7 @@ models:
     version: 
     released: 2026-06-09
     added: 2026-10-24
-    status: archived
+    status: active
   - id: opencode-qwen3-8-max-xhigh
     name: "OpenCode Qwen3.8 Max Xhigh"
     agent: OpenCode
