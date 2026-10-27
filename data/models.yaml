@@ -175,6 +175,14 @@ models:
     version: 
     added: 2026-10-16
     status: active
+  - id: opencode-big-pickle
+    name: "OpenCode Big Pickle (stealth)"
+    agent: OpenCode
+    provider: Unknown
+    version: 
+    added: 2026-10-26
+    status: active
+    notes: "stealth model, free, OpenCode Console; underlying lab undisclosed; data may be used for training during free period"
   - id: opencode-claude-haiku-5-5-max
     name: "OpenCode Claude Haiku 5.5 Max"
     agent: OpenCode

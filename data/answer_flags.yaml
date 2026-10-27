@@ -22,6 +22,8 @@ answer_flags:
     devin-swe-2-max: true
     nemotron-3-ultra-free-high: true
     opencode-beam-free-max: true
+    opencode-big-pickle: true
+    opencode-claude-haiku-5-5-max: true
     opencode-deepseek-v4-1-flash-1017-max: true
     opencode-deepseek-v4-1-flash-free-max: true
     opencode-fledge-alpha-free: true
@@ -35,6 +37,8 @@ answer_flags:
     opencode-inkling-free-max: true
     opencode-inkling-small-free-max: true
     opencode-kimi-k3-1-pro-max: true
+    opencode-laguna-s-2-1-free: true
+    opencode-laguna-xs-2-1-free: true
     opencode-ling-3-0-flash-fin-free: true
     opencode-ling-3-1-flash-free: true
     opencode-longcat-2-5-preview-free: true
@@ -47,6 +51,3 @@ answer_flags:
     opencode-qwen3-8-max-xhigh: true
     opencode-space-bunny-free-max: true
     opencode-step-5-preview-free-high: true
-    opencode-laguna-xs-2-1-free: true
-    opencode-laguna-s-2-1-free: true
-    opencode-claude-haiku-5-5-max: true
