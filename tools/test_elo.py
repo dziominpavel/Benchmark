@@ -606,6 +606,44 @@ def test_journal_roundtrip():
     print("journal roundtrip: OK")
 
 
+def test_digest_line_endings():
+    """matchups_digest не зависит от CRLF/LF working tree (autocrlf, CI)."""
+    import json
+    import tempfile
+    import elo as elo_mod
+
+    lines = [
+        json.dumps({"seq": 1, "task": "T-001", "matchup": "T-001/001",
+                    "recorded_at": "2026-09-05T10:00:01+03:00"}, ensure_ascii=False),
+        json.dumps({"seq": 2, "task": "T-001", "matchup": "T-001/002",
+                    "recorded_at": "2026-09-05T10:00:02+03:00"}, ensure_ascii=False),
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        journal = Path(td) / "journal.jsonl"
+        saved = elo_mod.JOURNAL_PATH
+        elo_mod.JOURNAL_PATH = journal
+        try:
+            journal.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+            lf = elo_mod.matchups_digest()
+
+            journal.write_bytes(("\r\n".join(lines) + "\r\n").encode("utf-8"))
+            crlf = elo_mod.matchups_digest()
+
+            # Смешанные окончания — как после дозаписи в бинарном режиме
+            mixed = (lines[0] + "\r\n" + lines[1] + "\n").encode("utf-8")
+            journal.write_bytes(mixed)
+            mixed_digest = elo_mod.matchups_digest()
+
+            assert lf == crlf == mixed_digest, (lf, crlf, mixed_digest)
+
+            # Перестановка событий и правка содержимого дайджест меняют
+            journal.write_bytes(("\n".join([lines[1], lines[0]]) + "\n").encode("utf-8"))
+            assert elo_mod.matchups_digest() != lf
+        finally:
+            elo_mod.JOURNAL_PATH = saved
+    print("matchups_digest line endings: OK")
+
+
 def test_journal_torn_last_line():
     """Оборванная последняя строка пропускается; предыдущие события применяются."""
     import json
@@ -972,6 +1010,7 @@ if __name__ == "__main__":
     test_index_stale_agent_provider()
     test_elo_dist_scale()
     test_journal_roundtrip()
+    test_digest_line_endings()
     test_journal_torn_last_line()
     test_journal_check_problems()
     test_run_check_reports_journal_problems()

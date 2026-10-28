@@ -1,7 +1,7 @@
 {
   "version": 2,
   "updated": "2026-10-28",
-  "matchups_digest": "3b2f1061dc79bbad463e28676a534c7d225c8a036043d95e23bb7bd72a1f03d2",
+  "matchups_digest": "e185cc4c7222d20d309bed8c6c2cc33088166f2ed9e1d525ca25c4d2ad7a918a",
   "models": {
     "codex-gpt-5-6-terra-09-2026": {
       "name": "Codex GPT-5.6-Terra High 09-2026",

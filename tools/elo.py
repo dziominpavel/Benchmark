@@ -186,16 +186,30 @@ def load_matchups() -> list[dict]:
     return events
 
 
+def _canonical_journal_bytes(raw: bytes) -> bytes:
+    """Приводит байты журнала к канонической форме (переводы строк → LF).
+
+    Git хранит текстовые файлы с LF, но в working tree на Windows они
+    получают CRLF (`core.autocrlf=true`), а дозапись событий идёт в бинарном
+    режиме и может оставить смешанные окончания. Дайджест не должен зависеть
+    от этого: иначе index.json, пересчитанный на Windows, «устаревает» при
+    checkout на Linux и CI падает на `elo.py --check`.
+    """
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def matchups_digest() -> str:
-    """sha256 содержимого `data/matchups/journal.jsonl`.
+    """sha256 канонического содержимого `data/matchups/journal.jsonl`.
 
     Используется для инвалидации index.json и memo-слоя: любая правка/
-    удаление/дописывание строки журнала меняет дайджест. Отсутствующий
-    файл — дайджест пустого хранилища.
+    удаление/дописывание строки журнала меняет дайджест. Окончания строк
+    нормализуются к LF, поэтому дайджест одинаков на Windows и Linux
+    независимо от `core.autocrlf`. Отсутствующий файл — дайджест пустого
+    хранилища.
     """
     h = hashlib.sha256()
     try:
-        h.update(JOURNAL_PATH.read_bytes())
+        h.update(_canonical_journal_bytes(JOURNAL_PATH.read_bytes()))
     except OSError:
         pass
     return h.hexdigest()
