@@ -42,5 +42,6 @@ providers:
   - Tencent
   - Thinking Machines Lab
   - Recursive
-  - OpenCode
   - Cohere
+  - Anomaly
+  - Microsoft

@@ -182,7 +182,7 @@ models:
     version: 
     added: 2026-10-26
     status: active
-    notes: "stealth model, free, OpenCode Console; underlying lab undisclosed; data may be used for training during free period"
+    notes: "stealth alias with rotating backend; lab undisclosed (GLM-4.6 earlier, DeepSeek V4 Flash in routing errors); data may be used for training during free period"
   - id: opencode-claude-haiku-5-5-max
     name: "OpenCode Claude Haiku 5.5 Max"
     agent: OpenCode
@@ -211,6 +211,7 @@ models:
     version: 
     added: 2026-10-02
     status: active
+    notes: "stealth model; lab undisclosed; leaks point to Thinking Machines Lab (Inkling family) but unconfirmed"
   - id: opencode-flint-free
     name: "OpenCode Flint Free"
     agent: OpenCode
@@ -222,11 +223,12 @@ models:
   - id: opencode-free-model-router-20261024
     name: "OpenCode Free Model Router 20261024"
     agent: OpenCode
-    provider: OpenCode
+    provider: Anomaly
     version: 20261024
     released: 2026-10-24
     added: 2026-10-24
     status: active
+    notes: "free-model routing alias operated by OpenCode, not a standalone lab model"
   - id: opencode-gemini-4-argon-high
     name: "OpenCode Gemini 4 Argon High"
     agent: OpenCode
@@ -259,11 +261,12 @@ models:
   - id: opencode-iceman-contributor-free
     name: "OpenCode Iceman Contributor Free"
     agent: OpenCode
-    provider: OpenCode
+    provider: Microsoft
     version: 
     released: 2026-10-24
     added: 2026-10-25
     status: active
+    notes: "stealth model; strongest lead is Microsoft MAI (self-identification plus tokenizer match with MAI Thinking 1), not officially confirmed"
   - id: opencode-inkling-free-max
     name: "OpenCode Inkling Free Max"
     agent: OpenCode
