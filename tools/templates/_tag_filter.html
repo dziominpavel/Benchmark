@@ -1,11 +1,11 @@
 {# Общие макросы единого блока «Фильтр» (changes agent-provider-lookups,
-   filter-display-settings, filter-settings-trigger). filter_panel() — всегда
-   развёрнутая карточка «Фильтр»: одна GET-форма страницы, контролы которой
-   передаются телом {% call filter_panel() %}; в шапке — кнопка-раскрывашка
-   «Настройки фильтра» (режим отображения, сортировка чипов, подпись модели)
-   и ссылка
-   «Сбросить», ниже — ряды чипов «Агент»/«Компания». «Сбросить» видна,
-   только когда что-то отфильтровано, и сохраняет настройки отображения.
+   filter-display-settings, filter-settings-trigger, model-registry-v3).
+   filter_panel() — всегда развёрнутая карточка «Фильтр»: одна GET-форма
+   страницы, контролы которой передаются телом {% call filter_panel() %};
+   в шапке — кнопка-раскрывашка «Настройки фильтра» (режим отображения,
+   сортировка чипов, подпись модели) и ссылка «Сбросить», ниже — ряды чипов
+   «Разработчик»/«Провайдер»/«Харнесс». «Сбросить» видна, только когда
+   что-то отфильтровано, и сохраняет настройки отображения.
    filter_hidden() — скрытые копии всех фильтров страницы для отдельных форм,
    чтобы фильтр не терялся при отправке. #}
 
@@ -33,12 +33,14 @@
           </div>
           <div class="filter-row">
             <span class="filter-label">Подпись модели</span>
-            {# Снятый флажок = «параметра нет» = подписи скрыты (дефолт);
-               скрытое поле-компаньон не нужно. #}
+            {# Дефолт — подписи видны. Включённый флажок отправляет show,
+               снятый — скрытый компаньон hide; первое значение читает
+               request.args.get(). #}
             <label class="filter-check">
               <input type="checkbox" name="captions" value="show"{% if not filter_captions_hidden %} checked{% endif %} onchange="this.form.submit()">
-              <span>Отражать агент-компанию</span>
+              <span>Отражать атрибуты модели</span>
             </label>
+            <input type="hidden" name="captions" value="hide">
           </div>
         </div>
       </details>
@@ -50,40 +52,25 @@
     {% if page_controls.strip() %}
     <div class="filter-row">{{ page_controls }}</div>
     {% endif %}
+    {% for group in filter_groups %}
     <div class="filter-row">
-      <span class="filter-label">Агент</span>
+      <span class="filter-label">{{ group.label }}</span>
       <div class="filter-chips">
-        {% for o in filter_agents %}
+        {% for o in group.options %}
         <label class="chip">
-          <input type="checkbox" name="agents" value="{{ o.value }}"{% if o.checked %} checked{% endif %} onchange="this.form.submit()">
+          <input type="checkbox" name="{{ group.param }}" value="{{ o.value }}"{% if o.checked %} checked{% endif %} onchange="this.form.submit()">
           <span>{{ o.label }}</span>
         </label>
         {% endfor %}
-        {% if filter_agents_has_none %}
+        {% if group.has_none %}
         <label class="chip">
-          <input type="checkbox" name="agents" value="none"{% if filter_agents_none_checked %} checked{% endif %} onchange="this.form.submit()">
-          <span>без агента</span>
+          <input type="checkbox" name="{{ group.param }}" value="none"{% if group.none_checked %} checked{% endif %} onchange="this.form.submit()">
+          <span>{{ group.none_label }}</span>
         </label>
         {% endif %}
       </div>
     </div>
-    <div class="filter-row">
-      <span class="filter-label">Компания</span>
-      <div class="filter-chips">
-        {% for o in filter_providers %}
-        <label class="chip">
-          <input type="checkbox" name="providers" value="{{ o.value }}"{% if o.checked %} checked{% endif %} onchange="this.form.submit()">
-          <span>{{ o.label }}</span>
-        </label>
-        {% endfor %}
-        {% if filter_providers_has_none %}
-        <label class="chip">
-          <input type="checkbox" name="providers" value="none"{% if filter_providers_none_checked %} checked{% endif %} onchange="this.form.submit()">
-          <span>без компании</span>
-        </label>
-        {% endif %}
-      </div>
-    </div>
+    {% endfor %}
   </div>
 </form>
 {% endmacro %}

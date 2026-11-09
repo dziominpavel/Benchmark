@@ -47,7 +47,7 @@
 - **WHEN** `data/index.json` сгенерирован
 - **THEN** он содержит секции: `version`, `updated`, `matchups_digest`, `models`, `tasks`, `matchups_summary`, `elo_history`, `voided_history`
 - **AND** каждая запись `models.<id>` содержит `added`, скопированный из `data/models.yaml` (пустая строка, если в реестре поля нет)
-- **AND** каждая запись `models.<id>` содержит `agent` и `provider`, скопированные из `data/models.yaml` (пустая строка, если поле не задано)
+- **AND** каждая запись `models.<id>` содержит `developer`, `provider` и `harness`, скопированные из `data/models.yaml` (пустая строка, если поле не задано)
 - **AND** `elo_history[0]` содержит `elo_a` и `elo_b`
 - **AND** секция `matchups_index` отсутствует
 - **AND** `tasks.T-001` не содержит поля `answers`
@@ -82,7 +82,7 @@ CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переп�
 ### Requirement: Критерий устаревания кэша
 
 `is_index_stale` SHALL считать кэш устаревшим если: `data/index.json` отсутствует
-или не парсится; `matchups_digest` в кэше ≠ дайджесту текущего журнала (ловит любые правки, добавления и удаления строк журнала); множество id моделей в кэше ≠ множеству id в `data/models.yaml`; метаданные модели (`name`, `agent`, `provider`, `status`, `added`) в кэше ≠ реестру. Отдельной проверки числа записей НЕ существует — дайджест покрывает состав журнала полностью. Содержимое ответов, тексты задач и даты внутри вердиктов НЕ проверяются.
+или не парсится; `matchups_digest` в кэше ≠ дайджесту текущего журнала (ловит любые правки, добавления и удаления строк журнала); множество id моделей в кэше ≠ множеству id в `data/models.yaml`; метаданные модели (`name`, `developer`, `provider`, `harness`, `status`, `added`) в кэше ≠ реестру. Отдельной проверки числа записей НЕ существует — дайджест покрывает состав журнала полностью. Содержимое ответов, тексты задач и даты внутри вердиктов НЕ проверяются.
 
 #### Scenario: Новый вердикт делает кэш устаревшим
 
@@ -95,9 +95,9 @@ CLI-скрипты `register_model.py` / `archive_model.py` MUST NOT переп�
 - **THEN** `is_index_stale` возвращает True
 - **AND** следующий пересчёт копирует новое значение в `data/index.json`
 
-#### Scenario: Правка agent или provider делает кэш устаревшим
+#### Scenario: Правка классификации делает кэш устаревшим
 
-- **WHEN** в `data/models.yaml` изменён `agent` или `provider` модели
+- **WHEN** в `data/models.yaml` изменён `developer`, `provider` или `harness` модели
 - **THEN** `is_index_stale` возвращает True
 - **AND** следующий пересчёт копирует новые значения в `data/index.json`
 

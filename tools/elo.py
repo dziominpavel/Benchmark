@@ -738,7 +738,7 @@ def verify_snapshots(matchups: list[dict], model_ids: list[str]) -> list[str]:
 
 def load_models_yaml() -> list[dict]:
     """Парсит models.yaml — возвращает список моделей
-    (id, name, agent, provider, released, added, status)."""
+    (id, name, developer, provider, harness, released, added, status)."""
     models_path = MODELS_PATH
     if not models_path.exists():
         return []
@@ -859,8 +859,9 @@ def generate_index() -> dict:
         })
         models_out[mid] = {
             "name": m.get("name", ""),
-            "agent": m.get("agent", ""),
+            "developer": m.get("developer", ""),
             "provider": m.get("provider", ""),
+            "harness": m.get("harness", ""),
             "added": m.get("added", ""),
             "status": m.get("status", "active"),
             "elo": elo_info["elo"],
@@ -1388,11 +1389,12 @@ def is_index_stale(idx: dict | None = None, digest: str | None = None) -> bool:
     if indexed_models != yaml_models:
         return True
 
-    # Метаданные моделей (status, name, agent, provider, added) тоже влияют на UI/рекомендации
+    # Метаданные моделей (status, name, developer, provider, harness, added)
+    # тоже влияют на UI/рекомендации.
     for m in models:
         mid = m["id"]
         info = idx.get("models", {}).get(mid, {})
-        for key in ("name", "agent", "provider", "status", "added"):
+        for key in ("name", "developer", "provider", "harness", "status", "added"):
             if info.get(key, "") != m.get(key, ""):
                 return True
 

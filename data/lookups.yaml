@@ -1,47 +1,53 @@
-# Справочники агентов и компаний для бенчмарка
+# Справочники харнессов, разработчиков и провайдеров для бенчмарка
 #
-# Допустимые значения полей agent и provider реестра data/models.yaml:
-#   agents:    агент-обёртка, под которой гонялась модель
-#   providers: компания-разработчик модели
-#
-# Порядок значений в файле задаёт порядок вывода в таблицах справочников,
-# выпадающих списках форм и других местах выбора значения. Новые значения
-# добавляются в конец списка. Файл можно править вручную: значения реестра,
-# которых нет в справочнике, остаются допустимыми и помечаются «вне справочника»
-# в консоли (Настройки → Справочники).
-#
-# Управление справочником (добавить/переименовать/удалить) — секция
-# «Справочники» страницы /settings; новые значения при регистрации модели
-# автоматически добавляет tools/register_model.py.
+# Допустимые значения полей harness, developer и provider реестра data/models.yaml:
+#   harnesses  — харнесс (Codex, Cursor, Devin, OpenCode): в чём гоняли модель;
+#   developers — разработчик модели (Alibaba, Anthropic, ...): кто обучил;
+#   providers  — провайдер доступа (OpenCode Go, OpenRouter, Vercel AI Gateway,
+#                Kilo Code, встроенный доступ харнесса): через что шёл запрос.
+# Порядок значений в файле задаёт порядок их вывода в консоли; новые
+# значения добавляются в конец. Управление (добавить/переименовать/
+# удалить) — секция «Справочники» страницы /settings, авто-добавление
+# при регистрации модели — tools/register_model.py.
 
-agents:
+harnesses:
   - Codex
   - Cursor
   - Devin
   - OpenCode
 
-providers:
+developers:
+  - Alibaba
+  - Anomaly
   - Ant Group
   - Anthropic
   - Cognition
+  - Cohere
   - DeepSeek
   - Google
   - Meituan
   - Meta
+  - Microsoft
   - MiniMax
   - Moonshot AI
   - NVIDIA
   - OpenAI
+  - Recursive
   - Reflection AI
   - SpaceXAI
   - StepFun
+  - Tencent
+  - Thinking Machines Lab
   - Unknown
   - Xiaomi
   - Z.ai
-  - Alibaba
-  - Tencent
-  - Thinking Machines Lab
-  - Recursive
-  - Cohere
-  - Anomaly
-  - Microsoft
+
+providers:
+  - Cognition
+  - Cursor
+  - Kilo Code
+  - OpenAI
+  - OpenCode Go
+  - OpenRouter
+  - Unknown
+  - Vercel AI Gateway

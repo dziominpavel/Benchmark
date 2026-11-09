@@ -12,8 +12,8 @@ UI/pairing считают READY только по флагам; файлы в `d
 
 ## Чеклист после «зарегистрируй модель»
 
-1. Зарегистрировать: `uv run python tools/register_model.py --auto --id <slug> --name "<Имя>" [--agent OpenCode|…]`.
-2. Если ответ уже есть — каталог `data/answers/<T-NNN>/<точное name из models.yaml>/` с хотя бы одним `*.md` — **сразу** поставить флаг `true` для этой модели на этот таск (через `save_answer_flags` / UI «Наличие ответов», не оставлять mismatch «файл есть, флаг false»).
+1. Зарегистрировать: `uv run python tools/register_model.py --auto --id <slug> --name "<Имя>" [--harness OpenCode] [--developer <компания>] [--provider <провайдер>]`.
+2. Если ответ уже есть — каталог `data/answers/<T-NNN>/<harness>/<точное name из models.yaml>/` с хотя бы одним `*.md` — **сразу** поставить флаг `true` для этой модели на этот таск (через `save_answer_flags` / UI «Наличие ответов», не оставлять mismatch «файл есть, флаг false»).
 3. Имя каталога ответа = поле `name` из реестра (не `id`). Дрейф имён чинить переименованием каталога под `models.yaml`.
 4. `current_task` в `settings.yaml` — отдельно; регистрация его не меняет.
 

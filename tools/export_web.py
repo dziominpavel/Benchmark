@@ -48,10 +48,10 @@ SIZE_WARN_BYTES = 200 * 1024 * 1024  # объём слепка
 
 HISTORY_PAGE_SIZE = 20               # размер страницы истории консоли
 
-# Подписи «Компания · Агент» в слепке: предрендерятся (это данные), а
-# показ ведёт клиентский слой зеркала — по параметру `captions` в адресе
-# (change caption-visibility-toggle). Поэтому страницы собираются с
-# `captions=show`, а в разметку подписи попадают всегда.
+# Подписи «Разработчик · Провайдер · Харнесс» в слепке: предрендерятся (это данные), а
+# показ ведёт клиентский слой зеркала — по параметру `captions` в адресе.
+# Дефолт — подписи видны; страницы собираются с `captions=show`, чтобы
+# предрендеренные подписи гарантированно попали в разметку.
 CAPTIONS_QUERY = "captions=show"
 
 ROOT_MARKER = "__root__"
@@ -102,11 +102,8 @@ _ARCHIVED_FLAGS_ROW_RE = re.compile(
 # Навигационный onchange фильтров: его роль в слепке исполняет mirror.js
 _FORM_SUBMIT_RE = re.compile(r'\s+onchange="this\.form\.submit\(\)"')
 
-# Тег body: в слепке на нём сразу ставится класс «подписи скрыты» (дефолт
-# живой консоли), чтобы предрендеренные подписи не «мигали» до запуска
-# клиентского слоя.
-_BODY_RE = re.compile(r"<body(?P<attrs>[^>]*)>")
-_CAPTIONS_OFF_CLASS = "captions-off"
+# Тег body: класс «captions-off» в разметку не ставится — подписи видны
+# по умолчанию, как в живой консоли; скрытие включает клиентский слой.
 
 
 class ExportError(Exception):
@@ -167,30 +164,15 @@ def postprocess(html: str, out_file: str, urls: dict, catalog_depth: int) -> str
     html = html.replace(ROOT_MARKER, "../" * depth)
     html = html.replace(CATALOG_MARKER, "../" * (catalog_depth + depth))
     html = _FORM_SUBMIT_RE.sub("", html)
-    # Только первый <body>: острова данных вставляются перед </body>,
-    # то есть после тега, и их содержимое тегом body не является.
-    html = _BODY_RE.sub(_body_with_captions_off, html, count=1)
     return _rewrite_links(html, out_file, urls)
-
-
-def _body_with_captions_off(match: re.Match) -> str:
-    """Тег body слепка с классом «подписи скрыты».
-
-    Класс ставится в разметке, а не только клиентом: подписи в слепке
-    предрендерены, но по умолчанию не показываются — как в живой консоли.
-    """
-    attrs = match.group("attrs")
-    if "class=" in attrs:
-        return match.group(0)
-    return f'<body{attrs} class="{_CAPTIONS_OFF_CLASS}">'
 
 
 def _strip_captions(query: str) -> str:
     """Убирает `captions=show` из query ссылки слепка.
 
-    Слепок открывается с выключенными подписями, поэтому в запечённых
-    ссылках параметра быть не должно: состояние подписей, как и остальных
-    настроек фильтра, ведёт клиентский слой зеркала.
+    Подписи видны по умолчанию, поэтому явный `captions=show` в запечённых
+    ссылках не нужен: состояние подписей, как и остальных настроек фильтра,
+    ведёт клиентский слой зеркала.
     """
     if not query:
         return query
@@ -387,8 +369,8 @@ def build_models_island(index_data: dict, island_id: str) -> str:
     """JSON-остров состава реестра для клиентского слоя зеркала.
 
     Компактные ключи: n — имя, c — подпись, e — Elo, g — игры, s — статус,
-    a — агент, p — компания. `</` экранируется, чтобы JSON не оборвал
-    script-блок.
+    d — разработчик, p — провайдер, h — харнесс. `</` экранируется, чтобы
+    JSON не оборвал script-блок.
     """
     payload = {}
     for mid, info in sorted(index_data.get("models", {}).items()):
@@ -398,8 +380,9 @@ def build_models_island(index_data: dict, island_id: str) -> str:
             "e": info.get("elo", server.DEFAULT_ELO),
             "g": info.get("games", 0),
             "s": info.get("status", "active"),
-            "a": str(info.get("agent") or "").strip(),
+            "d": str(info.get("developer") or "").strip(),
             "p": str(info.get("provider") or "").strip(),
+            "h": str(info.get("harness") or "").strip(),
         }
     data = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return (

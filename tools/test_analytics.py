@@ -537,33 +537,43 @@ def test_elo_svg_point_links():
 
 
 def test_group_summary():
-    """A5: медиана/среднее/винрейт, «без агента»/«без компании», порядок."""
+    """A5: медиана/среднее/винрейт, «без …», порядок по трём полям."""
     models = {
         "m1": {"elo": 1500, "games": 20, "wins": 12,
-               "agent": "Cursor", "provider": "Anthropic"},
+               "developer": "Anthropic", "provider": "Cursor",
+               "harness": "Cursor"},
         "m2": {"elo": 1300, "games": 20, "wins": 10,
-               "agent": "Cursor", "provider": "Anthropic"},
+               "developer": "Anthropic", "provider": "Cursor",
+               "harness": "Cursor"},
         "m3": {"elo": 1400, "games": 5, "wins": 3,
-               "agent": "", "provider": "OpenAI"},
-        "m4": {"elo": 1600, "games": 0, "wins": 0},
+               "developer": "", "provider": "OpenRouter", "harness": ""},
+        "m4": {"elo": 1600, "games": 0, "wins": 0,
+               "developer": "Google", "provider": "OpenRouter",
+               "harness": "Devin"},
     }
-    agents = rh.group_summary(models, "agent")
-    assert [r["name"] for r in agents] == ["без агента", "Cursor"]
-    cursor = agents[1]
-    assert cursor["models"] == 2
-    assert cursor["median"] == 1400 and cursor["mean"] == 1400
-    assert cursor["games"] == 40 and cursor["wins"] == 22
-    assert cursor["winrate"] == "55%"
-    none_row = agents[0]
-    assert none_row["models"] == 2 and none_row["median"] == 1500
-    assert none_row["games"] == 5 and none_row["winrate"] == "60%"
+    developers = rh.group_summary(models, "developer")
+    assert [r["name"] for r in developers] == [
+        "Google", "Anthropic", "без разработчика",
+    ], "медиана вниз, при равенстве — по названию"
+    anthropic = developers[1]
+    assert anthropic["models"] == 2
+    assert anthropic["median"] == 1400 and anthropic["mean"] == 1400
+    assert anthropic["games"] == 40 and anthropic["wins"] == 22
+    assert anthropic["winrate"] == "55%"
+    assert developers[0]["games"] == 0 and developers[0]["winrate"] == "—"
 
     providers = rh.group_summary(models, "provider")
     assert [r["name"] for r in providers] == [
-        "без компании", "Anthropic", "OpenAI",
-    ], "медиана вниз, при равенстве — по названию"
-    assert providers[0]["games"] == 0 and providers[0]["winrate"] == "—"
-    assert rh.group_summary({}, "agent") == []
+        "OpenRouter", "Cursor",
+    ]
+    assert providers[0]["models"] == 2 and providers[0]["median"] == 1500
+    assert providers[0]["games"] == 5 and providers[0]["winrate"] == "60%"
+
+    harnesses = rh.group_summary(models, "harness")
+    assert [r["name"] for r in harnesses] == [
+        "Devin", "Cursor", "без харнесса",
+    ]
+    assert rh.group_summary({}, "harness") == []
     print("A5 group summary: OK")
 
 

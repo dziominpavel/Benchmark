@@ -97,8 +97,9 @@ def _models_yaml(ids: list[str]) -> str:
         lines += [
             f"  - id: {mid}",
             f"    name: Perf Model {i:04d}",
-            f"    agent: Agent{i % 5}",
+            f"    developer: Dev{i % 5}",
             f"    provider: Prov{i % 3}",
+            f"    harness: Harness{i % 2}",
             "    added: 2026-01-01",
             "    status: active",
         ]
@@ -190,7 +191,8 @@ def _perf_storage():
         )
         _write(
             paths["lookups"],
-            "agents:\n" + "".join(f"  - Agent{i}\n" for i in range(5))
+            "harnesses:\n" + "".join(f"  - Harness{i}\n" for i in range(2))
+            + "developers:\n" + "".join(f"  - Dev{i}\n" for i in range(5))
             + "providers:\n" + "".join(f"  - Prov{i}\n" for i in range(3)),
         )
         for t in TASKS:
@@ -288,8 +290,9 @@ def test_perf_budgets() -> None:
         filters = [
             ("/?filter=all", "фильтр «Все»"),
             ("/?filter=archived", "фильтр «Архивные»"),
-            ("/?agents=Agent1", "фильтр по агенту"),
-            ("/?providers=Prov2", "фильтр по компании"),
+            ("/?developers=Dev1", "фильтр по разработчику"),
+            ("/?providers=Prov2", "фильтр по провайдеру"),
+            ("/?harnesses=Harness1", "фильтр по харнессу"),
             ("/?view=highlight", "режим «Подсвечивать»"),
         ]
         for url, label in filters:

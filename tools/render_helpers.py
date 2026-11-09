@@ -94,7 +94,7 @@ def get_model_detail(index_data: dict, model_id: str,
     `registry` — сырые записи models.yaml ({id: запись}): из них берутся
     поля метаданных (версия, релиз, заметки), которых нет в index.
     Возвращает None для неизвестного id. Иначе словарь:
-      id, name, agent, provider, status, elo, games, wins, losses, draws,
+      id, name, developer, provider, harness, status, elo, games, wins, losses, draws,
       winrate, last_match (последний по seq матч: {opp_id, opp_name,
       date_str, outcome, delta_str, delta_class, seq, url} или None),
       meta (непустые поля реестра: [{label, value}] — версия, релиз,
@@ -209,8 +209,9 @@ def get_model_detail(index_data: dict, model_id: str,
     registry_entry = (registry or {}).get(model_id) or info
     status_labels = {"active": "активна", "archived": "неактивна"}
     meta: list[dict] = []
-    for label, key in (("Версия", "version"), ("Релиз", "released"),
-                       ("Добавлена", "added")):
+    for label, key in (("Разработчик", "developer"), ("Провайдер", "provider"),
+                       ("Харнесс", "harness"), ("Версия", "version"),
+                       ("Релиз", "released"), ("Добавлена", "added")):
         value = str(registry_entry.get(key) or "").strip()
         if value:
             meta.append({"label": label, "value": value})
@@ -231,8 +232,9 @@ def get_model_detail(index_data: dict, model_id: str,
     return {
         "id": model_id,
         "name": info.get("name", model_id),
-        "agent": info.get("agent", ""),
+        "developer": info.get("developer", ""),
         "provider": info.get("provider", ""),
+        "harness": info.get("harness", ""),
         "status": info.get("status", "active"),
         "elo": info.get("elo", DEFAULT_ELO),
         "games": games,
@@ -277,7 +279,7 @@ def format_elo_history(history: list[dict], name_map: dict,
                        highlight: bool = False) -> list[dict]:
     """Преобразует match-centric elo_history в форму для рендеринга.
 
-    caption_map: id → подпись «Компания · Агент» (опционально).
+    caption_map: id → подпись «Разработчик · Провайдер · Харнесс» (опционально).
     highlight: режим «Подсвечивать» — отдаёт item["hit"] (признак отобранной
     записи, проставленный роутом в исходных словарях); иначе hit=False.
     Возвращает список словарей с полями:
@@ -1700,18 +1702,22 @@ def build_elo_multiline_svg(
     )
 
 
-# ─── Аналитика: агенты и компании (A5) ──────────────────────────────
+# ─── Аналитика: разработчики, провайдеры и харнессы ────────────────
 
 
 def group_summary(models: dict, key: str) -> list[dict]:
-    """Сводка активного пула по агентам или компаниям (A5).
+    """Сводка активного пула по разработчикам, провайдерам или харнессам.
 
-    key — "agent"/"provider"; пустые значения собираются в «без
-    агента»/«без компании». Строка: моделей, медиана и среднее ELO,
-    суммарные игры и победы, винрейт (доля побед от игр). Порядок —
-    медиана по убыванию, при равенстве — по названию.
+    key — "developer"/"provider"/"harness"; пустые значения собираются в
+    «без разработчика»/«без провайдера»/«без харнесса». Строка: моделей,
+    медиана и среднее ELO, суммарные игры и победы, винрейт (доля побед
+    от игр). Порядок — медиана по убыванию, при равенстве — по названию.
     """
-    empty_labels = {"agent": "без агента", "provider": "без компании"}
+    empty_labels = {
+        "developer": "без разработчика",
+        "provider": "без провайдера",
+        "harness": "без харнесса",
+    }
     groups: dict[str, dict] = {}
     for mid, info in models.items():
         name = str(info.get(key) or "").strip()

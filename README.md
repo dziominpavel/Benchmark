@@ -61,7 +61,7 @@ Benchmark/
 ├── launch.vbs             # Скрытый запуск сервера (вызывается из start.bat)
 │
 ├── data/                  # Все данные прогонов
-│   ├── models.yaml        # Реестр моделей (agent, provider, status: active/archived)
+│   ├── models.yaml        # Реестр моделей (developer, provider, harness, status)
 │   ├── judges.yaml        # Резерв пула судей (пока пуст, судейство — skill/вручную)
 │   ├── settings.yaml      # Статусы тасок и текущая таска
 │   ├── index.json         # Кэш ELO + сводки (генерируется tools/elo.py, коммитится)
@@ -72,11 +72,12 @@ Benchmark/
 │   │   └── T-NNN-<slug>/
 │   │       └── task.md    # Описание + критерии + baseline_commit (опц.)
 │   │
-│   ├── answers/           # Ответы (не в git): modelA.md / modelB.md (skills) или <model-id>.md (вручную)
+│   ├── answers/           # Ответы (не в git): modelA.md / modelB.md (skills) или <Harness>/<name>/ (архив)
 │   │   ├── _TEMPLATE.md
 │   │   └── T-NNN/
 │   │       ├── modelA.md
-│   │       └── modelB.md
+│   │       ├── modelB.md
+│   │       └── <Harness>/<name>/  # локальный архив: modelA.md / modelB.md
 │   │
 │   └── matchups/          # Вердикты (попарные сравнения)
 │       └── journal.jsonl  # Append-only журнал: строка = событие (вердикт / tombstone)
@@ -91,12 +92,14 @@ Benchmark/
 │   ├── elo.py             # ELO-движок (реплей журнала data/matchups/journal.jsonl → data/index.json) + --check
 │   ├── test_elo.py        # Юнит-тесты движка
 │   ├── server.py          # Flask: leaderboard + рекомендации пар + ввод вердиктов + управление тасками
-│   ├── register_model.py  # Регистрация модели (+ --agent/--provider; --auto для саморегистрации)
+│   ├── register_model.py  # Регистрация модели (+ --harness/--developer/--provider; --auto)
 │   ├── register_task.py   # Регистрация задачи T-NNN
 │   ├── archive_model.py   # Архивация/разархивация модели (--restore)
 │   ├── data_cache.py      # Memo-слой сервера: кэш дайджестов и производных данных
 │   ├── migrate_journal.py # Одноразовая миграция вердиктов в единый журнал journal.jsonl
 │   ├── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
+│   ├── migrate_registry_v3.py      # Миграция реестра к developer/provider/harness
+│   ├── migrate_answers_v3.py       # Раскладка архива ответов по харнессам
 │   ├── export_web.py      # Статический слепок консоли для витрины (read-only, относительные ссылки)
 │   └── test_export.py     # Тесты слепка: read-only режим, состав, ссылки, клиентский слой
 │
@@ -142,9 +145,9 @@ uv run python tools/test_pairing.py
 # Нагрузочные бюджеты (по умолчанию множитель 1.5; строгий замер: BENCH_PERF_FACTOR=1)
 uv run python tools/test_perf.py
 
-# Зарегистрировать модель (--agent/--provider опциональны)
+# Зарегистрировать модель (--harness/--developer/--provider опциональны)
 uv run python tools/register_model.py --auto --id gpt-5 --name "GPT-5"
-uv run python tools/register_model.py --id claude-sonnet-4.6 --name "Claude Sonnet 4.6" --version sonnet-4.6 --agent Cursor --provider Anthropic
+uv run python tools/register_model.py --id claude-sonnet-4.6 --name "Claude Sonnet 4.6" --version sonnet-4.6 --harness Cursor --developer Anthropic --provider Cursor
 
 # Зарегистрировать задачу
 uv run python tools/register_task.py --title "Bug Hunt — NewModule" --project VoiceMind --baseline abc123

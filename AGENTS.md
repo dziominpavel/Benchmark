@@ -42,7 +42,8 @@
    data/answers/<task-id>/modelB.md   # если ты участник B (@benchmark-run-b)
    ```
    Ручной прогон произвольной модели из реестра — локальный файл
-   `data/answers/<task-id>/<model-id>.md` по формату `data/answers/_TEMPLATE.md`
+   `data/answers/<task-id>/<harness>/<name>/<file>.md` по формату
+   `data/answers/_TEMPLATE.md`
    (каталог `data/answers/` игнорируется git; для судейства текст копируется
    в один из слотов). Формат и рубрика конкретной задачи имеют приоритет над
    общим шаблоном ниже.
@@ -119,7 +120,7 @@ python tools/register_model.py --auto --id <slug> --name "<Имя Модели>"
 к A/B; при ручной саморегистрации реестр читается только для регистрации, не оценки.
 
 Регистрация в `models.yaml` **не** ставит флаг в `data/answer_flags.yaml`. Если ответ
-уже лежит в `data/answers/<T-NNN>/<name>/`, флаг `true` на этот таск нужно проставить
+уже лежит в `data/answers/<T-NNN>/<harness>/<name>/`, флаг `true` на этот таск нужно проставить
 отдельно (см. `.cursor/rules/model-registration.mdc`).
 
 ## Проверка самого Benchmark (не прогон участника)

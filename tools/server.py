@@ -432,28 +432,24 @@ def valid_chips_order(value: str | None) -> str:
 
 
 def valid_captions_state(value: str | None) -> str:
-    """Валидирует состояние подписей «Компания · Агент»; невалидное → 'hide'.
+    """Валидирует состояние подписей «Разработчик · Провайдер · Харнесс».
 
-    Параметр несёт только отклонение от дефолта: `captions=show` — подписи
-    видны, отсутствие или невалидное значение — скрыты (дефолт). Значит
-    решает ПЕРВОЕ значение в адресе — так же, как его читает
-    `request.args.get()`: ссылки сортировки, экспорта и скрытые поля
-    страницы переносят состояние без потерь.
-
-    Скрытое поле-компаньон не нужно: снятый флажок = «параметра нет» =
-    дефолт «подписи скрыты» (см. leaderboard-ui, «Состав блока «Фильтр»»).
+    Дефолт — подписи видны: отсутствие параметра или невалидное значение
+    дают `show`. Скрыть подписи можно только явным `captions=hide`.
+    Флажок в форме отправляет `captions=show` + скрытый `captions=hide`
+    (первое значение читает `request.args.get()`), поэтому снятый флажок
+    даёт `hide`, а включённый — `show`.
     """
-    v = (value or "hide").strip().lower()
-    return v if v == "show" else "hide"
+    v = (value or "show").strip().lower()
+    return "hide" if v == "hide" else "show"
 
 
 def captions_hidden_now() -> bool:
-    """Скрыты ли подписи «Компания · Агент» текущим запросом.
+    """Скрыты ли подписи «Разработчик · Провайдер · Харнесс» текущим запросом.
 
-    Дефолт — скрыты (флажок «Отражать агент-компанию» снят), видимы они
-    только при `captions=show`. Читается только на страницах с блоком
-    «Фильтр»: на `/model/<id>` и `/task/<id>` подписи выводятся всегда
-    (см. leaderboard-ui, «Подпись агента и фирмы у модели»).
+    Дефолт — видны; скрыты только при `captions=hide`. Читается на страницах
+    с блоком «Фильтр»: на `/model/<id>` и `/task/<id>` подписи выводятся
+    всегда (см. leaderboard-ui, «Подпись разработчика, провайдера и харнесса»).
     """
     return valid_captions_state(request.args.get("captions")) == "hide"
 
@@ -495,7 +491,7 @@ def _tag_values(models: dict, key: str) -> tuple[list[str], bool]:
 def _parse_tag_tokens(raw: str | None, known: list[str]) -> set[str]:
     """CSV токенов из запроса (собран `_tag_query_csv`) → выбранные теги.
 
-    Токен `none` = пустое значение («без агента»/«без компании»), неизвестные
+    Токен `none` = пустое значение («без разработчика/провайдера/харнесса»), неизвестные
     и пустые токены отбрасываются; пустой CSV = пустой набор (без сужения).
     """
     known_set = set(known)
@@ -524,15 +520,23 @@ def _tag_query_csv(source, name: str) -> str:
     return ",".join(value for value in source.getlist(name) if value)
 
 
-def model_passes_tags(info: dict, agent_sel: set[str], provider_sel: set[str]) -> bool:
-    """Проходит ли модель фильтр «Агент и компания».
+def model_passes_tags(
+    info: dict,
+    developer_sel: set[str],
+    provider_sel: set[str],
+    harness_sel: set[str],
+) -> bool:
+    """Проходит ли модель фильтр «Разработчик, провайдер и харнесс».
 
     ИЛИ внутри группы, И между группами; пустая группа не сужает.
     """
-    if agent_sel and str(info.get("agent") or "").strip() not in agent_sel:
-        return False
-    if provider_sel and str(info.get("provider") or "").strip() not in provider_sel:
-        return False
+    for key, selected in (
+        ("developer", developer_sel),
+        ("provider", provider_sel),
+        ("harness", harness_sel),
+    ):
+        if selected and str(info.get(key) or "").strip() not in selected:
+            return False
     return True
 
 
@@ -574,40 +578,56 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
     Настройки отображения (`view`, `chips`, `captions`) читаются из query и
     возвращаются как `filter_view`/`filter_chips`/`filter_captions_hidden`;
     в «Сбросить» и hidden-поля они попадают, только когда отличаются от
-    значений по умолчанию. Для подписей дефолт — скрыты, поэтому
-    `captions=show` в адрес попадает только при включённом флажке.
+    значений по умолчанию. Для подписей дефолт — видны, поэтому
+    `captions=hide` в адрес попадает только при снятом флажке.
     """
     filter_view = valid_filter_view(request.args.get("view"))
     filter_chips = valid_chips_order(request.args.get("chips"))
     filter_captions_hidden = captions_hidden_now()
-    agents, agents_none = _tag_values(models, "agent")
-    providers, providers_none = _tag_values(models, "provider")
-    if filter_chips == "elo":
-        agents = _sort_tags_by_elo(agents, models, "agent")
-        providers = _sort_tags_by_elo(providers, models, "provider")
-    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
-    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
-    agents_csv = _tags_csv(agent_sel)
-    providers_csv = _tags_csv(provider_sel)
+    group_defs = (
+        ("developer", "developers", "Разработчик", "без разработчика"),
+        ("provider", "providers", "Провайдер", "без провайдера"),
+        ("harness", "harnesses", "Харнесс", "без харнесса"),
+    )
     hidden = list(hidden_fields or [])
-    if agents_csv:
-        hidden.append({"name": "agents", "value": agents_csv})
-    if providers_csv:
-        hidden.append({"name": "providers", "value": providers_csv})
+    groups = []
+    selections: dict[str, set[str]] = {}
+    for key, param, label, none_label in group_defs:
+        values, has_none = _tag_values(models, key)
+        if filter_chips == "elo":
+            values = _sort_tags_by_elo(values, models, key)
+        selected = _parse_tag_tokens(_tag_query_csv(request.args, param), values)
+        csv = _tags_csv(selected)
+        selections[key] = selected
+        groups.append({
+            "key": key,
+            "param": param,
+            "label": label,
+            "none_label": none_label,
+            "options": [
+                {"value": v, "label": v, "checked": v in selected} for v in values
+            ],
+            "has_none": has_none,
+            "none_checked": "" in selected,
+            "csv": csv,
+            "selected": selected,
+        })
+        if csv:
+            hidden.append({"name": param, "value": csv})
     if filter_view != "hide":
         hidden.append({"name": "view", "value": filter_view})
     if filter_chips != "alpha":
         hidden.append({"name": "chips", "value": filter_chips})
-    if not filter_captions_hidden:
-        hidden.append({"name": "captions", "value": "show"})
+    if filter_captions_hidden:
+        hidden.append({"name": "captions", "value": "hide"})
     reset = reset_url
     reset_extra_params = {}
     if filter_view != "hide":
         reset_extra_params["view"] = filter_view
     if filter_chips != "alpha":
         reset_extra_params["chips"] = filter_chips
-    if not filter_captions_hidden:
-        reset_extra_params["captions"] = "show"
+    if filter_captions_hidden:
+        reset_extra_params["captions"] = "hide"
     if reset_extra_params:
         reset = reset + ("&" if "?" in reset else "?") + urlencode(reset_extra_params)
     badge_parts = []
@@ -615,33 +635,27 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
         badge_parts.append("подсветка")
     if filter_chips == "elo":
         badge_parts.append("чипы по ELO")
-    if not filter_captions_hidden:
-        badge_parts.append("подписи видны")
-    other_active = bool(agent_sel or provider_sel) or bool(
+    if filter_captions_hidden:
+        badge_parts.append("подписи скрыты")
+    filter_active = any(bool(sel) for sel in selections.values())
+    other_active = filter_active or bool(
         reset_extra if reset_other_active is None else reset_other_active
     )
     return {
         "filter_action": action,
         "filter_reset_url": reset,
         "filter_hidden_fields": hidden,
-        "filter_active": bool(agent_sel or provider_sel),
+        "filter_active": filter_active,
         "filter_reset_other_active": other_active,
         "filter_reset_visible": other_active or bool(reset_extra),
         "filter_live_reset": live_reset,
-        "filter_agents": [
-            {"value": v, "label": v, "checked": v in agent_sel} for v in agents
-        ],
-        "filter_agents_has_none": agents_none,
-        "filter_agents_none_checked": "" in agent_sel,
-        "filter_providers": [
-            {"value": v, "label": v, "checked": v in provider_sel} for v in providers
-        ],
-        "filter_providers_has_none": providers_none,
-        "filter_providers_none_checked": "" in provider_sel,
-        "filter_agents_csv": agents_csv,
-        "filter_providers_csv": providers_csv,
-        "filter_agent_sel": agent_sel,
-        "filter_provider_sel": provider_sel,
+        "filter_groups": groups,
+        "filter_developer_sel": selections["developer"],
+        "filter_provider_sel": selections["provider"],
+        "filter_harness_sel": selections["harness"],
+        "filter_developers_csv": groups[0]["csv"],
+        "filter_providers_csv": groups[1]["csv"],
+        "filter_harnesses_csv": groups[2]["csv"],
         "filter_view": filter_view,
         "filter_chips": filter_chips,
         "filter_captions_hidden": filter_captions_hidden,
@@ -650,24 +664,26 @@ def filter_panel_context(models: dict, action: str, reset_url: str,
 
 
 def format_model_caption(info: dict) -> str:
-    """Серая подпись «Компания · Агент»; пустые части не выводятся."""
-    parts = []
-    provider = str(info.get("provider") or "").strip()
-    agent = str(info.get("agent") or "").strip()
-    if provider:
-        parts.append(provider)
-    if agent:
-        parts.append(agent)
+    """Серая подпись «Разработчик · Провайдер · Харнесс».
+
+    Пустые части не выводятся; соседние одинаковые значения схлопываются
+    (например, Anthropic · Cursor · Cursor → Anthropic · Cursor).
+    """
+    parts: list[str] = []
+    for key in ("developer", "provider", "harness"):
+        value = str(info.get(key) or "").strip()
+        if value and (not parts or parts[-1].lower() != value.lower()):
+            parts.append(value)
     return " · ".join(parts)
 
 
 def page_caption(info: dict) -> str:
-    """Подпись модели с учётом переключателя «Отражать агент-компанию».
+    """Подпись модели с учётом переключателя «Отражать атрибуты модели».
 
-    На страницах с блоком «Фильтр» подпись гасится, пока флажок не включён
-    (дефолт — подписи скрыты, `captions=show` — видны; см. leaderboard-ui,
-    «Подпись агента и фирмы у модели»); на `/model/<id>` и `/task/<id>`
-    подпись выводится всегда — там блока «Фильтр» нет.
+    На страницах с блоком «Фильтр» подпись видна по умолчанию и гасится
+    только при `captions=hide` (см. leaderboard-ui, «Подпись разработчика,
+    провайдера и харнесса»); на `/model/<id>` и `/task/<id>` подпись
+    выводится всегда — там блока «Фильтр» нет.
     """
     if captions_hidden_now():
         return ""
@@ -993,8 +1009,9 @@ def set_current_task(task_id: str) -> bool:
 
 
 def update_model(model_id: str, name: str, status: str,
-                 agent: str = "", provider: str = "") -> bool:
-    """Редактирует name/status/agent/provider модели в models.yaml и пересчитывает index."""
+                 developer: str = "", provider: str = "",
+                 harness: str = "") -> bool:
+    """Редактирует name/status/developer/provider/harness и пересчитывает index."""
     models_path = MODELS_PATH
     if not models_path.exists():
         return False
@@ -1007,8 +1024,9 @@ def update_model(model_id: str, name: str, status: str,
         if m["id"] == model_id:
             m["name"] = name
             m["status"] = status
-            m["agent"] = agent
+            m["developer"] = developer
             m["provider"] = provider
+            m["harness"] = harness
             found = True
             break
 
@@ -1329,16 +1347,25 @@ def rating_request_state(models: dict) -> dict:
     filter_mode = (request.args.get("filter") or "active").strip().lower()
     if filter_mode not in ("active", "all", "inactive"):
         filter_mode = "active"
-    agents, _ = _tag_values(models, "agent")
+    developers, _ = _tag_values(models, "developer")
     providers, _ = _tag_values(models, "provider")
-    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
-    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
+    harnesses, _ = _tag_values(models, "harness")
+    developer_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "developers"), developers
+    )
+    provider_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "providers"), providers
+    )
+    harness_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "harnesses"), harnesses
+    )
     sort, direction = parse_rating_sort(request.args)
     return {
         "filter_mode": filter_mode,
         "highlight": valid_filter_view(request.args.get("view")) == "highlight",
-        "agent_sel": agent_sel,
+        "developer_sel": developer_sel,
         "provider_sel": provider_sel,
+        "harness_sel": harness_sel,
         "query": (request.args.get("q") or "").strip(),
         "sort": sort,
         "direction": direction,
@@ -1390,8 +1417,9 @@ def sort_rating_rows(rows: list[dict], sort: str, direction: str) -> list[dict]:
     return with_value + without
 
 
-def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
-                     provider_sel: set, highlight: bool, query: str) -> dict:
+def rating_selection(index_data: dict, filter_mode: str, developer_sel: set,
+                     provider_sel: set, harness_sel: set, highlight: bool,
+                     query: str) -> dict:
     """Пул и видимые строки рейтинга — общий конвейер страницы и экспорта.
 
     Места и индикаторы движения рейтинга считаются по статусному пулу (копии строк,
@@ -1439,12 +1467,12 @@ def rating_selection(index_data: dict, filter_mode: str, agent_sel: set,
         for m in models_pool:
             m["hit"] = (
                 status_matches(m)
-                and model_passes_tags(m, agent_sel, provider_sel)
+                and model_passes_tags(m, developer_sel, provider_sel, harness_sel)
             )
     else:
         models_pool = [
             m for m in models_sorted
-            if model_passes_tags(m, agent_sel, provider_sel)
+            if model_passes_tags(m, developer_sel, provider_sel, harness_sel)
         ]
 
     # Живой поиск главной: сервер отдаёт весь пул (после нетекстовых
@@ -1599,8 +1627,9 @@ def history_matches_search(item: dict, search: dict, models: dict) -> bool:
 
 
 def build_history_feed(index_data: dict, models: dict, search: dict, *,
-                       model_id: str, agent_sel: set, provider_sel: set,
-                       highlight: bool, include_voided: bool) -> dict:
+                       model_id: str, developer_sel: set, provider_sel: set,
+                       harness_sel: set, highlight: bool,
+                       include_voided: bool) -> dict:
     """Лента истории — общий конвейер страницы и экспорта.
 
     Объединение с аннулированными (`include_voided` или `only_voided`) →
@@ -1625,8 +1654,14 @@ def build_history_feed(index_data: dict, models: dict, search: dict, *,
                 )
             else:
                 h["hit"] = (
-                    model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
-                    or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
+                    model_passes_tags(
+                        models.get(h.get("model_a_id"), {}),
+                        developer_sel, provider_sel, harness_sel,
+                    )
+                    or model_passes_tags(
+                        models.get(h.get("model_b_id"), {}),
+                        developer_sel, provider_sel, harness_sel,
+                    )
                 )
     elif model_id:
         records = [
@@ -1636,8 +1671,14 @@ def build_history_feed(index_data: dict, models: dict, search: dict, *,
     else:
         records = [
             h for h in records
-            if model_passes_tags(models.get(h.get("model_a_id"), {}), agent_sel, provider_sel)
-            or model_passes_tags(models.get(h.get("model_b_id"), {}), agent_sel, provider_sel)
+            if model_passes_tags(
+                models.get(h.get("model_a_id"), {}),
+                developer_sel, provider_sel, harness_sel,
+            )
+            or model_passes_tags(
+                models.get(h.get("model_b_id"), {}),
+                developer_sel, provider_sel, harness_sel,
+            )
         ]
 
     total = len(records)
@@ -1848,7 +1889,7 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
             {% for a in archived_list %}
             <li>
               <span class="archived-name">
-                <a href="{{ url_for('model_page', model_id=a.id, agents=filter_agents_csv or none, providers=filter_providers_csv or none) }}" class="edit-link">{{ a.name }}</a>
+                <a href="{{ url_for('model_page', model_id=a.id, developers=filter_developers_csv or none, providers=filter_providers_csv or none, harnesses=filter_harnesses_csv or none) }}" class="edit-link">{{ a.name }}</a>
                 {% if a.caption %}<span class="model-caption">{{ a.caption }}</span>{% endif %}
               </span>
               <span>{{ a.elo }}</span>
@@ -1907,8 +1948,8 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               <label>Модель A</label>
               <select name="model_a" id="modelA"{% if not read_only() %} data-combobox data-label="Модель A"{% endif %} onchange="validate()">
                 <option value="">— выбрать —</option>
-                {% for mid, mname, magent in models_list %}
-                <option value="{{ mid }}" data-agent="{{ magent }}" {% if mid == pre_a %}selected{% endif %}>{{ mname }}</option>
+                {% for mid, mname, mharness in models_list %}
+                <option value="{{ mid }}" data-harness="{{ mharness }}" {% if mid == pre_a %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -1916,8 +1957,8 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
               <label>Модель B</label>
               <select name="model_b" id="modelB"{% if not read_only() %} data-combobox data-label="Модель B"{% endif %} onchange="validate()">
                 <option value="">— выбрать —</option>
-                {% for mid, mname, magent in models_list %}
-                <option value="{{ mid }}" data-agent="{{ magent }}" {% if mid == pre_b %}selected{% endif %}>{{ mname }}</option>
+                {% for mid, mname, mharness in models_list %}
+                <option value="{{ mid }}" data-harness="{{ mharness }}" {% if mid == pre_b %}selected{% endif %}>{{ mname }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -2075,7 +2116,7 @@ HISTORY_TEMPLATE = """{% extends "shell.html" %}
       <span class="filter-label">Модель</span>
       <select name="model" id="model"{% if not read_only() %} data-combobox data-label="Модель"{% endif %} onchange="this.form.submit()">
         {% for m in models_dropdown %}
-        <option value="{{ m.id }}" data-agent="{{ m.agent }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
+        <option value="{{ m.id }}" data-harness="{{ m.harness }}" {% if m.selected %}selected{% endif %}>{{ m.name }}{% if m.archived %} (неактивна){% endif %}</option>
         {% endfor %}
       </select>
       <span class="filter-label">Таск</span>
@@ -2456,30 +2497,43 @@ STATS_TEMPLATE = """{% extends "shell.html" %}
     {% endif %}
   </div>
 
-  <div class="card" id="agents-providers">
-    <h2>Агенты и компании</h2>
-    {% if agents_summary or providers_summary %}
-    <h3 class="card-subtitle">Агенты</h3>
+  <div class="card" id="registry-groups">
+    <h2>Разработчики, провайдеры и харнессы</h2>
+    {% if developers_summary or providers_summary or harnesses_summary %}
+    <h3 class="card-subtitle">Разработчики</h3>
     <div class="table-wrap">
       <table class="analytics-table">
         <thead>
-          <tr><th scope="col">Агент</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
+          <tr><th scope="col">Разработчик</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
         </thead>
         <tbody>
-          {% for g in agents_summary %}
+          {% for g in developers_summary %}
           <tr><td>{{ g.name }}</td><td>{{ g.models }}</td><td>{{ g.median }}</td><td>{{ g.mean }}</td><td>{{ g.games }}</td><td>{{ g.winrate }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    <h3 class="card-subtitle">Компании</h3>
+    <h3 class="card-subtitle">Провайдеры</h3>
     <div class="table-wrap">
       <table class="analytics-table">
         <thead>
-          <tr><th scope="col">Компания</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
+          <tr><th scope="col">Провайдер</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
         </thead>
         <tbody>
           {% for g in providers_summary %}
+          <tr><td>{{ g.name }}</td><td>{{ g.models }}</td><td>{{ g.median }}</td><td>{{ g.mean }}</td><td>{{ g.games }}</td><td>{{ g.winrate }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <h3 class="card-subtitle">Харнессы</h3>
+    <div class="table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr><th scope="col">Харнесс</th><th scope="col">Моделей</th><th scope="col">Медиана Elo</th><th scope="col">Среднее Elo</th><th scope="col">Игр</th><th scope="col">Винрейт</th></tr>
+        </thead>
+        <tbody>
+          {% for g in harnesses_summary %}
           <tr><td>{{ g.name }}</td><td>{{ g.models }}</td><td>{{ g.median }}</td><td>{{ g.mean }}</td><td>{{ g.games }}</td><td>{{ g.winrate }}</td></tr>
           {% endfor %}
         </tbody>
@@ -2589,17 +2643,24 @@ ADD_TEMPLATE = """{% extends "shell.html" %}
       <input type="text" name="name" required placeholder="Например: GPT-4o" autofocus>
     </div>
     <div class="form-group">
-      <label>Агент</label>
-      <select name="agent">
+      <label>Разработчик</label>
+      <select name="developer">
         <option value="">— не указано —</option>
-        {% for a in agent_options %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+        {% for d in developer_options %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
       </select>
     </div>
     <div class="form-group">
-      <label>Компания</label>
+      <label>Провайдер</label>
       <select name="provider">
         <option value="">— не указано —</option>
         {% for p in provider_options %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Харнесс</label>
+      <select name="harness">
+        <option value="">— не указано —</option>
+        {% for h in harness_options %}<option value="{{ h }}">{{ h }}</option>{% endfor %}
       </select>
     </div>
     <div class="hint">
@@ -2675,19 +2736,19 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
       <input type="text" name="name" value="{{ model.name }}" required autofocus>
     </div>
     <div class="form-group">
-      <label>Агент</label>
-      <select name="agent">
+      <label>Разработчик</label>
+      <select name="developer">
         <option value="">— не указано —</option>
-        {% for a in agent_options %}
-        <option value="{{ a }}" {% if model.agent == a %}selected{% endif %}>{{ a }}</option>
+        {% for d in developer_options %}
+        <option value="{{ d }}" {% if model.developer == d %}selected{% endif %}>{{ d }}</option>
         {% endfor %}
-        {% if model.agent and model.agent not in agent_options %}
-        <option value="{{ model.agent }}" selected>{{ model.agent }} (вне справочника)</option>
+        {% if model.developer and model.developer not in developer_options %}
+        <option value="{{ model.developer }}" selected>{{ model.developer }} (вне справочника)</option>
         {% endif %}
       </select>
     </div>
     <div class="form-group">
-      <label>Компания</label>
+      <label>Провайдер</label>
       <select name="provider">
         <option value="">— не указано —</option>
         {% for p in provider_options %}
@@ -2695,6 +2756,18 @@ EDIT_TEMPLATE = """{% extends "shell.html" %}
         {% endfor %}
         {% if model.provider and model.provider not in provider_options %}
         <option value="{{ model.provider }}" selected>{{ model.provider }} (вне справочника)</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Харнесс</label>
+      <select name="harness">
+        <option value="">— не указано —</option>
+        {% for h in harness_options %}
+        <option value="{{ h }}" {% if model.harness == h %}selected{% endif %}>{{ h }}</option>
+        {% endfor %}
+        {% if model.harness and model.harness not in harness_options %}
+        <option value="{{ model.harness }}" selected>{{ model.harness }} (вне справочника)</option>
         {% endif %}
       </select>
     </div>
@@ -2909,7 +2982,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
         </details>
       </div>
       <div class="hint">
-        Название обязательно; id генерируется автоматически. Агент и компания
+        Название обязательно; id генерируется автоматически. Разработчик, провайдер и харнесс
         выбираются из справочника (ссылка «Справочники» внизу страницы или
         на странице добавления). Изменить или архивировать — по ссылке
         «Изменить» в списке моделей.
@@ -3106,7 +3179,7 @@ SETTINGS_TEMPLATE = """{% extends "shell.html" %}
   <div class="card" id="lookups">
     <h2>Справочники</h2>
     <div class="hint">
-      Допустимые значения полей «Агент» и «Компания» модели — порядок как в
+      Допустимые значения полей «Разработчик», «Провайдер» и «Харнесс» модели — порядок как в
       data/lookups.yaml. Переименование обновляет все модели реестра и
       пересчитывает index; удалить можно только значение, не используемое
       ни одной моделью. Значения реестра вне справочника помечены
@@ -3240,7 +3313,9 @@ def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
         reset_other_active=history_other_active,
         live_reset=True,
     )
-    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    developer_sel = filter_ctx["filter_developer_sel"]
+    provider_sel = filter_ctx["filter_provider_sel"]
+    harness_sel = filter_ctx["filter_harness_sel"]
     filter_view = filter_ctx["filter_view"]
     highlight = filter_view == "highlight"
     # Параметры для ссылок пагинации: все фильтры страницы и настройки отображения как были
@@ -3254,29 +3329,32 @@ def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
         "outcome": search["outcome"] or None,
         "pair": history_pair_value or None,
         "only_voided": "1" if search["only_voided"] else None,
-        "agents": filter_ctx["filter_agents_csv"] or None,
+        "developers": filter_ctx["filter_developers_csv"] or None,
         "providers": filter_ctx["filter_providers_csv"] or None,
+        "harnesses": filter_ctx["filter_harnesses_csv"] or None,
         "view": filter_view if filter_view != "hide" else None,
         "chips": filter_ctx["filter_chips"] if filter_ctx["filter_chips"] != "alpha" else None,
-        "captions": "show" if not filter_ctx["filter_captions_hidden"] else None,
+        "captions": "hide" if filter_ctx["filter_captions_hidden"] else None,
     }
 
     # Выпадайка: активные + выбранная модель, плюс archived при чекбоксе;
     # состав дополнительно сужается блоком «Фильтр».
     all_models = sorted(models.values(), key=lambda m: m.get("name", "").lower())
-    dropdown = [{"id": "", "name": "Все", "agent": "", "archived": False, "selected": not model_id}]
+    dropdown = [{"id": "", "name": "Все", "harness": "", "archived": False, "selected": not model_id}]
     for m in all_models:
         mid = m.get("id", "")
         status = m.get("status", "active")
         archived = status == "archived"
         if not include_inactive and archived and mid != model_id:
             continue
-        if mid != model_id and not model_passes_tags(m, agent_sel, provider_sel):
+        if mid != model_id and not model_passes_tags(
+            m, developer_sel, provider_sel, harness_sel
+        ):
             continue
         dropdown.append({
             "id": mid,
             "name": m.get("name", mid),
-            "agent": str(m.get("agent") or "").strip(),
+            "harness": str(m.get("harness") or "").strip(),
             "archived": archived,
             "selected": mid == model_id,
         })
@@ -3285,7 +3363,8 @@ def build_history_context(index_data: dict, *, fragment: bool = False) -> dict:
     caption_map = {mid: page_caption(info) for mid, info in models.items()}
     feed = build_history_feed(
         index_data, models, search,
-        model_id=model_id, agent_sel=agent_sel, provider_sel=provider_sel,
+        model_id=model_id, developer_sel=developer_sel,
+        provider_sel=provider_sel, harness_sel=harness_sel,
         highlight=highlight, include_voided=include_voided,
     )
     records = feed["records"]
@@ -3698,7 +3777,9 @@ def stats_page():
         reset_url=url_for("stats_page"),
         reset_extra=stats_filter != "active",
     )
-    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    developer_sel = filter_ctx["filter_developer_sel"]
+    provider_sel = filter_ctx["filter_provider_sel"]
+    harness_sel = filter_ctx["filter_harness_sel"]
     filter_view = filter_ctx["filter_view"]
     highlight = filter_view == "highlight"
 
@@ -3710,7 +3791,10 @@ def stats_page():
     else:
         pool = list(models.values())
     if not highlight:
-        pool = [info for info in pool if model_passes_tags(info, agent_sel, provider_sel)]
+        pool = [
+            info for info in pool
+            if model_passes_tags(info, developer_sel, provider_sel, harness_sel)
+        ]
 
     # Карточка «Рейтинг»: строки пула с интервалами ±400/√игр и группами
     # «место не определено». Фильтры страницы действуют и на неё.
@@ -3726,7 +3810,9 @@ def stats_page():
         if highlight:
             row["hit"] = (
                 (stats_filter == "all" or is_model_active(m))
-                and model_passes_tags(m, agent_sel, provider_sel)
+                and model_passes_tags(
+                    m, developer_sel, provider_sel, harness_sel
+                )
             )
         rating_rows.append(row)
 
@@ -3793,7 +3879,7 @@ def stats_page():
             "elo": info.get("elo", DEFAULT_ELO),
         })
 
-    # «Агенты и компании»: сводки по активному пулу.
+    # «Разработчики, провайдеры и харнессы»: сводки по активному пулу.
     active_models = {
         mid: info for mid, info in models.items() if is_model_active(info)
     }
@@ -3825,7 +3911,10 @@ def stats_page():
     def _stats_url(**overrides) -> str:
         """Адрес «Аналитики» с сохранением фильтров, линий и страниц блоков."""
         args: dict = {}
-        for name in ("filter", "agents", "providers", "view", "chips", "captions"):
+        for name in (
+            "filter", "developers", "providers", "harnesses", "view", "chips",
+            "captions",
+        ):
             values = request.args.getlist(name)
             if values:
                 args[name] = values
@@ -3905,8 +3994,9 @@ def stats_page():
             else "Нет матчей выбранных моделей в периоде."
         ),
         line_legend=line_legend,
-        agents_summary=group_summary(active_models, "agent"),
+        developers_summary=group_summary(active_models, "developer"),
         providers_summary=group_summary(active_models, "provider"),
+        harnesses_summary=group_summary(active_models, "harness"),
         delta_7=delta_7,
         delta_30=delta_30,
         opposition=opposition,
@@ -3971,7 +4061,9 @@ def leaderboard():
         reset_other_active=filter_mode != "active",
         live_reset=True,
     )
-    agent_sel, provider_sel = state["agent_sel"], state["provider_sel"]
+    developer_sel = state["developer_sel"]
+    provider_sel = state["provider_sel"]
+    harness_sel = state["harness_sel"]
     filter_view = filter_ctx["filter_view"]
     highlight = state["highlight"]
 
@@ -3979,7 +4071,8 @@ def leaderboard():
     # (rating_selection); сортировка по клику только переупорядочивает
     # вывод, места и медали не пересчитываются.
     selection = rating_selection(
-        index_data, filter_mode, agent_sel, provider_sel, highlight, query,
+        index_data, filter_mode, developer_sel, provider_sel, harness_sel,
+        highlight, query,
     )
     models_sorted = selection["models_sorted"]
     models_pool = sort_rating_rows(
@@ -3993,13 +4086,13 @@ def leaderboard():
     # весь пул, а «подсвечено» — отобранные строки (см. rating_selection).
     filtered_count = len(models_pool) if highlight else len(models_visible)
 
-    # Для формы вердикта — только активные модели (id, имя, агент)
+    # Для формы вердикта — только активные модели (id, имя, харнесс)
     active_models = {
         mid: info for mid, info in models.items() if is_model_active(info)
     }
     models_list = sorted(
         (
-            (mid, info.get("name", mid), str(info.get("agent") or "").strip())
+            (mid, info.get("name", mid), str(info.get("harness") or "").strip())
             for mid, info in active_models.items()
         ),
         key=lambda x: x[1].lower(),
@@ -4062,10 +4155,10 @@ def leaderboard():
     )
     archived_list = [
         info for info in archived_list
-        if model_passes_tags(info, agent_sel, provider_sel)
+        if model_passes_tags(info, developer_sel, provider_sel, harness_sel)
     ]
     # Копии строк: подпись зависит от запроса (переключатель «Отражать
-    # агент-компанию»), а мемо-индекс общий для всех запросов — правка
+    # атрибуты модели»), а мемо-индекс общий для всех запросов — правка
     # оригинала залипла бы подписью до следующего перезапуска.
     archived_list = [dict(info) for info in archived_list]
     for info in archived_list:
@@ -4156,8 +4249,9 @@ def _rating_export(fmt: str):
     models = index_data.get("models", {})
     state = rating_request_state(models)
     selection = rating_selection(
-        index_data, state["filter_mode"], state["agent_sel"], state["provider_sel"],
-        state["highlight"], state["query"],
+        index_data, state["filter_mode"], state["developer_sel"],
+        state["provider_sel"], state["harness_sel"], state["highlight"],
+        state["query"],
     )
     rows = sort_rating_rows(
         selection["models_visible"], state["sort"], state["direction"],
@@ -4167,8 +4261,9 @@ def _rating_export(fmt: str):
             "place": m.get("rank", ""),
             "id": m.get("id", ""),
             "name": m.get("name", ""),
+            "developer": str(m.get("developer") or "").strip(),
             "provider": str(m.get("provider") or "").strip(),
-            "agent": str(m.get("agent") or "").strip(),
+            "harness": str(m.get("harness") or "").strip(),
             "elo": m.get("elo", DEFAULT_ELO),
             "confidence": format_confidence(m.get("games", 0)),
             "games": m.get("games", 0),
@@ -4181,8 +4276,9 @@ def _rating_export(fmt: str):
     ]
     today = date.today().isoformat()
     if fmt == "csv":
-        header = ["Место", "id", "Имя", "Компания", "Агент", "ELO", "±", "Игры",
-                  "Победы", "Поражения", "Ничьи", "Винрейт, %"]
+        header = ["Место", "id", "Имя", "Разработчик", "Провайдер", "Харнесс",
+                  "ELO", "±", "Игры", "Победы", "Поражения", "Ничьи",
+                  "Винрейт, %"]
         return _attachment(
             f"rating-{today}.csv", "text/csv; charset=utf-8",
             _csv_text(header, [list(row.values()) for row in data]),
@@ -4191,8 +4287,9 @@ def _rating_export(fmt: str):
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "filters": {
             "filter": state["filter_mode"],
-            "agents": sorted(state["agent_sel"]),
+            "developers": sorted(state["developer_sel"]),
             "providers": sorted(state["provider_sel"]),
+            "harnesses": sorted(state["harness_sel"]),
             "q": state["query"],
         },
         "sort": state["sort"] or "rank",
@@ -4227,14 +4324,23 @@ def _history_export(fmt: str):
     model_id = (request.args.get("model") or "").strip()
     include_voided = request.args.get("include_voided", "") == "1"
     search = parse_history_search(models)
-    agents, _ = _tag_values(models, "agent")
+    developers, _ = _tag_values(models, "developer")
     providers, _ = _tag_values(models, "provider")
-    agent_sel = _parse_tag_tokens(_tag_query_csv(request.args, "agents"), agents)
-    provider_sel = _parse_tag_tokens(_tag_query_csv(request.args, "providers"), providers)
+    harnesses, _ = _tag_values(models, "harness")
+    developer_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "developers"), developers
+    )
+    provider_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "providers"), providers
+    )
+    harness_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "harnesses"), harnesses
+    )
     highlight = valid_filter_view(request.args.get("view")) == "highlight"
     feed = build_history_feed(
         index_data, models, search,
-        model_id=model_id, agent_sel=agent_sel, provider_sel=provider_sel,
+        model_id=model_id, developer_sel=developer_sel,
+        provider_sel=provider_sel, harness_sel=harness_sel,
         highlight=highlight, include_voided=include_voided,
     )
     name_map = {mid: info.get("name", mid) for mid, info in models.items()}
@@ -4312,8 +4418,9 @@ def add_page():
             "elo": info.get("elo", DEFAULT_ELO),
             "games": info.get("games", 0),
             "status": info.get("status", "active"),
-            "agent": info.get("agent", ""),
+            "developer": info.get("developer", ""),
             "provider": info.get("provider", ""),
+            "harness": info.get("harness", ""),
             "caption": page_caption(info),
         })
     models_list.sort(key=lambda m: m["name"].lower())
@@ -4323,26 +4430,34 @@ def add_page():
         action="/add",
         reset_url=url_for("add_page"),
     )
-    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    developer_sel = filter_ctx["filter_developer_sel"]
+    provider_sel = filter_ctx["filter_provider_sel"]
+    harness_sel = filter_ctx["filter_harness_sel"]
     filter_view = filter_ctx["filter_view"]
     highlight = filter_view == "highlight"
     if highlight:
         # «Подсвечивать»: список не сужается, отобранные строки помечаются.
         for m in models_list:
-            m["hit"] = model_passes_tags(m, agent_sel, provider_sel)
+            m["hit"] = model_passes_tags(
+                m, developer_sel, provider_sel, harness_sel
+            )
         highlight_hits = sum(1 for m in models_list if m["hit"])
     else:
-        models_list = [m for m in models_list if model_passes_tags(m, agent_sel, provider_sel)]
+        models_list = [
+            m for m in models_list
+            if model_passes_tags(m, developer_sel, provider_sel, harness_sel)
+        ]
         highlight_hits = 0
 
-    # Агент и компания — выпадающие списки только из справочника
+    # Разработчик, провайдер и харнесс — выпадающие списки только из справочника
     lookup_data = load_lookups()
 
     return ADD_TEMPLATE.render(
         models_list=models_list,
         highlight_hits=highlight_hits,
-        agent_options=lookup_data["agents"],
+        developer_options=lookup_data["developers"],
         provider_options=lookup_data["providers"],
+        harness_options=lookup_data["harnesses"],
         default_elo=DEFAULT_ELO,
         **filter_ctx,
         error=request.args.get("error", ""),
@@ -4358,8 +4473,9 @@ def add_page():
 @app.route("/add_model", methods=["POST"])
 def add_model():
     name = request.form.get("name", "").strip()
-    agent = request.form.get("agent", "").strip()
+    developer = request.form.get("developer", "").strip()
     provider = request.form.get("provider", "").strip()
+    harness = request.form.get("harness", "").strip()
 
     if not name:
         return redirect(url_for("add_page", error="Введите название модели"))
@@ -4368,17 +4484,17 @@ def add_model():
     if not models_path.exists():
         return redirect(url_for("add_page", error="models.yaml не найден"))
 
-    # Агент и компания — только пустое значение или значение из справочника
-    if agent and not has_value("agent", agent):
-        return redirect(url_for(
-            "add_page",
-            error=f"Агент «{agent}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
-        ))
-    if provider and not has_value("provider", provider):
-        return redirect(url_for(
-            "add_page",
-            error=f"Компания «{provider}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
-        ))
+    # Разработчик, провайдер и харнесс — пустые или значения из справочника
+    for kind, value, label in (
+        ("developer", developer, "Разработчик"),
+        ("provider", provider, "Провайдер"),
+        ("harness", harness, "Харнесс"),
+    ):
+        if value and not has_value(kind, value):
+            return redirect(url_for(
+                "add_page",
+                error=f"{label} «{value}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+            ))
 
     text = models_path.read_text(encoding="utf-8")
     models, preamble = parse_existing(text)
@@ -4389,8 +4505,9 @@ def add_model():
     new_model = {
         "id": model_id,
         "name": name,
-        "agent": agent,
+        "developer": developer,
         "provider": provider,
+        "harness": harness,
         "version": "",
         "released": "",
         "added": date.today().isoformat(),
@@ -4519,7 +4636,9 @@ def settings_page():
         hidden_fields=hidden_fields,
         reset_extra=answer_filter != "active" or only_debts,
     )
-    agent_sel, provider_sel = filter_ctx["filter_agent_sel"], filter_ctx["filter_provider_sel"]
+    developer_sel = filter_ctx["filter_developer_sel"]
+    provider_sel = filter_ctx["filter_provider_sel"]
+    harness_sel = filter_ctx["filter_harness_sel"]
     filter_view = filter_ctx["filter_view"]
     highlight = filter_view == "highlight"
 
@@ -4529,12 +4648,15 @@ def settings_page():
             "id": mid,
             "name": info.get("name", mid),
             "elo": info.get("elo", DEFAULT_ELO),
-            "agent": info.get("agent", ""),
+            "developer": info.get("developer", ""),
             "provider": info.get("provider", ""),
+            "harness": info.get("harness", ""),
             "caption": page_caption(info),
         }
         # В «Подсвечивать» фильтр не сужает раскрытые списки и счётчики.
-        if not highlight and not model_passes_tags(entry, agent_sel, provider_sel):
+        if not highlight and not model_passes_tags(
+            entry, developer_sel, provider_sel, harness_sel
+        ):
             continue
         if is_model_active(info):
             models_active_list.append(entry)
@@ -4557,7 +4679,10 @@ def settings_page():
             )
             r["hit"] = (
                 status_ok
-                and model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
+                and model_passes_tags(
+                    models.get(r["id"], {}),
+                    developer_sel, provider_sel, harness_sel,
+                )
                 and (not only_debts or r.get("debt", 0) > 0)
             )
         answer_hits = sum(1 for r in answer_rows if r["hit"])
@@ -4568,7 +4693,10 @@ def settings_page():
             answer_rows = [r for r in answer_rows if r["status"] == "archived"]
         answer_rows = [
             r for r in answer_rows
-            if model_passes_tags(models.get(r["id"], {}), agent_sel, provider_sel)
+            if model_passes_tags(
+                models.get(r["id"], {}),
+                developer_sel, provider_sel, harness_sel,
+            )
         ]
         if only_debts:
             answer_rows = [r for r in answer_rows if r.get("debt", 0) > 0]
@@ -4660,8 +4788,12 @@ def settings_page():
     # значения реестра вне справочника — отдельными строками в конце.
     lookup_data = load_lookups()
     lookup_sections = []
-    for kind, title in (("agent", "Агенты"), ("provider", "Компании")):
-        values = lookup_data["agents" if kind == "agent" else "providers"]
+    for kind, title, plural in (
+        ("developer", "Разработчики", "developers"),
+        ("provider", "Провайдеры", "providers"),
+        ("harness", "Харнессы", "harnesses"),
+    ):
+        values = lookup_data[plural]
         counts: dict[str, int] = {}
         for info in models.values():
             val = str(info.get(kind) or "").strip()
@@ -4735,8 +4867,17 @@ def settings_save():
 
 # ─── Справочники: CRUD (секция #lookups страницы /settings) ─────────
 
-# kind → название списка для сообщений пользователю
-LOOKUP_KIND_TITLES = {"agent": "агентов", "provider": "компаний"}
+# kind → название списка для сообщений пользователю и ключ в lookups.yaml
+LOOKUP_KIND_TITLES = {
+    "developer": "разработчиков",
+    "provider": "провайдеров",
+    "harness": "харнессов",
+}
+LOOKUP_KIND_PLURALS = {
+    "developer": "developers",
+    "provider": "providers",
+    "harness": "harnesses",
+}
 
 
 def _settings_redirect(error: str = "", success: str = ""):
@@ -4759,16 +4900,16 @@ def _settings_filter_params(models: dict) -> dict:
     params: dict = {
         "answer_filter": valid_answer_filter(request.values.get("answer_filter")),
     }
-    agents_csv = _tags_csv(_parse_tag_tokens(
-        _tag_query_csv(request.values, "agents"), _tag_values(models, "agent")[0],
-    ))
-    providers_csv = _tags_csv(_parse_tag_tokens(
-        _tag_query_csv(request.values, "providers"), _tag_values(models, "provider")[0],
-    ))
-    if agents_csv:
-        params["agents"] = agents_csv
-    if providers_csv:
-        params["providers"] = providers_csv
+    for key, param, plural in (
+        ("developer", "developers", "developers"),
+        ("provider", "providers", "providers"),
+        ("harness", "harnesses", "harnesses"),
+    ):
+        csv = _tags_csv(_parse_tag_tokens(
+            _tag_query_csv(request.values, param), _tag_values(models, key)[0],
+        ))
+        if csv:
+            params[param] = csv
     if (request.values.get("only_debts") or "").strip() == "1":
         params["only_debts"] = "1"
     view = valid_filter_view(request.values.get("view"))
@@ -4777,10 +4918,10 @@ def _settings_filter_params(models: dict) -> dict:
     chips = valid_chips_order(request.values.get("chips"))
     if chips != "alpha":
         params["chips"] = chips
-    # Подписи: дефолт — скрыты, поэтому в redirect попадает только
-    # включённый флажок (`captions=show`).
-    if valid_captions_state(request.values.get("captions")) == "show":
-        params["captions"] = "show"
+    # Подписи: дефолт — видны, поэтому в redirect попадает только
+    # отклонение «скрыты» (`captions=hide`).
+    if valid_captions_state(request.values.get("captions")) == "hide":
+        params["captions"] = "hide"
     return params
 
 
@@ -4836,7 +4977,7 @@ def lookup_rename():
         return _settings_redirect(error=f"Значение уже есть в справочнике: {existing}")
 
     lookup_data = load_lookups()
-    values = lookup_data["agents" if kind == "agent" else "providers"]
+    values = lookup_data[LOOKUP_KIND_PLURALS[kind]]
     if old not in values:
         return _settings_redirect(error=f"Значение «{old}» не найдено в справочнике")
 
@@ -4879,7 +5020,7 @@ def lookup_delete():
         return _settings_redirect(error="Введите значение")
 
     lookup_data = load_lookups()
-    values = lookup_data["agents" if kind == "agent" else "providers"]
+    values = lookup_data[LOOKUP_KIND_PLURALS[kind]]
     if value not in values:
         return _settings_redirect(error=f"Значение «{value}» не найдено в справочнике")
 
@@ -4921,13 +5062,17 @@ def save_answer_flags_route():
     chips_order = valid_chips_order(
         request.args.get("chips") or request.form.get("chips")
     )
-    agent_sel = _parse_tag_tokens(
-        _tag_query_csv(request.args, "agents") or _tag_query_csv(request.form, "agents"),
-        _tag_values(models, "agent")[0],
+    developer_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "developers") or _tag_query_csv(request.form, "developers"),
+        _tag_values(models, "developer")[0],
     )
     provider_sel = _parse_tag_tokens(
         _tag_query_csv(request.args, "providers") or _tag_query_csv(request.form, "providers"),
         _tag_values(models, "provider")[0],
+    )
+    harness_sel = _parse_tag_tokens(
+        _tag_query_csv(request.args, "harnesses") or _tag_query_csv(request.form, "harnesses"),
+        _tag_values(models, "harness")[0],
     )
     if filter_view == "highlight":
         visible = set(model_ids)
@@ -4939,7 +5084,9 @@ def save_answer_flags_route():
                 continue
             if answer_filter == "inactive" and status != "archived":
                 continue
-            if not model_passes_tags(info, agent_sel, provider_sel):
+            if not model_passes_tags(
+                info, developer_sel, provider_sel, harness_sel
+            ):
                 continue
             visible.add(mid)
         if only_debts:
@@ -4968,12 +5115,15 @@ def save_answer_flags_route():
     redirect_params = {"answer_filter": answer_filter}
     if only_debts:
         redirect_params["only_debts"] = "1"
-    agents_csv = _tags_csv(agent_sel)
+    developers_csv = _tags_csv(developer_sel)
     providers_csv = _tags_csv(provider_sel)
-    if agents_csv:
-        redirect_params["agents"] = agents_csv
+    harnesses_csv = _tags_csv(harness_sel)
+    if developers_csv:
+        redirect_params["developers"] = developers_csv
     if providers_csv:
         redirect_params["providers"] = providers_csv
+    if harnesses_csv:
+        redirect_params["harnesses"] = harnesses_csv
     if filter_view != "hide":
         redirect_params["view"] = filter_view
     if chips_order != "alpha":
@@ -4992,7 +5142,7 @@ def edit_page(model_id: str):
     if not info:
         return redirect(url_for("leaderboard", error="Модель не найдена"))
 
-    # Агент и компания — выпадающие списки только из справочника
+    # Разработчик, провайдер и харнесс — выпадающие списки только из справочника
     lookup_data = load_lookups()
 
     return EDIT_TEMPLATE.render(
@@ -5000,11 +5150,13 @@ def edit_page(model_id: str):
             "id": model_id,
             "name": info.get("name", ""),
             "status": info.get("status", "active"),
-            "agent": str(info.get("agent") or "").strip(),
+            "developer": str(info.get("developer") or "").strip(),
             "provider": str(info.get("provider") or "").strip(),
+            "harness": str(info.get("harness") or "").strip(),
         },
-        agent_options=lookup_data["agents"],
+        developer_options=lookup_data["developers"],
         provider_options=lookup_data["providers"],
+        harness_options=lookup_data["harnesses"],
         error=request.args.get("error", ""),
         success=request.args.get("success", ""),
         crumbs=[
@@ -5019,8 +5171,9 @@ def edit_page(model_id: str):
 def edit_model(model_id: str):
     name = request.form.get("name", "").strip()
     status = request.form.get("status", "").strip()
-    agent = request.form.get("agent", "").strip()
+    developer = request.form.get("developer", "").strip()
     provider = request.form.get("provider", "").strip()
+    harness = request.form.get("harness", "").strip()
 
     if not name:
         return redirect(url_for("edit_page", model_id=model_id, error="Введите название модели"))
@@ -5028,24 +5181,23 @@ def edit_model(model_id: str):
     if status not in ("active", "archived"):
         return redirect(url_for("edit_page", model_id=model_id, error="Неверный статус"))
 
-    # Агент и компания: пустое значение, значение из справочника или текущее
-    # значение модели без изменений (ручные значения «вне справочника»).
+    # Разработчик, провайдер и харнесс: пустое значение, значение из
+    # справочника или текущее значение модели без изменений (вне справочника).
     index_data = ensure_index()
     current = index_data.get("models", {}).get(model_id, {})
-    current_agent = str(current.get("agent") or "").strip()
-    current_provider = str(current.get("provider") or "").strip()
-    if agent and agent != current_agent and not has_value("agent", agent):
-        return redirect(url_for(
-            "edit_page", model_id=model_id,
-            error=f"Агент «{agent}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
-        ))
-    if provider and provider != current_provider and not has_value("provider", provider):
-        return redirect(url_for(
-            "edit_page", model_id=model_id,
-            error=f"Компания «{provider}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
-        ))
+    for kind, value, label in (
+        ("developer", developer, "Разработчик"),
+        ("provider", provider, "Провайдер"),
+        ("harness", harness, "Харнесс"),
+    ):
+        current_value = str(current.get(kind) or "").strip()
+        if value and value != current_value and not has_value(kind, value):
+            return redirect(url_for(
+                "edit_page", model_id=model_id,
+                error=f"{label} «{value}» отсутствует в справочнике: добавьте значение в разделе «Справочники».",
+            ))
 
-    if not update_model(model_id, name, status, agent, provider):
+    if not update_model(model_id, name, status, developer, provider, harness):
         return redirect(url_for("leaderboard", error="Не удалось обновить модель"))
 
     status_label = "активна" if status == "active" else "неактивна (архив)"

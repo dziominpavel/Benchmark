@@ -4,15 +4,17 @@ register_model.py — регистрация новой LLM-модели в mode
 
 Использование:
     python tools/register_model.py --id <slug> --name "<полное имя>" \
-        --version <строка> [--agent <agent>] [--provider <компания>] \
+        --version <строка> [--harness <harness>] [--developer <компания>] \
+        [--provider <провайдер доступа>] \
         [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>] [--notes "<текст>"]
 
 Проверяет уникальность id. Если модель с таким id уже есть — отказывается
 (используй --force для перезаписи, но осторожно — история прогонов смешается).
 
-Справочник: непустые --agent/--provider, которых нет в data/lookups.yaml,
-автоматически добавляются в него (в конец списка) с сообщением в выводе —
-регистрация не падает из-за нового значения.
+Справочник: непустые --harness/--developer/--provider, которых нет в
+data/lookups.yaml, автоматически добавляются в него (в конец списка) с
+сообщением в выводе — регистрация не падает из-за нового значения.
+--agent оставлен синонимом --harness для старых скриптов.
 
 Зависимости: только stdlib.
 """
@@ -89,8 +91,9 @@ def format_model(m: dict) -> str:
     """Форматирует модель в YAML-блок."""
     lines = [f"  - id: {m['id']}"]
     lines.append(f"    name: \"{m.get('name', '')}\"")
-    lines.append(f"    agent: {m.get('agent', '')}")
+    lines.append(f"    developer: {m.get('developer', '')}")
     lines.append(f"    provider: {m.get('provider', '')}")
+    lines.append(f"    harness: {m.get('harness', '')}")
     lines.append(f"    version: {m.get('version', '')}")
     if m.get("released"):
         lines.append(f"    released: {m['released']}")
@@ -106,8 +109,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Регистрация модели в models.yaml")
     parser.add_argument("--id", required=True, help="Уникальный slug модели")
     parser.add_argument("--name", required=True, help="Полное имя модели")
-    parser.add_argument("--agent", default="", help="Агент (Codex, Cursor, Devin, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
-    parser.add_argument("--provider", default="", help="Компания-разработчик (Anthropic, OpenAI, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
+    parser.add_argument("--harness", "--agent", dest="harness", default="", help="Харнесс (Codex, Cursor, Devin, OpenCode). --agent — устаревший синоним. Опционально; новое значение пополняет справочник data/lookups.yaml.")
+    parser.add_argument("--developer", default="", help="Компания-разработчик модели (Anthropic, OpenAI, Alibaba, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
+    parser.add_argument("--provider", default="", help="Провайдер доступа (OpenCode Go, OpenRouter, Vercel AI Gateway, Kilo Code, ...). Опционально; новое значение пополняет справочник data/lookups.yaml.")
     parser.add_argument("--version", default="", help="Версия/релиз. Опционально при --auto.")
     parser.add_argument("--released", default="", help="Дата выхода YYYY-MM-DD")
     parser.add_argument("--added", default="",
@@ -121,7 +125,7 @@ def main() -> int:
         print(f"Файл {MODELS_PATH} не найден.", file=sys.stderr)
         return 1
 
-    # При обычном режиме обязательна только версия; --agent и --provider опциональны
+    # При обычном режиме обязательна только версия; классификация опциональна
     if not args.auto and not args.version:
         print("--version обязателен без --auto.", file=sys.stderr)
         return 1
@@ -146,12 +150,13 @@ def main() -> int:
         models = [m for m in models if m["id"] != args.id]
         print(f"Перезаписываю существующую запись '{args.id}'.")
 
-    # Справочник: новые значения --agent/--provider добавляются автоматически
+    # Справочник: новые значения --harness/--developer/--provider добавляются автоматически
     # (в конец списка), чтобы авто-прогоны не падали, а значение сразу
     # появлялось в выпадающих списках консоли.
     for kind, label, value in (
-        ("agent", "агентов", args.agent.strip()),
-        ("provider", "компаний", args.provider.strip()),
+        ("harness", "харнессов", args.harness.strip()),
+        ("developer", "разработчиков", args.developer.strip()),
+        ("provider", "провайдеров", args.provider.strip()),
     ):
         if value and find_value(kind, value) is None and add_value(kind, value):
             print(f"В справочник {label} добавлено значение: {value}")
@@ -159,8 +164,9 @@ def main() -> int:
     new_model = {
         "id": args.id,
         "name": args.name,
-        "agent": args.agent.strip(),
+        "developer": args.developer.strip(),
         "provider": args.provider.strip(),
+        "harness": args.harness.strip(),
         "version": args.version,
         "released": args.released,
         "added": args.added or date.today().isoformat(),

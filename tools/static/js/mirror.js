@@ -85,19 +85,11 @@
     return ranks;
   })();
 
-  function knownTagValues(key) {
-    const values = new Set();
-    for (const mid of MODEL_IDS) values.add(MODELS[mid][key] || "");
-    return values;
-  }
-
-  const AGENT_VALUES = knownTagValues("a");
-  const PROVIDER_VALUES = knownTagValues("p");
-
-  function passesTags(mid, agentSel, providerSel) {
+  function passesTags(mid, developerSel, providerSel, harnessSel) {
     const info = MODELS[mid] || {};
-    if (agentSel.size && !agentSel.has(info.a || "")) return false;
+    if (developerSel.size && !developerSel.has(info.d || "")) return false;
     if (providerSel.size && !providerSel.has(info.p || "")) return false;
+    if (harnessSel.size && !harnessSel.has(info.h || "")) return false;
     return true;
   }
 
@@ -315,11 +307,11 @@
         el.checked = params.get(name) === "1";
       });
     }
-    // Подписи: флажок «Отражать агент-компанию» — параметр `captions`
-    // (дефолт «скрыты», значит показ = `captions=show`).
+    // Подписи: флажок «Отражать атрибуты модели» — параметр `captions`
+    // (дефолт «видны», скрытие = `captions=hide`).
     const captionBox = form.querySelector('input[name="captions"]');
     if (captionBox) {
-      captionBox.checked = (params.get("captions") || "").toLowerCase() === "show";
+      captionBox.checked = (params.get("captions") || "show").toLowerCase() !== "hide";
     }
     for (const name of tagNames) {
       const tokens = new Set(splitCsv(params.getAll(name).join(",")));
@@ -353,12 +345,15 @@
   // Порядок чипов: «по алфавиту» консоли или «по ELO» (макс. Elo значения,
   // ничьи — по алфавиту); чип «без …» всегда последний.
   function chipsOrder(form, order) {
-    for (const name of ["agents", "providers"]) {
+    for (const [name, key] of [
+      ["developers", "d"],
+      ["providers", "p"],
+      ["harnesses", "h"],
+    ]) {
       const first = form.querySelector('input[name="' + name + '"]');
       if (!first) continue;
       const box = first.closest(".filter-chips");
       if (!box) continue;
-      const key = name === "agents" ? "a" : "p";
       const maxElo = new Map();
       for (const mid of MODEL_IDS) {
         const value = MODELS[mid][key] || "";
@@ -396,7 +391,7 @@
     const parts = [];
     if (view === "highlight") parts.push("подсветка");
     if (chips === "elo") parts.push("чипы по ELO");
-    if (captions) parts.push("подписи видны");
+    if (!captions) parts.push("подписи скрыты");
     summary.textContent = parts.length
       ? "Настройки фильтра — " + parts.join(" · ")
       : "Настройки фильтра";
@@ -481,8 +476,9 @@
       mode: checkedValue(form, "filter", "active"),
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
-      agentSel: formTags(form, "agents"),
+      developerSel: formTags(form, "developers"),
       providerSel: formTags(form, "providers"),
+      harnessSel: formTags(form, "harnesses"),
       captions: isChecked(form, "captions"),
       qRaw: qInput ? qInput.value.trim() : "",
       q: casefold(qInput ? qInput.value.trim() : ""),
@@ -571,7 +567,7 @@
       let shown = 0;
       section.querySelectorAll("li").forEach((li) => {
         const mid = modelIdFromLink(li);
-        const ok = !mid || passesTags(mid, st.agentSel, st.providerSel);
+        const ok = !mid || passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
         setShown(li, ok);
         if (ok) shown += 1;
       });
@@ -605,7 +601,7 @@
       let hits = 0;
       const marks = all.map((row) => {
         const mid = modelIdFromLink(row);
-        const tags = passesTags(mid, st.agentSel, st.providerSel);
+        const tags = passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
         const found = matchesSearch(row.dataset.search || "", q);
         if (tags && found) visible += 1;
         if (tags && found && statusMatches(st.mode, mid)) {
@@ -676,8 +672,9 @@
             place: ranks.get(mid) || "",
             id: mid,
             name: modelName(mid),
+            developer: info.d || "",
             provider: info.p || "",
-            agent: info.a || "",
+            harness: info.h || "",
             elo: Number(row.dataset.elo) || modelElo(mid),
             confidence: cell(4),
             games: Number(row.dataset.games) || 0,
@@ -689,8 +686,9 @@
         });
       const today = isoToday();
       if (format === "csv") {
-        const header = ["Место", "id", "Имя", "Компания", "Агент", "ELO", "±",
-                        "Игры", "Победы", "Поражения", "Ничьи", "Винрейт, %"];
+        const header = ["Место", "id", "Имя", "Разработчик", "Провайдер",
+                        "Харнесс", "ELO", "±", "Игры", "Победы", "Поражения",
+                        "Ничьи", "Винрейт, %"];
         downloadFile(
           "rating-" + today + ".csv",
           "text/csv;charset=utf-8",
@@ -702,8 +700,9 @@
         generated_at: isoNow(),
         filters: {
           filter: st.mode,
-          agents: [...st.agentSel].sort(),
+          developers: [...st.developerSel].sort(),
           providers: [...st.providerSel].sort(),
+          harnesses: [...st.harnessSel].sort(),
           q: st.qRaw,
         },
         sort: st.sort || "rank",
@@ -727,11 +726,12 @@
       writeUrl([
         ["q", st.qRaw],
         ["filter", st.mode !== "active" ? st.mode : ""],
-        ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
+        ["developers", st.developerSel.size ? tagsCsv(st.developerSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
+        ["harnesses", st.harnessSel.size ? tagsCsv(st.harnessSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
-        ["captions", st.captions ? "show" : ""],
+        ["captions", st.captions ? "" : "hide"],
         ["sort", st.sort],
         ["dir", st.sort ? st.dir : ""],
       ]);
@@ -758,7 +758,7 @@
       }
     });
 
-    syncFromUrl(form, ["agents", "providers"]);
+    syncFromUrl(form, ["developers", "providers", "harnesses"]);
     // Живой поиск: локальная фильтрация без сервера, как `data-live-input`
     // консоли. Перерисовка отложена, чтобы не дёргать DOM на каждый символ.
     let qTimer = null;
@@ -789,7 +789,7 @@
       (card.closest(".history-results") || card).querySelector(".stats") ||
       document.querySelector(".controls .stats");
 
-    const params = syncFromUrl(form, ["agents", "providers"], ["model"]);
+    const params = syncFromUrl(form, ["developers", "providers", "harnesses"], ["model"]);
     // Выбранная из адреса модель могла не попасть в опции (архивная или под
     // чипом): консоль сохраняет её в выпадайке — повторяем.
     const urlModel = (params.get("model") || "").trim();
@@ -820,8 +820,9 @@
       outcome: checkedValue(form, "outcome", ""),
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
-      agentSel: formTags(form, "agents"),
+      developerSel: formTags(form, "developers"),
       providerSel: formTags(form, "providers"),
+      harnessSel: formTags(form, "harnesses"),
       captions: isChecked(form, "captions"),
       pairRaw: pairInput ? pairInput.value.trim() : "",
       pair: casefold(pairInput ? pairInput.value.trim() : ""),
@@ -839,7 +840,7 @@
       ];
       for (const mid of sorted) {
         if (isArchived(mid) && !st.includeInactive && mid !== st.model) continue;
-        if (mid !== st.model && !passesTags(mid, st.agentSel, st.providerSel)) continue;
+        if (mid !== st.model && !passesTags(mid, st.developerSel, st.providerSel, st.harnessSel)) continue;
         parts.push(
           '<option value="' + esc(mid) + '"' + (mid === st.model ? " selected" : "") + ">" +
             esc(modelName(mid)) + (isArchived(mid) ? " (неактивна)" : "") +
@@ -915,8 +916,8 @@
         const date = (row.dataset.date || "").slice(0, 10);
         const modelMatch = Boolean(st.model) && (a === st.model || b === st.model);
         const tagMatch =
-          passesTags(a, st.agentSel, st.providerSel) ||
-          passesTags(b, st.agentSel, st.providerSel);
+          passesTags(a, st.developerSel, st.providerSel, st.harnessSel) ||
+          passesTags(b, st.developerSel, st.providerSel, st.harnessSel);
         const matches = keepAll || (st.model ? modelMatch : tagMatch);
         // Поиск по паре — как в консоли: подстрока в id и имени обеих моделей.
         let pairMatch;
@@ -1118,11 +1119,12 @@
         ["only_voided", st.onlyVoided ? "1" : ""],
         ["include_inactive", st.includeInactive ? "1" : ""],
         ["include_voided", st.includeVoided ? "1" : ""],
-        ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
+        ["developers", st.developerSel.size ? tagsCsv(st.developerSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
+        ["harnesses", st.harnessSel.size ? tagsCsv(st.harnessSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
-        ["captions", st.captions ? "show" : ""],
+        ["captions", st.captions ? "" : "hide"],
         ["page", currentPage > 1 ? String(currentPage) : ""],
       ]);
     };
@@ -1643,8 +1645,9 @@
       mode: checkedValue(form, "filter", "active") === "all" ? "all" : "active",
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
-      agentSel: formTags(form, "agents"),
+      developerSel: formTags(form, "developers"),
       providerSel: formTags(form, "providers"),
+      harnessSel: formTags(form, "harnesses"),
       captions: isChecked(form, "captions"),
     });
 
@@ -1653,7 +1656,7 @@
       const rows = [];
       for (const mid of MODEL_IDS) {
         const statusOk = st.mode === "all" || !isArchived(mid);
-        const tagOk = passesTags(mid, st.agentSel, st.providerSel);
+        const tagOk = passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
         if (highlight) rows.push({ mid, hit: statusOk && tagOk });
         else if (statusOk && tagOk) rows.push({ mid, hit: true });
       }
@@ -1762,16 +1765,17 @@
       render(st);
       writeUrl([
         ["filter", st.mode === "all" ? "all" : ""],
-        ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
+        ["developers", st.developerSel.size ? tagsCsv(st.developerSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
+        ["harnesses", st.harnessSel.size ? tagsCsv(st.harnessSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
-        ["captions", st.captions ? "show" : ""],
+        ["captions", st.captions ? "" : "hide"],
         ["rank_page", currentPage > 1 ? String(currentPage) : ""],
       ]);
     };
 
-    syncFromUrl(form, ["agents", "providers"]);
+    syncFromUrl(form, ["developers", "providers", "harnesses"]);
     form.addEventListener("change", () => {
       currentPage = 1;
       apply();
@@ -1814,8 +1818,9 @@
       view: checkedValue(form, "view", "hide") === "highlight" ? "highlight" : "hide",
       chips: checkedValue(form, "chips", "alpha") === "elo" ? "elo" : "alpha",
       onlyDebts: isChecked(form, "only_debts"),
-      agentSel: formTags(form, "agents"),
+      developerSel: formTags(form, "developers"),
       providerSel: formTags(form, "providers"),
+      harnessSel: formTags(form, "harnesses"),
       captions: isChecked(form, "captions"),
     });
 
@@ -1840,7 +1845,7 @@
         for (const li of items) {
           const mid = modelIdFromLink(li);
           const ok =
-            highlight || !mid || passesTags(mid, st.agentSel, st.providerSel);
+            highlight || !mid || passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
           setShown(li, ok);
           if (ok) shown += 1;
         }
@@ -1876,7 +1881,7 @@
       let hits = 0;
       const marks = [...body.rows].map((row) => {
         const mid = modelIdFromFlags(row);
-        const tags = passesTags(mid, st.agentSel, st.providerSel);
+        const tags = passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
         const debt = !st.onlyDebts || debtOf(row) > 0;
         const hit = tags && statusMatches(st.mode, mid) && debt;
         const shown = highlight || (tags && debt);
@@ -1894,7 +1899,7 @@
       const empty = emptyBox(card);
       let message = "";
       if (!highlight && visible === 0) {
-        if (st.agentSel.size || st.providerSel.size) {
+        if (st.developerSel.size || st.providerSel.size || st.harnessSel.size) {
           message = "Под выбранный фильтр не попала ни одна модель.";
         } else if (st.onlyDebts) {
           message = "Долгов нет.";
@@ -1936,15 +1941,16 @@
       writeUrl([
         ["answer_filter", st.mode !== "active" ? st.mode : ""],
         ["only_debts", st.onlyDebts ? "1" : ""],
-        ["agents", st.agentSel.size ? tagsCsv(st.agentSel) : ""],
+        ["developers", st.developerSel.size ? tagsCsv(st.developerSel) : ""],
         ["providers", st.providerSel.size ? tagsCsv(st.providerSel) : ""],
+        ["harnesses", st.harnessSel.size ? tagsCsv(st.harnessSel) : ""],
         ["view", st.view === "highlight" ? "highlight" : ""],
         ["chips", st.chips === "elo" ? "elo" : ""],
-        ["captions", st.captions ? "show" : ""],
+        ["captions", st.captions ? "" : "hide"],
       ]);
     };
 
-    syncFromUrl(form, ["agents", "providers"]);
+    syncFromUrl(form, ["developers", "providers", "harnesses"]);
     form.addEventListener("change", apply);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -1953,10 +1959,10 @@
     apply();
   }
 
-  /* Подписи «Компания · Агент» и разделитель «·» перед ними: слепок
-   * статичен, поэтому состояние берётся из адреса — подписи видны только
-   * при ?captions=show (change caption-visibility-toggle). Флажок панели
-   * работает как в живой консоли: состояние живёт в форме и в адресе.
+  /* Подписи «Разработчик · Провайдер · Харнесс» и разделитель «·» перед ними: слепок
+   * статичен, поэтому состояние берётся из адреса — подписи видны по умолчанию,
+   * скрываются только при ?captions=hide. Флажок панели работает как в живой
+   * консоли: состояние живёт в форме и в адресе.
    * Скрытие применяется только к страницам с блоком «Фильтр»: у страницы
    * модели и страницы задачи панели нет, там подпись видна всегда. */
   function applyCaptions(shown) {
@@ -1966,7 +1972,7 @@
 
   function captionsFromUrl() {
     const params = new URLSearchParams(location.search);
-    return (params.get("captions") || "").toLowerCase() === "show";
+    return (params.get("captions") || "show").toLowerCase() !== "hide";
   }
 
   /* ── Запуск: страница сама выбирает, что инициализировать ───────── */

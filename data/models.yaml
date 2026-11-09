@@ -1,25 +1,32 @@
-﻿# Реестр LLM-моделей для бенчмарка
+# Реестр LLM-моделей для бенчмарка
 #
 # Формат записи:
-#   - id: <slug>          # короткий стабильный идентификатор, используется в именах файлов ответов
-#     name: <полное имя>  # человекочитаемое имя
-#     agent: <agent>      # агент из справочника data/lookups.yaml (agents)
-#     provider: <компания>   # компания из справочника data/lookups.yaml (providers); Unknown — неизвестна
-#     version: <строка>   # версия/релиз модели
-#     released: <YYYY-MM-DD>  # дата выхода модели (если известна)
-#     added: <YYYY-MM-DD>     # дата регистрации в реестре (ставится автоматически)
-#     status: active      # active | archived (archived = заморожена, не участвует в новых парах)
-#     notes: <строка>     # необязательные заметки
+#   - id: <slug>            # стабильный идентификатор; на него ссылаются journal и флаги
+#     name: <имя>           # человекочитаемое имя модели без харнесса и компании
+#     developer: <компания> # разработчик модели из справочника data/lookups.yaml (developers)
+#     provider: <провайдер> # провайдер доступа из справочника data/lookups.yaml (providers)
+#     harness: <харнесс>    # харнесс из справочника data/lookups.yaml (harnesses)
+#     version: <строка>     # версия/релиз модели
+#     released: <YYYY-MM-DD># дата выхода модели (если известна)
+#     added: <YYYY-MM-DD>   # дата регистрации в реестре (ставится автоматически)
+#     status: active        # active | archived (archived = заморожена, не участвует в новых парах)
+#     notes: <строка>       # необязательные заметки
 #
-# Допустимые значения agent и provider — в справочнике data/lookups.yaml.
-# Значения вне справочника не теряются: консоль помечает их «вне справочника»
-# и позволяет внести одной кнопкой; --agent/--provider при регистрации
+# Три классификационных параметра:
+#   developer — кто обучил модель (Alibaba, Anthropic, OpenAI, ...);
+#   provider  — через что шёл доступ (OpenCode Go, OpenRouter, Vercel AI Gateway,
+#               Kilo Code, встроенный доступ харнесса: Cursor, Cognition, OpenAI);
+#   harness   — в чём гоняли (Codex, Cursor, Devin, OpenCode).
+#
+# Допустимые значения — в справочнике data/lookups.yaml. Значения вне
+# справочника не теряются: консоль помечает их «вне справочника» и позволяет
+# внести одной кнопкой; --harness/--developer/--provider при регистрации
 # автоматически пополняют справочник.
 #
 # Добавляй модели через tools/register_model.py:
-#   python tools/register_model.py --id <slug> --name "<name>" --version <ver> [--agent <agent>] [--provider <компания>] [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>]
+#   python tools/register_model.py --id <slug> --name "<name>" --version <ver> #       [--harness <harness>] [--developer <компания>] [--provider <провайдер>] #       [--released <YYYY-MM-DD>] [--added <YYYY-MM-DD>]
 # Или через саморегистрацию (--auto, --version не обязателен):
-#   python tools/register_model.py --auto --id <slug> --name "<name>" [--agent <agent>] [--provider <компания>]
+#   python tools/register_model.py --auto --id <slug> --name "<name>" #       [--harness <harness>] [--developer <компания>] [--provider <провайдер>]
 #
 # Архивация через tools/archive_model.py:
 #   python tools/archive_model.py <slug>           # заархивировать
@@ -35,358 +42,423 @@
 
 models:
   - id: codex-gpt-5-6-terra-09-2026
-    name: "Codex GPT-5.6-Terra High 09-2026"
-    agent: Codex
+    name: "GPT-5.6-Terra High 09-2026"
+    developer: OpenAI
     provider: OpenAI
+    harness: Codex
     version: 
     added: 2026-09-08
     status: active
   - id: cursor-composer-2-5
-    name: "Cursor Composer 2.5"
-    agent: Cursor
-    provider: SpaceXAI
+    name: "Composer 2.5"
+    developer: SpaceXAI
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-05
     status: active
   - id: cursor-fable-5-1-1m-max
-    name: "Cursor Fable 5.1 1M Max"
-    agent: Cursor
-    provider: Anthropic
+    name: "Claude Fable 5.1 1M Max"
+    developer: Anthropic
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-06
     status: active
+  - id: cursor-fable-5-2-max
+    name: "Claude Fable 5.2 Max"
+    developer: Anthropic
+    provider: Cursor
+    harness: Cursor
+    version: 
+    added: 2026-11-09
+    status: active
   - id: cursor-gemini-3-8-flash-high
-    name: "Cursor Gemini 3.8 Flash High"
-    agent: Cursor
-    provider: Google
+    name: "Gemini 3.8 Flash High"
+    developer: Google
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-06
     status: active
   - id: cursor-grok-4-6
-    name: "Cursor Grok 4.6 Extra High"
-    agent: Cursor
-    provider: SpaceXAI
+    name: "Grok 4.6 Extra High"
+    developer: SpaceXAI
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-05
     status: active
   - id: cursor-grok-4-6-low
-    name: "Cursor Grok 4.6 Low"
-    agent: Cursor
-    provider: SpaceXAI
+    name: "Grok 4.6 Low"
+    developer: SpaceXAI
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-06
     status: active
   - id: cursor-kimi-k3-max
-    name: "Cursor Kimi K3 Max"
-    agent: Cursor
-    provider: Moonshot AI
+    name: "Kimi K3 Max"
+    developer: Moonshot AI
+    provider: Cursor
+    harness: Cursor
     version: 
     added: 2026-09-06
     status: active
   - id: cursor-sonnet-5-5-1m-max
-    name: "Cursor Sonnet 5.5 1M Max"
-    agent: Cursor
-    provider: Anthropic
+    name: "Claude Sonnet 5.5 1M Max"
+    developer: Anthropic
+    provider: Cursor
+    harness: Cursor
     version: 5.5 1M Max
     added: 2026-10-06
     status: active
   - id: devin-deepseek-v4-1-flash-max
-    name: "Devin DeepSeek V4.1 Flash Max"
-    agent: Devin
-    provider: DeepSeek
+    name: "DeepSeek V4.1 Flash Max"
+    developer: DeepSeek
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-11
     status: active
   - id: devin-deepseek-v4-pro-max
-    name: "Devin DeepSeek V4 Pro Max"
-    agent: Devin
-    provider: DeepSeek
+    name: "DeepSeek V4 Pro Max"
+    developer: DeepSeek
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-10
     status: active
   - id: devin-glm-5-2-high
-    name: "Devin GLM-5.2 High"
-    agent: Devin
-    provider: Z.ai
+    name: "GLM-5.2 High"
+    developer: Z.ai
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-05
     status: active
   - id: devin-glm-5-3-flash-max
-    name: "Devin GLM-5.3 Flash Max"
-    agent: Devin
-    provider: Z.ai
+    name: "GLM-5.3 Flash Max"
+    developer: Z.ai
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-05
     status: active
   - id: devin-gpt-5-6-sol-max
-    name: "Devin GPT-5.6 Sol Max"
-    agent: Devin
-    provider: OpenAI
+    name: "GPT-5.6 Sol Max"
+    developer: OpenAI
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-05
     status: active
   - id: devin-gpt-6-astra-max
-    name: "Devin GPT-6 Astra Max"
-    agent: Devin
-    provider: OpenAI
+    name: "GPT-6 Astra Max"
+    developer: OpenAI
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-06
     status: active
   - id: devin-gpt-6-astra-max-2
-    name: "Devin GPT-6 Astra Low"
-    agent: Devin
-    provider: OpenAI
+    name: "GPT-6 Astra Low"
+    developer: OpenAI
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-06
     status: active
   - id: devin-kimi-k3-max
-    name: "Devin Kimi K3 Max"
-    agent: Devin
-    provider: Moonshot AI
+    name: "Kimi K3 Max"
+    developer: Moonshot AI
+    provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-05
     status: active
   - id: devin-swe-1-7-max
-    name: "Devin SWE-1.7 Max"
-    agent: Devin
+    name: "SWE-1.7 Max"
+    developer: Cognition
     provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-05
     status: active
   - id: devin-swe-2-max
-    name: "Devin SWE-2 Max"
-    agent: Devin
+    name: "SWE-2 Max"
+    developer: Cognition
     provider: Cognition
+    harness: Devin
     version: 
     added: 2026-09-10
     status: active
   - id: nemotron-3-ultra-free-high
-    name: "OpenCode Nemotron 3 Ultra Free High"
-    agent: OpenCode
-    provider: NVIDIA
+    name: "Nemotron 3 Ultra Free High"
+    developer: NVIDIA
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-10-25
-    status: active
+    status: archived
     notes: "OpenRouter free tier"
   - id: opencode-beam-free-max
-    name: "OpenCode Beam Free Max"
-    agent: OpenCode
-    provider: Reflection AI
+    name: "Beam Free Max"
+    developer: Reflection AI
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-16
     status: active
   - id: opencode-big-pickle
-    name: "OpenCode Big Pickle (stealth)"
-    agent: OpenCode
-    provider: Unknown
+    name: "Big Pickle"
+    developer: Unknown
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-26
     status: active
     notes: "stealth alias with rotating backend; lab undisclosed (GLM-4.6 earlier, DeepSeek V4 Flash in routing errors); data may be used for training during free period"
   - id: opencode-claude-haiku-5-5-max
-    name: "OpenCode Claude Haiku 5.5 Max"
-    agent: OpenCode
-    provider: Anthropic
+    name: "Claude Haiku 5.5 Max"
+    developer: Anthropic
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-25
     status: active
   - id: opencode-deepseek-v4-1-flash-1017-max
-    name: "OpenCode DeepSeek V4.1 Flash 1017 Max"
-    agent: OpenCode
-    provider: DeepSeek
+    name: "DeepSeek V4.1 Flash 1017 Max"
+    developer: DeepSeek
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-20
     status: active
   - id: opencode-deepseek-v4-1-flash-free-max
-    name: "OpenCode DeepSeek V4.1 Flash Free Max"
-    agent: OpenCode
-    provider: DeepSeek
+    name: "DeepSeek V4.1 Flash Free Max"
+    developer: DeepSeek
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-15
     status: active
   - id: opencode-fledge-alpha-free
-    name: "OpenCode Fledge Alpha Free Max"
-    agent: OpenCode
-    provider: Unknown
+    name: "Fledge Alpha Free Max"
+    developer: Unknown
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-10-02
     status: active
     notes: "stealth model; lab undisclosed; leaks point to Thinking Machines Lab (Inkling family) but unconfirmed"
   - id: opencode-flint-free
-    name: "OpenCode Flint Free"
-    agent: OpenCode
-    provider: Recursive
+    name: "Flint Free"
+    developer: Recursive
+    provider: OpenCode Go
+    harness: OpenCode
     version: free
     released: 2026-10-21
     added: 2026-10-24
-    status: active
+    status: archived
   - id: opencode-free-model-router-20261024
-    name: "OpenCode Free Model Router 20261024"
-    agent: OpenCode
-    provider: Anomaly
+    name: "Free Model Router 20261024"
+    developer: Anomaly
+    provider: OpenCode Go
+    harness: OpenCode
     version: 20261024
     released: 2026-10-24
     added: 2026-10-24
-    status: active
+    status: archived
     notes: "free-model routing alias operated by OpenCode, not a standalone lab model"
   - id: opencode-gemini-4-argon-high
-    name: "OpenCode Gemini 4 Argon High"
-    agent: OpenCode
-    provider: Google
+    name: "Gemini 4 Argon High"
+    developer: Google
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-15
     status: active
   - id: opencode-glm-5-3-flash-free
-    name: "OpenCode GLM-5.3 Flash Free"
-    agent: OpenCode
-    provider: Z.ai
+    name: "GLM-5.3 Flash Free"
+    developer: Z.ai
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-16
     status: active
   - id: opencode-grok-4-7-xhigh
-    name: "OpenCode Grok 4.7 Xhigh"
-    agent: OpenCode
-    provider: SpaceXAI
+    name: "Grok 4.7 Xhigh"
+    developer: SpaceXAI
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-09-22
     status: active
   - id: opencode-hy4-preview-high
-    name: "OpenCode Hy4 Preview High"
-    agent: OpenCode
-    provider: Tencent
+    name: "Hy4 Preview High"
+    developer: Tencent
+    provider: OpenCode Go
+    harness: OpenCode
     version: 4 preview
     released: 2026-08-28
     added: 2026-10-17
     status: active
   - id: opencode-iceman-contributor-free
-    name: "OpenCode Iceman Contributor Free"
-    agent: OpenCode
-    provider: Microsoft
+    name: "Iceman Contributor Free"
+    developer: Microsoft
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     released: 2026-10-24
     added: 2026-10-25
-    status: active
+    status: archived
     notes: "stealth model; strongest lead is Microsoft MAI (self-identification plus tokenizer match with MAI Thinking 1), not officially confirmed"
   - id: opencode-inkling-free-max
-    name: "OpenCode Inkling Free Max"
-    agent: OpenCode
-    provider: Thinking Machines Lab
+    name: "Inkling Free Max"
+    developer: Thinking Machines Lab
+    provider: OpenRouter
+    harness: OpenCode
     version: free-max
     released: 2026-07-15
     added: 2026-10-24
-    status: active
+    status: archived
   - id: opencode-inkling-small-free-max
-    name: "OpenCode Inkling Small Free Max"
-    agent: OpenCode
-    provider: Thinking Machines Lab
+    name: "Inkling Small Free Max"
+    developer: Thinking Machines Lab
+    provider: OpenRouter
+    harness: OpenCode
     version: free-max
     released: 2026-07-30
     added: 2026-10-24
-    status: active
+    status: archived
   - id: opencode-kimi-k3-1-pro-max
-    name: "OpenCode Kimi K3.1 Pro Max"
-    agent: OpenCode
-    provider: Moonshot AI
+    name: "Kimi K3.1 Pro Max"
+    developer: Moonshot AI
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-23
     status: active
   - id: opencode-laguna-s-2-1-free
-    name: "OpenCode Laguna S 2.1 Free"
-    agent: OpenCode
-    provider: Reflection AI
+    name: "Laguna S 2.1 Free"
+    developer: Reflection AI
+    provider: OpenRouter
+    harness: OpenCode
     version: free
     added: 2026-10-25
     status: active
   - id: opencode-laguna-xs-2-1-free
-    name: "OpenCode Laguna XS 2.1 Free"
-    agent: OpenCode
-    provider: Reflection AI
+    name: "Laguna XS 2.1 Free"
+    developer: Reflection AI
+    provider: OpenRouter
+    harness: OpenCode
     version: free
     added: 2026-10-25
-    status: active
+    status: archived
   - id: opencode-ling-3-0-flash-fin-free
-    name: "OpenCode Ling 3.0 Flash Fin Free"
-    agent: OpenCode
-    provider: Ant Group
+    name: "Ling 3.0 Flash Fin Free"
+    developer: Ant Group
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-09-22
-    status: active
+    status: archived
   - id: opencode-ling-3-1-flash-free
-    name: "OpenCode Ling 3.1 Flash Free"
-    agent: OpenCode
-    provider: Ant Group
+    name: "Ling 3.1 Flash Free"
+    developer: Ant Group
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-10-02
     status: active
   - id: opencode-longcat-2-5-preview-free
-    name: "OpenCode LongCat 2.5 Preview Free"
-    agent: OpenCode
-    provider: Meituan
+    name: "LongCat 2.5 Preview Free"
+    developer: Meituan
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-09-30
-    status: active
+    status: archived
   - id: opencode-mimo-v2-5-free
-    name: "OpenCode MiMo V2.5 Free"
-    agent: OpenCode
-    provider: Xiaomi
+    name: "MiMo V2.5 Free"
+    developer: Xiaomi
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-09-05
-    status: active
+    status: archived
   - id: opencode-mimo-v2-6-flash-free
-    name: "OpenCode MiMo V2.6 Flash Free"
-    agent: OpenCode
-    provider: Xiaomi
+    name: "MiMo V2.6 Flash Free"
+    developer: Xiaomi
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-09-22
     status: active
   - id: opencode-minimax-m3-1-flash-free-max
-    name: "OpenCode MiniMax M3.1 Flash Free Max"
-    agent: OpenCode
-    provider: MiniMax
+    name: "MiniMax M3.1 Flash Free Max"
+    developer: MiniMax
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-19
     status: active
   - id: opencode-muse-spark-1-3-free-xhigh
-    name: "OpenCode Muse Spark 1.3 Free Xhigh"
-    agent: OpenCode
-    provider: Meta
+    name: "Muse Spark 1.3 Free Xhigh"
+    developer: Meta
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-09-05
     status: active
   - id: opencode-nemotron-3-5-super-vl-free-xhigh
-    name: "OpenCode Nemotron 3.5 Super VL Free Xhigh"
-    agent: OpenCode
-    provider: NVIDIA
+    name: "Nemotron 3.5 Super VL Free Xhigh"
+    developer: NVIDIA
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-15
-    status: active
+    status: archived
   - id: opencode-north-mini-code-free-thinking
-    name: "OpenCode North Mini Code Free Thinking"
-    agent: OpenCode
-    provider: Cohere
+    name: "North Mini Code Free Thinking"
+    developer: Cohere
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     released: 2026-06-09
     added: 2026-10-24
+    status: archived
+  - id: opencode-qwen3-8-max-0912-xhigh
+    name: "Qwen3.8 Max 0912 Xhigh"
+    developer: Alibaba
+    provider: Vercel AI Gateway
+    harness: OpenCode
+    version: 3.8
+    added: 2026-11-01
     status: active
   - id: opencode-qwen3-8-max-xhigh
-    name: "OpenCode Qwen3.8 Max Xhigh"
-    agent: OpenCode
-    provider: Alibaba
+    name: "Qwen3.8 Max Xhigh"
+    developer: Alibaba
+    provider: OpenCode Go
+    harness: OpenCode
     version: 3.8
     released: 2026-08-03
     added: 2026-10-17
     status: active
   - id: opencode-space-bunny-free-max
-    name: "OpenCode Space Bunny Free Max"
-    agent: OpenCode
-    provider: MiniMax
+    name: "Space Bunny Free Max"
+    developer: MiniMax
+    provider: OpenRouter
+    harness: OpenCode
     version: 
     added: 2026-09-26
     status: active
   - id: opencode-step-5-preview-free-high
-    name: "OpenCode Step 5 Preview Free High"
-    agent: OpenCode
-    provider: StepFun
+    name: "Step 5 Preview Free High"
+    developer: StepFun
+    provider: OpenCode Go
+    harness: OpenCode
     version: 
     added: 2026-10-10
     status: active

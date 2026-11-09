@@ -119,10 +119,13 @@ _На схеме ниже префикс `data/` опущен: `tasks/` = `data/
 ## Хранение
 
 **Source of truth (в git, всё под `data/`):**
-- `data/models.yaml` — реестр моделей (id, name, agent, provider, version, released, added, status, notes; agent и provider — из справочника, значения вне справочника допустимы и помечаются «вне справочника»)
-- `data/lookups.yaml` — справочники агентов и компаний (agents, providers) —
-  допустимые значения полей agent/provider; CRUD — секция «Справочники»
-  страницы /settings, авто-дополнение — tools/register_model.py
+- `data/models.yaml` — реестр моделей (id, name, developer, provider, harness,
+  version, released, added, status, notes; developer/provider/harness — из
+  справочника, значения вне справочника допустимы и помечаются «вне справочника»)
+- `data/lookups.yaml` — справочники разработчиков, провайдеров и харнессов
+  (developers, providers, harnesses) — допустимые значения полей
+  developer/provider/harness; CRUD — секция «Справочники» страницы /settings,
+  авто-дополнение — tools/register_model.py
 - `data/tasks/T-NNN-<slug>/task.md` — задачи (создание вручную из `data/tasks/_TEMPLATE.md`)
 - `data/matchups/journal.jsonl` — журнал вердиктов: единый append-only
   JSONL-файл, строка = событие (поля: version, seq, task, matchup,
@@ -135,7 +138,9 @@ _На схеме ниже префикс `data/` опущен: `tasks/` = `data/
 **Локально (не в git, игнорируется):**
 - `data/answers/T-NNN/modelA.md`, `modelB.md` — транзитные слоты текущего
   судейства; `data/answers/T-NNN/<model-id>.md` — ручные прогоны произвольных
-  моделей. Система читает только слоты: для судейства текст копируется в слот.
+  моделей; `data/answers/T-NNN/<harness>/<name>/` — локальный архив ответов,
+  сгруппированный по харнессу. Система читает только слоты: для судейства
+  текст копируется в слот.
 
 **Кэш (генерируется, в git):**
 - `data/index.json` — ELO + статистика + сводки + история + matchups_digest

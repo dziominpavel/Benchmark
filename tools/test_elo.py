@@ -414,47 +414,55 @@ def test_get_run_progress():
 
 
 def test_format_model_roundtrip():
-    """parse_existing↔format_model сохраняют agent/provider и не добавляют мусор."""
+    """parse_existing↔format_model сохраняют developer/provider/harness."""
     from register_model import format_model, parse_existing
     text = (
         "# шапка\n\nmodels:\n"
         "  - id: a\n"
         "    name: \"A\"\n"
-        "    agent: Cursor\n"
-        "    provider: Anthropic\n"
+        "    developer: Anthropic\n"
+        "    provider: Cursor\n"
+        "    harness: Cursor\n"
         "    version: v1\n"
         "    added: 2026-01-02\n"
         "    status: active\n"
         "  - id: b\n"
         "    name: \"B\"\n"
-        "    agent: \n"
+        "    developer: \n"
         "    provider: \n"
+        "    harness: \n"
         "    version: \n"
         "    added: 2026-01-03\n"
         "    status: archived\n"
     )
     models, _ = parse_existing(text)
     assert [m["id"] for m in models] == ["a", "b"], models
-    assert models[0]["agent"] == "Cursor" and models[0]["provider"] == "Anthropic"
+    assert models[0]["developer"] == "Anthropic"
+    assert models[0]["provider"] == "Cursor"
+    assert models[0]["harness"] == "Cursor"
 
     out = format_model(models[0])
     back, _ = parse_existing("models:\n" + out + "\n")
     assert back[0] == models[0], f"round-trip потерял поля: {models[0]} != {back[0]}"
 
-    # Пустые agent/provider остаются пустыми строками, released/notes не появляются
+    # Пустые developer/provider/harness остаются пустыми строками,
+    # released/notes не появляются.
     back_b, _ = parse_existing("models:\n" + format_model(models[1]) + "\n")
-    assert back_b[0]["agent"] == "" and back_b[0]["provider"] == ""
+    assert back_b[0]["developer"] == "" and back_b[0]["provider"] == ""
+    assert back_b[0]["harness"] == ""
     assert "released" not in back_b[0] and "notes" not in back_b[0]
 
-    # Запись без agent/provider (старый формат) переживает круг без выдуманных значений
+    # Запись без новых полей переживает круг без выдуманных значений
     legacy = {"id": "c", "name": "C", "version": "1", "added": "2026-01-04", "status": "active"}
     back_c, _ = parse_existing("models:\n" + format_model(legacy) + "\n")
-    assert back_c[0].get("agent", "") == "" and back_c[0].get("provider", "") == ""
+    assert back_c[0].get("developer", "") == ""
+    assert back_c[0].get("provider", "") == ""
+    assert back_c[0].get("harness", "") == ""
     print("format_model round-trip: OK")
 
 
-def test_index_stale_agent_provider():
-    """is_index_stale замечает правку agent/provider и старый кэш без agent."""
+def test_index_stale_registry_fields():
+    """is_index_stale замечает правку developer/provider/harness."""
     import json
     import tempfile
     import elo as elo_mod
@@ -463,8 +471,9 @@ def test_index_stale_agent_provider():
         "models:\n"
         "  - id: m\n"
         "    name: \"M\"\n"
-        "    agent: Cursor\n"
-        "    provider: Anthropic\n"
+        "    developer: Anthropic\n"
+        "    provider: Cursor\n"
+        "    harness: Cursor\n"
         "    version: 1\n"
         "    added: 2026-01-01\n"
         "    status: active\n"
@@ -474,9 +483,10 @@ def test_index_stale_agent_provider():
         "updated": "2026-01-01",
         "matchups_digest": elo_mod.matchups_digest(),
         "models": {
-            "m": {"name": "M", "agent": "Cursor", "provider": "Anthropic",
-                  "added": "2026-01-01", "status": "active",
-                  "elo": 1200, "games": 0, "wins": 0, "losses": 0, "draws": 0},
+            "m": {"name": "M", "developer": "Anthropic", "provider": "Cursor",
+                  "harness": "Cursor", "added": "2026-01-01",
+                  "status": "active", "elo": 1200, "games": 0, "wins": 0,
+                  "losses": 0, "draws": 0},
         },
     }
     old_models, old_index = elo_mod.MODELS_PATH, elo_mod.INDEX_PATH
@@ -490,23 +500,36 @@ def test_index_stale_agent_provider():
             ip.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
             assert elo_mod.is_index_stale() is False
 
-            mp.write_text(models_yaml.replace("agent: Cursor", "agent: Devin"), encoding="utf-8")
+            mp.write_text(
+                models_yaml.replace("developer: Anthropic", "developer: OpenAI"),
+                encoding="utf-8",
+            )
             assert elo_mod.is_index_stale() is True
 
-            mp.write_text(models_yaml.replace("provider: Anthropic", "provider: OpenAI"), encoding="utf-8")
+            mp.write_text(
+                models_yaml.replace("provider: Cursor", "provider: OpenRouter"),
+                encoding="utf-8",
+            )
             assert elo_mod.is_index_stale() is True
 
-            # Реестр с agent, а кэш — старого формата (без agent) → устарел
+            mp.write_text(
+                models_yaml.replace("harness: Cursor", "harness: Devin"),
+                encoding="utf-8",
+            )
+            assert elo_mod.is_index_stale() is True
+
+            # Реестр с полями, а кэш — старого формата → устарел
             mp.write_text(models_yaml, encoding="utf-8")
             old_cache = dict(cache)
             old_cache["models"] = {
-                "m": {k: v for k, v in cache["models"]["m"].items() if k != "agent"},
+                "m": {k: v for k, v in cache["models"]["m"].items()
+                      if k not in ("developer", "harness")},
             }
             ip.write_text(json.dumps(old_cache, ensure_ascii=False), encoding="utf-8")
             assert elo_mod.is_index_stale() is True
     finally:
         elo_mod.MODELS_PATH, elo_mod.INDEX_PATH = old_models, old_index
-    print("is_index_stale agent/provider: OK")
+    print("is_index_stale developer/provider/harness: OK")
 
 
 def test_elo_dist_scale():
@@ -1007,7 +1030,7 @@ if __name__ == "__main__":
     test_get_coverage_answer_aware()
     test_get_run_progress()
     test_format_model_roundtrip()
-    test_index_stale_agent_provider()
+    test_index_stale_registry_fields()
     test_elo_dist_scale()
     test_journal_roundtrip()
     test_digest_line_endings()

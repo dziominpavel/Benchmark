@@ -80,20 +80,23 @@ MODELS_YAML = """\
 models:
   - id: alpha
     name: Alpha
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: active
   - id: beta
     name: Beta
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: active
   - id: gamma
     name: Gamma
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: archived
 """
@@ -112,8 +115,10 @@ answer_flags:
 """
 
 LOOKUPS_YAML = """\
-agents:
-  - Agent
+harnesses:
+  - Harness
+developers:
+  - Dev
 providers:
   - Prov
 """
@@ -419,7 +424,7 @@ def test_routes_smoke():
 
         # Подтверждение удаления значения справочника — на форме
         assert 'onsubmit="return confirmDelete(this)"' in settings_html
-        assert 'data-value="Agent"' in settings_html
+        assert 'data-value="Dev"' in settings_html
         assert "function confirmDelete" in settings_html
 
         # Подтверждение архивации модели — на форме редактирования
@@ -800,7 +805,7 @@ def test_pair_hints_island():
         ).get_data(as_text=True)
         assert f'value="{today}"' in html2
         assert '<option value="nope" selected' not in html2
-        assert re.search(r'<option value="beta" data-agent="[^"]*" selected>', html2)
+        assert re.search(r'<option value="beta" data-harness="[^"]*" selected>', html2)
         assert '<option value="T-001" selected>' in html2
     print("wave2 pair hints island: OK")
 
@@ -1750,17 +1755,18 @@ def test_wave3_rating_search_sort():
         _write(paths["models"], MODELS_YAML + """\
   - id: delta
     name: Delta
-    agent: Other
+    developer: Other
     provider: Other
+    harness: Other
     added: 2026-01-01
     status: active
 """)
         data_cache.clear()
-        # Комбинация с чипами агентов (И между группами)
-        html = client.get("/?q=elta&agents=Other").get_data(as_text=True)
+        # Комбинация с чипами разработчиков (И между группами)
+        html = client.get("/?q=elta&developers=Other").get_data(as_text=True)
         rows = _rating_rows(html)
         assert len(rows) == 1 and "model/delta" in rows[0]
-        html = client.get("/?q=elta&agents=Agent").get_data(as_text=True)
+        html = client.get("/?q=elta&developers=Dev").get_data(as_text=True)
         assert _rating_rows(html) == []
         assert "Ничего не найдено по запросу" in html and "elta" in html
         assert 'data-live-table hidden' in html
@@ -1803,9 +1809,9 @@ def test_wave3_rating_search_sort():
         assert 'href="/?sort=trend&amp;dir=desc"' in html
 
         # Ссылки сортировки сохраняют поиск и чипы
-        html = client.get("/?q=alpha&agents=Agent&sort=name&dir=asc").get_data(as_text=True)
-        assert 'href="/?q=alpha&amp;agents=Agent&amp;sort=name&amp;dir=desc"' in html
-        assert 'href="/?q=alpha&amp;agents=Agent&amp;sort=elo&amp;dir=desc"' in html
+        html = client.get("/?q=alpha&developers=Dev&sort=name&dir=asc").get_data(as_text=True)
+        assert 'href="/?q=alpha&amp;developers=Dev&amp;sort=name&amp;dir=desc"' in html
+        assert 'href="/?q=alpha&amp;developers=Dev&amp;sort=elo&amp;dir=desc"' in html
 
         # По умолчанию — по месту, без aria-sort и стрелок; комбобокс подключён
         html = client.get("/").get_data(as_text=True)
@@ -1861,8 +1867,9 @@ def test_rating_momentum_indicator():
         _write(paths["models"], MODELS_YAML + """\
   - id: delta
     name: Delta
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: active
 """)
@@ -2105,10 +2112,10 @@ def test_wave3_export_routes():
         assert text.startswith("\ufeff"), "CSV без BOM"
         lines = text.lstrip("\ufeff").rstrip("\r\n").split("\r\n")
         assert lines[0].startswith(
-            "Место;id;Имя;Компания;Агент;ELO;±;Игры;Победы;Поражения;Ничьи;Винрейт, %"
+            "Место;id;Имя;Разработчик;Провайдер;Харнесс;ELO;±;Игры;Победы;Поражения;Ничьи;Винрейт, %"
         )
-        assert lines[1].startswith(f"2;beta;Beta;Prov;Agent;{elo_beta};")
-        assert lines[2].startswith(f"1;alpha;Alpha;Prov;Agent;{elo_alpha};")
+        assert lines[1].startswith(f"2;beta;Beta;Dev;Prov;Harness;{elo_beta};")
+        assert lines[2].startswith(f"1;alpha;Alpha;Dev;Prov;Harness;{elo_alpha};")
 
         resp = client.get("/export/rating.json?sort=elo&dir=asc&q=beta")
         payload = resp.get_json()
@@ -2319,7 +2326,7 @@ def test_wave6_stats_rating():
         order = [
             "<h2>Рейтинг</h2>",
             "<h2>Динамика ELO</h2>",
-            "<h2>Агенты и компании</h2>",
+            "<h2>Разработчики, провайдеры и харнессы</h2>",
             "<h2>Взлёты и падения</h2>",
             "<h2>Сила оппозиции</h2>",
         ]
@@ -2497,8 +2504,9 @@ def test_wave6_stats_lines_picker():
 
         # Пусто: все модели архивные — блоки показывают заглушки
         _write(paths["models"], (
-            "models:\n  - id: gamma\n    name: Gamma\n    agent: Agent\n"
-            "    provider: Prov\n    added: 2026-01-01\n    status: archived\n"
+            "models:\n  - id: gamma\n    name: Gamma\n    developer: Dev\n"
+            "    provider: Prov\n    harness: Harness\n"
+            "    added: 2026-01-01\n    status: archived\n"
         ))
         data_cache.clear()
         empty = client.get("/stats").get_data(as_text=True)
@@ -2913,8 +2921,9 @@ def test_wave4_profile():
         _write(paths["models"], MODELS_YAML + """\
   - id: delta
     name: Delta
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: archived
 """)
@@ -3081,7 +3090,7 @@ def test_filter_settings_trigger():
         assert "Порядок чипов" not in html, "старый aria-label не остался"
 
         # «Сбросить» живёт в той же обёртке шапки, что и кнопка настроек
-        filtered = client.get("/?agents=Agent").get_data(as_text=True)
+        filtered = client.get("/?developers=Dev").get_data(as_text=True)
         actions = filtered.index('<span class="filter-head-actions">')
         rows = filtered.index('<div class="filter-rows">')
         assert actions < filtered.index('class="filter-reset"') < rows
@@ -3191,16 +3200,18 @@ def test_history_caption_divider():
             assert ("model-caption" in row) == ("history-divider" in row), \
                 f"{url}: разделитель и подпись разошлись"
 
-        # При включённых подписях на месте и подпись, и разделитель.
-        shown = row_of(client.get("/history?captions=show").get_data(as_text=True))
+        # По умолчанию подписи видны; скрываются только явным captions=hide.
+        shown = row_of(client.get("/history").get_data(as_text=True))
         assert "model-caption" in shown and "history-divider" in shown
+        hidden = row_of(client.get("/history?captions=hide").get_data(as_text=True))
+        assert "model-caption" not in hidden and "history-divider" not in hidden
 
         # Настройка не теряется при переходе на следующую страницу ленты.
         _write(paths["journal"], _history_journal(540))
         data_cache.clear()
-        paged = client.get("/history?captions=show").get_data(as_text=True)
-        assert re.search(r'href="/history\?page=2[^"]*captions=show"', paged), \
-            "пагинация сбрасывает показ подписей"
+        paged = client.get("/history?captions=hide").get_data(as_text=True)
+        assert re.search(r'href="/history\?page=2[^"]*captions=hide"', paged), \
+            "пагинация сбрасывает скрытие подписей"
     print("history caption divider: OK")
 
 
@@ -3210,9 +3221,9 @@ def _caption_inputs(html: str) -> list[str]:
 
 
 def test_caption_toggle_server():
-    """Переключатель «Отражать агент-компанию»: дефолт, `captions=show`,
-    невалидное значение; состояние переносится в бейдж, hidden-поля и
-    ссылку «Сбросить» (change caption-visibility-toggle)."""
+    """Переключатель «Отражать атрибуты модели»: дефолт — видны,
+    `captions=hide` — скрыты; состояние переносится в бейдж, hidden-поля
+    и ссылку «Сбросить»."""
     with _temp_storage():
         server.app.config["TESTING"] = True
         client = server.app.test_client()
@@ -3220,38 +3231,40 @@ def test_caption_toggle_server():
         def page(url: str) -> str:
             return client.get(url).get_data(as_text=True)
 
-        # Дефолт: флажок снят, подписи скрыты, параметра в адресе нет.
+        # Дефолт: флажок отмечен, подписи видны, параметра в адресе нет.
         default = page("/")
         boxes = _caption_inputs(default)
-        assert len(boxes) == 1, f"флажок подписи должен быть один: {boxes}"
-        assert 'type="checkbox"' in boxes[0], "флажок подписи не чекбокс"
-        assert "checked" not in boxes[0], "флажок подписи отмечен по умолчанию"
-        assert "подписи видны" not in default, "бейдж показывает не-дефолтное состояние"
+        assert len(boxes) == 2, f"ожидались флажок и hidden-компаньон: {boxes}"
+        checkbox = next(b for b in boxes if 'type="checkbox"' in b)
+        assert "checked" in checkbox, "флажок подписи снят по умолчанию"
+        assert "model-caption" in default, "подписи скрыты по умолчанию"
+        assert "подписи скрыты" not in default, "бейдж показывает не-дефолтное состояние"
         assert "captions=" not in default, "в дефолтном адресе лишний параметр"
 
-        # Включённый флажок: подписи видны, состояние живёт в URL.
-        shown = page("/?captions=show")
-        boxes = _caption_inputs(shown)
-        assert len(boxes) == 1, f"флажок подписи должен быть один: {boxes}"
-        assert "checked" in boxes[0], "флажок подписи не отмечен при captions=show"
-        assert "подписи видны" in shown, "бейдж не сообщает о подписях"
+        # Скрытие: флажок снят, подписи погашены, состояние живёт в URL.
+        hidden_page = page("/?captions=hide")
+        boxes = _caption_inputs(hidden_page)
+        checkbox = next(b for b in boxes if 'type="checkbox"' in b)
+        assert "checked" not in checkbox, "флажок подписи отмечен при captions=hide"
+        assert "model-caption" not in hidden_page, "подписи не скрылись"
+        assert "подписи скрыты" in hidden_page, "бейдж не сообщает о скрытии"
 
         # Ссылка «Сбросить» сохраняет состояние флажка.
-        history = page("/history?captions=show")
-        assert 'href="/history?captions=show"' in history, "«Сбросить» сбросил подписи"
+        history = page("/history?captions=hide")
+        assert 'href="/history?captions=hide"' in history, "«Сбросить» вернул подписи"
 
         # Hidden-поля отдельных форм страницы сохраняют состояние.
-        settings = page("/settings?captions=show")
+        settings = page("/settings?captions=hide")
         hidden = [i for i in _caption_inputs(settings) if 'type="hidden"' in i]
-        assert hidden, "hidden-поля не сохраняют показ подписей"
-        assert all('value="show"' in i for i in hidden), "hidden-поле с чужим значением"
+        assert hidden, "hidden-поля не сохраняют скрытие подписей"
+        assert all('value="hide"' in i for i in hidden), "hidden-поле с чужим значением"
 
-        # Невалидное значение — дефолт (флажок снят, подписи скрыты).
+        # Невалидное значение — дефолт (флажок отмечен, подписи видны).
         invalid = page("/?captions=lol")
         boxes = _caption_inputs(invalid)
-        assert len(boxes) == 1 and "checked" not in boxes[0], \
-            "невалидное значение не дефолт"
-        assert "подписи видны" not in invalid, "невалидное значение не дефолт"
+        checkbox = next(b for b in boxes if 'type="checkbox"' in b)
+        assert "checked" in checkbox, "невалидное значение не дефолт"
+        assert "model-caption" in invalid, "невалидное значение не дефолт"
     print("caption toggle server: OK")
 
 
@@ -3265,7 +3278,8 @@ def test_caption_hidden_per_page():
         def page(url: str) -> str:
             return client.get(url).get_data(as_text=True)
 
-        # Страницы с блоком «Фильтр»: подпись только при `captions=show`.
+        # Страницы с блоком «Фильтр»: подпись видна по умолчанию
+        # и скрывается только явным `captions=hide`.
         for url, marker in (
             ("/", "model-caption"),
             ("/add", "model-caption"),
@@ -3273,25 +3287,26 @@ def test_caption_hidden_per_page():
             ("/history", "model-caption"),
             ("/stats", "dist-caption"),
         ):
-            assert marker not in page(url), f"{url}: подпись выведена без флажка"
-            assert marker in page(f"{url}?captions=show"), f"{url}: подпись не вернулась"
+            assert marker in page(url), f"{url}: подпись не выведена по умолчанию"
+            assert marker not in page(f"{url}?captions=hide"), f"{url}: подпись не скрылась"
 
         # Страница задачи: блока «Фильтр» нет — подписи не гасятся.
         task_page = page("/task/T-001")
         assert "Проект: Benchmark" in task_page, "подпись проекта страницы задачи пропала"
         assert '<span class="model-caption">T-001</span>' in task_page, \
             "идентификатор таски не выведен"
-        assert "Prov · Agent" in task_page, "подпись модели на странице задачи пропала"
+        assert "Dev · Prov · Harness" in task_page, "подпись модели на странице задачи пропала"
 
         # Экспорт — это данные, а не вид: колонки подписи остаются.
         csv = client.get("/export/rating.csv?captions=show").get_data(as_text=True)
-        assert "Компания" in csv and "Агент" in csv, "в CSV экспорта нет колонок подписи"
+        assert "Разработчик" in csv and "Провайдер" in csv and "Харнесс" in csv, "в CSV экспорта нет колонок подписи"
         payload = json.loads(
             client.get("/export/rating.json?captions=show").get_data(as_text=True)
         )
         assert payload["rows"], "экспорт рейтинга пуст"
+        assert payload["rows"][0]["developer"] == "Dev"
         assert payload["rows"][0]["provider"] == "Prov"
-        assert payload["rows"][0]["agent"] == "Agent"
+        assert payload["rows"][0]["harness"] == "Harness"
     print("caption hidden per page: OK")
 
 

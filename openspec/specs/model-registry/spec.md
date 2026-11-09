@@ -11,13 +11,16 @@ CLI (`tools/register_model.py`, включая саморегистрацию `-
 ### Requirement: Формат реестра
 
 Модели SHALL храниться в `data/models.yaml` списком `models:`. Каждая запись:
-`id` (slug, стабильный), `name` (человекочитаемое имя), опциональные `provider`
-(компания-разработчик модели), `agent` (агент-обёртка; допустимые значения —
-справочник `data/lookups.yaml`, см. «Файл справочников»), `version`,
-`released`, `notes`; `added` — дата регистрации модели
-(`YYYY-MM-DD`, заполняется при регистрации, может быть задана вручную);
-`status`: `active` | `archived` (по умолчанию `active`).
-Комментарии-Шапка файла SHALL описывать формат и команды управления.
+`id` (slug, стабильный), `name` (человекочитаемое имя модели без харнесса и
+компании), опциональные `developer` (компания-разработчик модели), `provider`
+(провайдер доступа: OpenCode Go, OpenRouter, Vercel AI Gateway, Kilo Code,
+встроенный доступ харнесса — Cursor, Cognition, OpenAI), `harness` (харнесс:
+Codex, Cursor, Devin, OpenCode), `version`, `released`, `notes`; `added` — дата
+регистрации модели (`YYYY-MM-DD`, заполняется при регистрации, может быть
+задана вручную); `status`: `active` | `archived` (по умолчанию `active`).
+Допустимые значения `developer`/`provider`/`harness` — справочник
+`data/lookups.yaml` (см. «Файл справочников»). Комментарии-шапка файла SHALL
+описывать формат и команды управления.
 
 #### Scenario: Новая модель
 
@@ -34,23 +37,24 @@ CLI (`tools/register_model.py`, включая саморегистрацию `-
 
 - **WHEN** модель архивируется
 - **THEN** её status меняется на archived
-- **AND** метаданные (id, name, agent, provider, version, added) сохраняются
+- **AND** метаданные (id, name, developer, provider, harness, version, added) сохраняются
 
-#### Scenario: Агент и компания в записи
+#### Scenario: Разработчик, провайдер и харнесс в записи
 
-- **WHEN** модель зарегистрирована с `--agent Cursor` и `--provider Anthropic`
-- **THEN** запись содержит `agent: Cursor` и `provider: Anthropic`
-- **AND** серверные страницы показывают подпись `Anthropic · Cursor`
-- **AND** значения проходят фильтр по агенту и компании
+- **WHEN** модель зарегистрирована с `--developer Anthropic`, `--provider Cursor` и `--harness Cursor`
+- **THEN** запись содержит `developer: Anthropic`, `provider: Cursor`, `harness: Cursor`
+- **AND** серверные страницы показывают подпись `Anthropic · Cursor` (повтор Cursor схлопывается)
+- **AND** значения проходят фильтр по разработчику, провайдеру и харнессу
 
 ### Requirement: Регистрация через CLI
 
 `register_model.py` SHALL требовать `--id` и `--name`; `--version` обязателен в
-обычном режиме и опционален при `--auto`; `--provider` (компания) и `--agent`
-опциональны в обоих режимах, переданные значения SHALL записываться в реестр.
-Если непустое значение `--agent` или `--provider` отсутствует в справочнике
-(`data/lookups.yaml`), скрипт SHALL добавить его в справочник в конец
-соответствующего списка и сообщить об этом в выводе — регистрация MUST NOT
+обычном режиме и опционален при `--auto`; `--developer`, `--provider` и
+`--harness` опциональны в обоих режимах, переданные значения SHALL записываться
+в реестр. `--agent` SHALL оставаться синонимом `--harness` для старых скриптов.
+Если непустое значение `--developer`, `--provider` или `--harness` отсутствует
+в справочнике (`data/lookups.yaml`), скрипт SHALL добавить его в справочник в
+конец соответствующего списка и сообщить об этом в выводе — регистрация MUST NOT
 падать из-за значения вне справочника. Дубликат id без `--force` SHALL
 отклоняться (exit 1); при `--auto` существующий
 id — не ошибка (exit 0, «уже зарегистрирована»); при `--force` запись
@@ -66,7 +70,7 @@ id — не ошибка (exit 0, «уже зарегистрирована»); 
 
 #### Scenario: Явная дата регистрации
 
-- **WHEN** выполняется `register_model.py --id gpt-5 --name "GPT-5" --provider OpenAI --version gpt-5 --added 2026-01-15`
+- **WHEN** выполняется `register_model.py --id gpt-5 --name "GPT-5" --developer OpenAI --provider OpenAI --harness Codex --version gpt-5 --added 2026-01-15`
 - **THEN** запись содержит `added: 2026-01-15`
 
 #### Scenario: Уже зарегистрирована
@@ -75,34 +79,35 @@ id — не ошибка (exit 0, «уже зарегистрирована»); 
 - **THEN** скрипт сообщает «Модель уже зарегистрирована» и завершается успешно
 - **AND** `added` существующей записи не меняется
 
-#### Scenario: Регистрация с агентом и компанией
+#### Scenario: Регистрация с разработчиком, провайдером и харнессом
 
-- **WHEN** выполняется `register_model.py --id claude-sonnet-4.6 --name "Claude Sonnet 4.6" --agent Cursor --provider Anthropic --version sonnet-4.6`
-- **THEN** запись содержит `agent: Cursor` и `provider: Anthropic`
+- **WHEN** выполняется `register_model.py --id claude-sonnet-4.6 --name "Claude Sonnet 4.6" --developer Anthropic --provider Cursor --harness Cursor --version sonnet-4.6`
+- **THEN** запись содержит `developer: Anthropic`, `provider: Cursor`, `harness: Cursor`
 
-#### Scenario: Агент и компания не обязательны
+#### Scenario: Классификация не обязательна
 
-- **WHEN** выполняется `register_model.py --id test --name "Test" --version 1` без `--agent` и `--provider`
-- **THEN** запись создаётся с пустыми `agent` и `provider`
+- **WHEN** выполняется `register_model.py --id test --name "Test" --version 1` без `--developer`, `--provider` и `--harness`
+- **THEN** запись создаётся с пустыми `developer`, `provider` и `harness`
 - **AND** вызов завершается успешно
 
 #### Scenario: Новое значение попадает в справочник
 
-- **WHEN** выполняется `register_model.py --id amp-1 --name "Amp 1" --agent Amp --provider Sourcegraph --version 1`
-- **AND** значений `Amp` и `Sourcegraph` нет в справочнике
+- **WHEN** выполняется `register_model.py --id amp-1 --name "Amp 1" --developer Sourcegraph --provider Amp --harness Amp --version 1`
+- **AND** значений `Sourcegraph` и `Amp` нет в справочнике
 - **THEN** запись создаётся
-- **AND** `data/lookups.yaml` содержит `Amp` в `agents` и `Sourcegraph` в `providers`
+- **AND** `data/lookups.yaml` содержит `Amp` в `harnesses` и `providers`, `Sourcegraph` в `developers`
 - **AND** вывод содержит сообщение о добавлении значений в справочник
 
 ### Requirement: Регистрация через веб-UI
 
-Форма `/add` SHALL принимать название (обязательно) и опциональные поля «Агент»
-и «Компания», выбираемые из справочника (см. «Файл справочников»); значение вне
-справочника сервер SHALL отклонять с ошибкой. Slug генерируется (`slugify`):
-нижний регистр, не-алфанумерика → дефисы; пустое название после очистки —
-`model-N`; занятый id — суффикс `-2`, `-3`… Новая запись SHALL получать
-`status: active`, `added` (текущая дата), а также переданные `agent`
-и `provider`; реестр сортируется по id, `index.json` пересчитывается сразу.
+Форма `/add` SHALL принимать название (обязательно) и опциональные поля
+«Разработчик», «Провайдер» и «Харнесс», выбираемые из справочника (см. «Файл
+справочников»); значение вне справочника сервер SHALL отклонять с ошибкой. Slug
+генерируется (`slugify`): нижний регистр, не-алфанумерика → дефисы; пустое
+название после очистки — `model-N`; занятый id — суффикс `-2`, `-3`… Новая
+запись SHALL получать `status: active`, `added` (текущая дата), а также
+переданные `developer`, `provider` и `harness`; реестр сортируется по id,
+`index.json` пересчитывается сразу.
 
 #### Scenario: Добавление через UI
 
@@ -110,21 +115,21 @@ id — не ошибка (exit 0, «уже зарегистрирована»); 
 - **THEN** создаётся id `gpt-4o` со стартовым ELO 1200
 - **AND** запись содержит `added` с текущей датой
 
-#### Scenario: Добавление с агентом и компанией
+#### Scenario: Добавление с классификацией
 
-- **WHEN** вводится «Cursor Fable 5.2», агент «Cursor», компания «Anthropic»
-- **THEN** запись содержит `agent: Cursor` и `provider: Anthropic`
+- **WHEN** вводится «Claude Fable 5.2», разработчик «Anthropic», провайдер «Cursor», харнесс «Cursor»
+- **THEN** запись содержит `developer: Anthropic`, `provider: Cursor`, `harness: Cursor`
 - **AND** в списке «Уже в списке» под именем видна подпись `Anthropic · Cursor`
 
-#### Scenario: Пустые агент и компания
+#### Scenario: Пустая классификация
 
-- **WHEN** название заполнено, а поля «Агент» и «Компания» пусты
-- **THEN** запись создаётся с пустыми `agent` и `provider`
+- **WHEN** название заполнено, а поля «Разработчик», «Провайдер» и «Харнесс» пусты
+- **THEN** запись создаётся с пустыми `developer`, `provider` и `harness`
 - **AND** вызов завершается успешно
 
 #### Scenario: Значение вне справочника отклоняется
 
-- **WHEN** в POST /add_model приходит агент, которого нет в справочнике
+- **WHEN** в POST /add_model приходит разработчик, которого нет в справочнике
 - **THEN** сервер отклоняет запрос с ошибкой
 - **AND** новая запись не создаётся
 
@@ -139,7 +144,7 @@ id — не ошибка (exit 0, «уже зарегистрирована»); 
 
 - **WHEN** выполняется `archive_model.py claude-sonnet-4.5`
 - **THEN** status в `data/models.yaml` меняется на archived
-- **AND** метаданные (id, name, agent, provider, version, added) сохраняются
+- **AND** метаданные (id, name, developer, provider, harness, version, added) сохраняются
 - **AND** старые вердикты остаются в `data/matchups/`
 
 #### Scenario: Архивация несуществующей модели
@@ -194,17 +199,18 @@ ELO и статистика (W/L/D, games) SHALL храниться только
 - **THEN** каждая модель содержит `status`
 - **AND** `pairing-algorithm` исключает модели со `status: archived`
 
-### Requirement: Агент и фирма модели в index.json
+### Requirement: Разработчик, провайдер и харнесс в index.json
 
-`data/index.json["models"][<id>]` SHALL содержать поля `agent` и `provider`,
-скопированные из `data/models.yaml` (пустая строка, если поле не задано).
-Серверные страницы SHALL брать подписи `Компания · Агент` и значения фильтров из
-`index.json`, без повторного чтения `data/models.yaml`.
+`data/index.json["models"][<id>]` SHALL содержать поля `developer`, `provider`
+и `harness`, скопированные из `data/models.yaml` (пустая строка, если поле не
+задано). Серверные страницы SHALL брать подписи
+`Разработчик · Провайдер · Харнесс` и значения фильтров из `index.json`, без
+повторного чтения `data/models.yaml`.
 
-#### Scenario: Агент и компания в кэше
+#### Scenario: Классификация в кэше
 
-- **WHEN** `data/index.json` сгенерирован, а у модели в реестре `agent: Cursor` и `provider: Anthropic`
-- **THEN** запись `models.<id>` содержит `"Cursor"` и `"Anthropic"`
+- **WHEN** `data/index.json` сгенерирован, а у модели в реестре `developer: Anthropic`, `provider: Cursor`, `harness: Cursor`
+- **THEN** запись `models.<id>` содержит `"Anthropic"`, `"Cursor"` и `"Cursor"`
 - **AND** серверная страница показывает подпись `Anthropic · Cursor` из кэша
 
 ### Requirement: Визуальная пометка archived
@@ -219,17 +225,17 @@ Leaderboard (серверная страница) SHALL визуально от�
 
 ### Requirement: Файл справочников
 
-`data/lookups.yaml` SHALL хранить допустимые значения полей `agent` и `provider`
-двумя списками простых строк: `agents:` и `providers:`. Порядок значений в файле
-SHALL задавать порядок их вывода в таблицах секции «Справочники», выпадающих
-списках форм и других местах выбора значения. Файл SHALL коммититься в git
-и MAY редактироваться вручную; при отсутствии файла SHALL считаться, что
-справочники пусты (все значения реестра — «вне справочника»), а страницы
-работают без ошибок.
+`data/lookups.yaml` SHALL хранить допустимые значения полей `harness`,
+`developer` и `provider` тремя списками простых строк: `harnesses:`,
+`developers:` и `providers:`. Порядок значений в файле SHALL задавать порядок их
+вывода в таблицах секции «Справочники», выпадающих списках форм и других местах
+выбора значения. Файл SHALL коммититься в git и MAY редактироваться вручную;
+при отсутствии файла SHALL считаться, что справочники пусты (все значения
+реестра — «вне справочника»), а страницы работают без ошибок.
 
 #### Scenario: Файл и порядок значений
 
-- **WHEN** `data/lookups.yaml` содержит `agents: [Codex, Cursor, Devin, OpenCode]`
+- **WHEN** `data/lookups.yaml` содержит `harnesses: [Codex, Cursor, Devin, OpenCode]`
 - **THEN** таблицы и выпадающие списки показывают значения в порядке файла
 
 #### Scenario: Отсутствующий файл
@@ -264,6 +270,6 @@ SHALL NOT менять ELO и вердикты. Значения реестра,
 
 #### Scenario: Ручное значение вне справочника
 
-- **WHEN** в `data/models.yaml` вручную задан `provider: Zhipu`, которого нет в справочнике
+- **WHEN** в `data/models.yaml` вручную задан `developer: Zhipu`, которого нет в справочнике
 - **THEN** страницы показывают `Zhipu` как значение «вне справочника»
 - **AND** страницы, фильтры и регистрация работают без ошибок

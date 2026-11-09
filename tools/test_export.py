@@ -52,20 +52,23 @@ MODELS_YAML = """\
 models:
   - id: alpha
     name: Alpha
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: active
   - id: beta
     name: Beta
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: active
   - id: gamma
     name: Gamma
-    agent: Agent
+    developer: Dev
     provider: Prov
+    harness: Harness
     added: 2026-01-01
     status: archived
 """
@@ -84,8 +87,10 @@ answer_flags:
 """
 
 LOOKUPS_YAML = """\
-agents:
-  - Agent
+harnesses:
+  - Harness
+developers:
+  - Dev
 providers:
   - Prov
 """
@@ -680,7 +685,7 @@ def test_export_stats_analytics():
             assert "interval-group-label" not in stats, "в слепке осталась надпись группы"
 
             # Остальные карточки на месте
-            assert "Агенты и компании" in stats and "card-subtitle" in stats
+            assert "Разработчики, провайдеры и харнессы" in stats and "card-subtitle" in stats
             assert "Взлёты и падения" in stats and "delta-list" in stats
             assert "Сила оппозиции" in stats
             assert "Остывшие" not in stats
@@ -784,11 +789,10 @@ def test_export_profile():
 
 
 def test_export_captions_toggle():
-    """Слепок повторяет переключатель «Отражать агент-компанию».
+    """Слепок повторяет переключатель «Отражать атрибуты модели».
 
-    Подписи в статике предрендерены (это данные), но по умолчанию скрыты:
-    класс «captions-off» стоит в разметке, а показ ведёт клиентский слой
-    по `?captions=show` — как в живой консоли.
+    Подписи в статике предрендерены и видны по умолчанию; скрытие ведёт
+    клиентский слой по `?captions=hide` — как в живой консоли.
     """
     with _temp_storage():
         with tempfile.TemporaryDirectory(prefix="bench_mirror_captions_") as out:
@@ -798,13 +802,13 @@ def test_export_captions_toggle():
             index = (root / "index.html").read_text(encoding="utf-8")
             history = (root / "history" / "index.html").read_text(encoding="utf-8")
 
-            # Флажок «Отражать агент-компанию» есть в панели настроек.
+            # Флажок «Отражать атрибуты модели» есть в панели настроек.
             assert 'name="captions" value="show"' in index, "в слепке нет флажка подписи"
             assert 'name="captions" value="show"' in history, "в слепке истории нет флажка"
 
-            # Подписи предрендерены (данные), но по умолчанию скрыты.
-            assert "Prov · Agent" in index, "подписи не попали в статику"
-            assert 'class="captions-off"' in index, "нет класса «подписи скрыты»"
+            # Подписи предрендерены (данные) и видны по умолчанию.
+            assert "Dev · Prov · Harness" in index, "подписи не попали в статику"
+            assert 'class="captions-off"' not in index, "подписи скрыты по умолчанию"
             css = (root / "static" / "css" / "console.css").read_text(encoding="utf-8")
             assert "body.captions-off .model-caption" in css, "нет правила гашения подписи"
 
@@ -816,10 +820,11 @@ def test_export_captions_toggle():
             assert 'input[name="captions"]' in script, "mirror.js не знает про флажок"
             assert 'params.get("captions")' in script, "mirror.js не читает параметр"
             assert "applyCaptions" in script, "mirror.js не применяет состояние подписей"
+            assert '!== "hide"' in script, "mirror.js не знает про дефолт «видны»"
 
             # Остров реестра сохраняет подписи (это данные, а не вид).
             island = _island_of(index, "mirror-models")
-            assert island["alpha"]["c"] == "Prov · Agent", "подпись не сохранена в острове"
+            assert island["alpha"]["c"] == "Dev · Prov · Harness", "подпись не сохранена в острове"
     print("export captions toggle: OK")
 
 

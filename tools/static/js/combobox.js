@@ -4,8 +4,8 @@
  * Подключается только в live-режиме консоли (shell.html); в слепке скрипт не
  * грузится, и селекты остаются обычными. Для каждого select[data-combobox]
  * строится текстовый input с ролью combobox и listbox: фильтрация опций без
- * серверных запросов (подстрока имени/id), группировка опций по агенту
- * (data-agent), управление клавиатурой (↓/↑/Enter/Esc), выбор кликом.
+ * серверных запросов (подстрока имени/id), группировка опций по харнессу
+ * (data-harness), управление клавиатурой (↓/↑/Enter/Esc), выбор кликом.
  *
  * Выбор пишется в исходный select и диспатчит change — страницы слушают его
  * для автопереходов (фильтр истории) и валидации (форма вердикта). Blur и
@@ -28,8 +28,8 @@
       emptyOption && emptyOption.value === ""
         ? optionLabel(emptyOption)
         : "Начните вводить имя";
-    const groupByAgent = Array.prototype.some.call(select.options, (option) => {
-      return option.dataset && option.dataset.agent;
+    const groupByHarness = Array.prototype.some.call(select.options, (option) => {
+      return option.dataset && option.dataset.harness;
     });
 
     const wrap = document.createElement("div");
@@ -59,15 +59,15 @@
     list.setAttribute("role", "listbox");
     list.hidden = true;
 
-    // Опции списка — по элементу на опцию select; заголовки групп — агент.
+    // Опции списка — по элементу на опцию select; заголовки групп — харнесс.
     const options = [];
     const headings = [];
     let currentGroup = null;
     Array.prototype.forEach.call(select.options, (option, index) => {
-      const agent = (option.dataset && option.dataset.agent) || "";
+      const harness = (option.dataset && option.dataset.harness) || "";
       let heading = null;
-      if (groupByAgent) {
-        const group = agent || "без агента";
+      if (groupByHarness) {
+        const group = harness || "без харнесса";
         if (group !== currentGroup) {
           currentGroup = group;
           heading = document.createElement("div");
