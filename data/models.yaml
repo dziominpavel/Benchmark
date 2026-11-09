@@ -65,14 +65,6 @@ models:
     version: 
     added: 2026-09-06
     status: active
-  - id: cursor-fable-5-2-max
-    name: "Claude Fable 5.2 Max"
-    developer: Anthropic
-    provider: Cursor
-    harness: Cursor
-    version: 
-    added: 2026-11-09
-    status: active
   - id: cursor-gemini-3-8-flash-high
     name: "Gemini 3.8 Flash High"
     developer: Google
