@@ -5,6 +5,7 @@ answer_flags:
     codex-gpt-5-6-terra-09-2026: true
     cursor-composer-2-5: true
     cursor-fable-5-1-1m-max: true
+    cursor-fable-5-2-max-grok-4-7-tail: true
     cursor-gemini-3-8-flash-high: true
     cursor-grok-4-6: true
     cursor-grok-4-6-low: true

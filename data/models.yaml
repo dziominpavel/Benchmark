@@ -65,6 +65,15 @@ models:
     version: 
     added: 2026-09-06
     status: active
+  - id: cursor-fable-5-2-max-grok-4-7-tail
+    name: "Claude Fable 5.2 Max + Grok 4.7 (композит)"
+    developer: Anthropic
+    provider: Cursor
+    harness: Cursor
+    version: 
+    added: 2026-11-10
+    status: active
+    notes: "Прогон Fable 5.2 остановлен лимитом токенов; финальный анализ и ответ дописаны Grok 4.7. Рейтинг композитный, не чистое качество Fable."
   - id: cursor-gemini-3-8-flash-high
     name: "Gemini 3.8 Flash High"
     developer: Google
