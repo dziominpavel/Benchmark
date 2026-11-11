@@ -11,7 +11,10 @@
  *   [data-live-search="local|remote"]  корень поиска (body страницы);
  *   [data-live-param]                  имя GET-параметра поиска;
  *   [data-live-input]                  поле ввода;
- *   [data-search]                      строка local-поиска;
+ *   [data-search]                      строка local-поиска (таблица или
+ *                                      пункт секции архива);
+ *   [data-archived-section]            секция архива local-поиска;
+ *   [data-archived-count]              счётчик секции архива;
  *   [data-hit="1"]                     строка, прошедшая отбор (подсветка);
  *   [data-live-results]                контейнер remote-результатов;
  *   [data-live-count-value]            значение счётчика;
@@ -87,8 +90,20 @@
   function initLocal(root, input, status) {
     const param = root.dataset.liveParam || "q";
     const highlightMode = root.dataset.liveHighlight === "1";
-    const rows = Array.from(root.querySelectorAll("[data-search]"));
     const table = root.querySelector("[data-live-table]");
+    /* Строки таблицы и пункты секции архива несут один data-search, но
+       считаются раздельно: таблица сужается целиком, секция архива — своим
+       счётчиком. */
+    const rows = table ? Array.from(table.querySelectorAll("[data-search]")) : [];
+    const archivedItems = Array.from(
+      root.querySelectorAll("[data-archived-section] [data-search]")
+    );
+    const archivedSections = Array.from(
+      root.querySelectorAll("[data-archived-section]")
+    );
+    const archivedCounts = Array.from(
+      root.querySelectorAll("[data-archived-count]")
+    );
     const emptyStates = Array.from(root.querySelectorAll("[data-live-empty]"));
     const countValues = Array.from(root.querySelectorAll("[data-live-count-value]"));
     const hitsValues = Array.from(root.querySelectorAll("[data-live-hits-value]"));
@@ -134,6 +149,21 @@
             row.classList.remove("filter-miss");
           }
         }
+      }
+
+      /* Секция архива: поиск по имени/id, как и у таблицы, но счётчик и
+         видимость секции собственные — при нуле совпадений она скрывается
+         и возвращается, когда запрос очищен. */
+      let archivedVisible = 0;
+      for (const item of archivedItems) {
+        const hay = normalize(item.dataset.search || "");
+        const show = !needle || hay.indexOf(needle) !== -1;
+        item.hidden = !show;
+        if (show) archivedVisible += 1;
+      }
+      for (const el of archivedCounts) el.textContent = String(archivedVisible);
+      for (const section of archivedSections) {
+        section.hidden = archivedVisible === 0;
       }
 
       for (const el of countValues) el.textContent = String(visible);

@@ -1026,7 +1026,9 @@ tr.archived.filter-miss:hover td { opacity: 0.85; }
 tr[data-search][hidden],
 [data-live-table][hidden],
 [data-live-empty][hidden],
-[data-live-reset][hidden] { display: none !important; }
+[data-live-reset][hidden],
+[data-archived-section][hidden],
+[data-archived-section] li[hidden] { display: none !important; }
 
 .visually-hidden {
   position: absolute;

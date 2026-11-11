@@ -15,6 +15,10 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
 - Реестр моделей: вместо «агент + компания» теперь три параметра — разработчик, провайдер доступа и харнесс.
 - Подписи моделей с разработчиком, провайдером и харнессом теперь видны по умолчанию.
 
+**Исправлено**
+
+- Поиск по имени модели теперь сужает и блок «Архивные модели», а его счётчик пересчитывается.
+
 ### Изменено
 
 - change model-registry-v3: поле `agent` заменено на `harness`, старое поле
@@ -24,6 +28,19 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
   параметра, подписи видны по умолчанию, локальный архив ответов разложен по
   `data/answers/<T-NNN>/<harness>/<name>/`, добавлены миграции
   `tools/migrate_registry_v3.py` и `tools/migrate_answers_v3.py`, тесты обновлены.
+
+### Исправлено
+
+- Главная: секция «Архивные модели (N)» учитывает `q` — `archived_list`
+  фильтруется по `model_matches_query` (копии получают `search_text` и
+  `matches_query`, `archived_visible` даёт счётчик); живой поиск сужает
+  пункты по `data-search` и скрывает секцию при нуле совпадений
+  (`tools/static/js/live-search.js`), слепок — `mirror.js`
+  (`matchesSearch(li.dataset.search)`), CSS — `[data-archived-section]` и
+  `li[hidden]`; очистка поля возвращает все пункты.
+- Тесты: `tools/test_data_cache.py` — `test_archive_section_search` и
+  контракт live-маркеров; `tools/test_export.py` — маркер поиска в секции
+  архива слепка. Спеки `leaderboard-ui` и `static-mirror` обновлены.
 
 ## [0.5.0] — 2026-10-30 (MINOR)
 

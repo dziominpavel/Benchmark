@@ -1822,6 +1822,38 @@ def test_wave3_rating_search_sort():
     print("wave3 rating search and sort: OK")
 
 
+def test_archive_section_search():
+    """Секция «Архивные модели (N)»: поиск q сужает её, как и таблицу."""
+    with _temp_storage() as paths:
+        server.app.config["TESTING"] = True
+        client = server.app.test_client()
+
+        # Совпадение с архивной моделью: пункт виден, счётчик 1, секция открыта
+        html = client.get("/?q=gamm").get_data(as_text=True)
+        section = re.search(r'<details class="archived-section"[^>]*>', html)
+        assert section, "секция архива пропала"
+        assert " hidden" not in section.group(0), "секция скрыта при совпадении"
+        assert "Архивные модели (<span data-archived-count>1</span>)" in html
+        item = re.search(r'<li[^>]*data-search="gamma gamma"[^>]*>', html)
+        assert item and " hidden" not in item.group(0)
+
+        # Поиск мимо архива: пункты и секция скрыты, счётчик 0
+        html = client.get("/?q=alph").get_data(as_text=True)
+        section = re.search(r'<details class="archived-section"[^>]*>', html)
+        assert section and " hidden" in section.group(0)
+        assert "Архивные модели (<span data-archived-count>0</span>)" in html
+        items = re.findall(r'<li[^>]*data-search="[^"]*"[^>]*>', html)
+        assert items and all(" hidden" in item for item in items)
+
+        # Пустой запрос: все архивные пункты возвращаются
+        html = client.get("/").get_data(as_text=True)
+        section = re.search(r'<details class="archived-section"[^>]*>', html)
+        assert section and " hidden" not in section.group(0)
+        assert "Архивные модели (<span data-archived-count>1</span>)" in html
+        assert re.search(r'<li[^>]*data-search="gamma gamma"[^>]*>', html)
+    print("archive section search: OK")
+
+
 def test_rating_momentum_indicator():
     """Главная: стрелка — заметное движение рейтинга за 10 личных игр."""
     with _temp_storage() as paths:
@@ -1943,6 +1975,8 @@ def test_live_search_main_contract():
         assert "data-live-empty" in html
         assert "data-live-reset" in html
         assert "data-live-link" in html
+        assert "data-archived-section" in html, "секция архива без live-маркера"
+        assert "data-archived-count" in html, "счётчик архива без live-маркера"
         assert 'data-live-status' in html and 'aria-live="polite"' in html
         # Ссылка сортировки и экспорта помечены для синхронизации
         assert 'class="sort-link" data-live-link' in html
@@ -1971,6 +2005,8 @@ def test_live_search_main_contract():
             html = client.get("/").get_data(as_text=True)
             assert 'name="q"' in html and "filter-search" in html
             assert "data-search=" in html
+            assert "data-archived-section" in html
+            assert "data-archived-count" in html
             assert "data-live-input" not in html
             assert "data-live-search" not in html
             assert "live-search.js" not in html
@@ -3338,6 +3374,7 @@ if __name__ == "__main__":
     test_wave3_history_row_anchor()
     test_wave3_history_controls()
     test_wave3_rating_search_sort()
+    test_archive_section_search()
     test_rating_momentum_indicator()
     test_live_search_main_contract()
     test_live_search_history_fragment()

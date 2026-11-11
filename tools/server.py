@@ -1883,11 +1883,11 @@ INDEX_TEMPLATE = """{% extends "shell.html" %}
         </div>
         {% endif %}
         {% if filter == 'active' and archived_list and filter_view == 'hide' %}
-        <details class="archived-section">
-          <summary>Архивные модели ({{ archived_list|length }})</summary>
+        <details class="archived-section" data-archived-section{% if not archived_visible %} hidden{% endif %}>
+          <summary>Архивные модели (<span data-archived-count>{{ archived_visible }}</span>)</summary>
           <ul>
             {% for a in archived_list %}
-            <li>
+            <li data-search="{{ a.search_text }}"{% if not a.matches_query %} hidden{% endif %}>
               <span class="archived-name">
                 <a href="{{ url_for('model_page', model_id=a.id, developers=filter_developers_csv or none, providers=filter_providers_csv or none, harnesses=filter_harnesses_csv or none) }}" class="edit-link">{{ a.name }}</a>
                 {% if a.caption %}<span class="model-caption">{{ a.caption }}</span>{% endif %}
@@ -4163,6 +4163,14 @@ def leaderboard():
     archived_list = [dict(info) for info in archived_list]
     for info in archived_list:
         info["caption"] = page_caption(info)
+        # Живой поиск сужает и секцию архива: сервер отдаёт все архивные
+        # строки (после чипов), клиент переключает hidden по data-search, а
+        # без скрипта несовпавшие пункты скрыты уже в разметке.
+        info["search_text"] = (
+            f"{info.get('name', '')} {info.get('id', '')}".casefold()
+        )
+        info["matches_query"] = model_matches_query(info, query)
+    archived_visible = sum(1 for info in archived_list if info["matches_query"])
 
     # Индикаторы движения рейтинга (пул детерминирован парой
     # highlight/filter_mode) проставлены rating_selection; здесь только
@@ -4202,6 +4210,7 @@ def leaderboard():
         medals=medals,
         medal_icons=["🥇", "🥈", "🥉"],
         archived_list=archived_list,
+        archived_visible=archived_visible,
         current_task=current_task,
         pre_a=pre_a,
         pre_b=pre_b,

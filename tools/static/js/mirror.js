@@ -567,7 +567,8 @@
       let shown = 0;
       section.querySelectorAll("li").forEach((li) => {
         const mid = modelIdFromLink(li);
-        const ok = !mid || passesTags(mid, st.developerSel, st.providerSel, st.harnessSel);
+        const ok = (!mid || passesTags(mid, st.developerSel, st.providerSel, st.harnessSel))
+          && matchesSearch(li.dataset.search || "", st.q);
         setShown(li, ok);
         if (ok) shown += 1;
       });

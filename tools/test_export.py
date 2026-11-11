@@ -496,6 +496,8 @@ def test_export_mirror_layer():
                            "mirror-stats-data", "HISTORY_PAGE_SIZE",
                            "rating-legend", "MIRROR_ROOT", "modelHref"):
                 assert marker in script, f"mirror.js: нет маркера {marker}"
+            assert "matchesSearch(li.dataset.search" in script, (
+                "mirror.js: поиск не сужает секцию архива")
             # Клиентский слой строит ссылки моделей от корня слепка, а не от
             # корня домена: на витрине «/model/…» уводит за пределы слепка.
             assert 'href="/model/' not in script, "mirror.js: корневая ссылка модели"
