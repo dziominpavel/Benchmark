@@ -43,10 +43,16 @@
 | `@benchmark-judge T-NNN` | Судья: оценивает оба ответа (5 критериев, /50), выбирает победителя; не вызывает `record_verdict.py` |
 | `@benchmark-batch-judge [N] [T-NNN]` | Батч-судейство: N пар из очереди, параллельные судьи, автозапись через `record_verdict` (по умолчанию N=10) |
 
-Три основных skill продублированы для трёх сред: `.opencode/skills/`,
-`.cursor/skills/`, `.devin/skills/`. `benchmark-batch-judge` — в OpenCode
-и в Cursor (скилл; без отдельной `.cursor/commands/`, иначе `/` дублирует
-пункт); параллельные судейские сессии, координатор сам пишет вердикты.
+Три основных skill продублированы для четырёх сред: `.opencode/skills/`,
+`.cursor/skills/`, `.devin/skills/`, `.dsh/skills/`. `benchmark-batch-judge` —
+в OpenCode, Cursor и DeepSeek Harness (скилл; без отдельной
+`.cursor/commands/`, иначе `/` дублирует пункт); параллельные судейские
+сессии, координатор сам пишет вердикты.
+
+В DeepSeek Harness те же команды вызываются слэшем: `/benchmark-run-a T-NNN`,
+`/benchmark-run-b T-NNN`, `/benchmark-judge T-NNN`,
+`/benchmark-batch-judge [N] [T-NNN]`.
+
 Ручное судейство без skill — по шаблону [docs/judge-prompt.md](docs/judge-prompt.md),
 запись результата — через веб-сервер.
 
@@ -72,12 +78,12 @@ Benchmark/
 │   │   └── T-NNN-<slug>/
 │   │       └── task.md    # Описание + критерии + baseline_commit (опц.)
 │   │
-│   ├── answers/           # Ответы (не в git): modelA.md / modelB.md (skills) или <Harness>/<name>/ (архив)
+│   ├── answers/           # Ответы (не в git): modelA.md / modelB.md (skills) или <Harness>/<provider>/<name>/ (архив)
 │   │   ├── _TEMPLATE.md
 │   │   └── T-NNN/
 │   │       ├── modelA.md
 │   │       ├── modelB.md
-│   │       └── <Harness>/<name>/  # локальный архив: modelA.md / modelB.md
+│   │       └── <Harness>/<provider>/<name>/  # локальный архив: modelA.md / modelB.md
 │   │
 │   └── matchups/          # Вердикты (попарные сравнения)
 │       └── journal.jsonl  # Append-only журнал: строка = событие (вердикт / tombstone)
@@ -100,6 +106,7 @@ Benchmark/
 │   ├── migrate_general_to_t001.py  # Одноразовая миграция вердиктов из general → T-001
 │   ├── migrate_registry_v3.py      # Миграция реестра к developer/provider/harness
 │   ├── migrate_answers_v3.py       # Раскладка архива ответов по харнессам
+│   ├── migrate_answers_v4.py       # Раскладка архива ответов по харнессам и провайдерам
 │   ├── export_web.py      # Статический слепок консоли для витрины (read-only, относительные ссылки)
 │   └── test_export.py     # Тесты слепка: read-only режим, состав, ссылки, клиентский слой
 │

@@ -28,6 +28,9 @@ python tools/register_task.py --title "Bug Hunt — NewModule" \
 @benchmark-run-b T-001
 ```
 
+В DeepSeek Harness те же прогоны вызываются слэшем: `/benchmark-run-a T-001`
+и `/benchmark-run-b T-001`.
+
 Каждый skill сам: читает `task.md`, создаёт отдельную копию проекта
 (`git clone --no-local --no-checkout`), делает `git checkout <baseline_commit>`
 только в ней, анализирует код и пишет анонимный ответ
@@ -46,6 +49,8 @@ skill сообщает, сколько багов найдено. Реальны
 ```
 @benchmark-judge T-001
 ```
+
+В DeepSeek Harness судейство вызывается так: `/benchmark-judge T-001`.
 
 Skill проверяет оба ответа, читает задачу, при противоречиях сверяется
 с кодом проекта, оценивает по 5 критериям (полнота, точность, качество кода,
@@ -125,8 +130,8 @@ uv run python tools/register_model.py --auto --id gemini-3-pro --name "Gemini 3 
 
 Затем:
 1. Ответ модели на задачу — каталог
-   `data/answers/T-001/<harness>/<точное name из models.yaml>/` с `*.md`
-   (локально, не в git; группировка по харнессу разводит одноимённые модели).
+   `data/answers/T-001/<harness>/<provider>/<точное name из models.yaml>/` с `*.md`
+   (локально, не в git; харнесс и провайдер разводят одноимённые модели).
 2. Проставить флаг ответа на этот таск (UI «Наличие ответов» или запись в
    `answer_flags.yaml`). Если файл уже был до регистрации — флаг ставить сразу,
    иначе mismatch «файл есть, флаг false» и пара не попадёт в обычные READY.

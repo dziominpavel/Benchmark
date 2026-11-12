@@ -10,6 +10,10 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
 
 ## [Unreleased]
 
+**Добавлено**
+
+- В DeepSeek Harness появились команды бенчмарка: прогоны A/B, судья и батч-судейство.
+
 **Изменено**
 
 - Реестр моделей: вместо «агент + компания» теперь три параметра — разработчик, провайдер доступа и харнесс.
@@ -19,6 +23,14 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
 
 - Поиск по имени модели теперь сужает и блок «Архивные модели», а его счётчик пересчитывается.
 
+### Добавлено
+
+- DeepSeek Harness: скиллы `.dsh/skills/benchmark-run-a`, `benchmark-run-b`,
+  `benchmark-judge`, `benchmark-batch-judge` — команды `/benchmark-run-a [T-NNN]`,
+  `/benchmark-run-b [T-NNN]`, `/benchmark-judge [T-NNN]` и
+  `/benchmark-batch-judge [N] [T-NNN]`; тексты повторяют `.opencode`-версии,
+  батч запускает судей через tool `subagent`, README и docs обновлены.
+
 ### Изменено
 
 - change model-registry-v3: поле `agent` заменено на `harness`, старое поле
@@ -26,8 +38,9 @@ Releases не производятся: релиз — это git-тег `vX.Y.Z
   доступа). Названия моделей очищены от харнессов, `data/lookups.yaml` хранит
   три справочника, UI-фильтры/формы/экспорт/статистика переведены на три
   параметра, подписи видны по умолчанию, локальный архив ответов разложен по
-  `data/answers/<T-NNN>/<harness>/<name>/`, добавлены миграции
-  `tools/migrate_registry_v3.py` и `tools/migrate_answers_v3.py`, тесты обновлены.
+  `data/answers/<T-NNN>/<harness>/<provider>/<name>/`, добавлены миграции
+  `tools/migrate_registry_v3.py`, `tools/migrate_answers_v3.py` и
+  `tools/migrate_answers_v4.py`, тесты обновлены.
 
 ### Исправлено
 
