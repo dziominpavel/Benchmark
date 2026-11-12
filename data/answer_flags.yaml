@@ -27,6 +27,7 @@ answer_flags:
     opencode-claude-haiku-5-5-max: true
     opencode-deepseek-v4-1-flash-1017-max: true
     opencode-deepseek-v4-1-flash-free-max: true
+    opencode-ernie-5-5-flash-preview-free-high: true
     opencode-fledge-alpha-free: true
     opencode-flint-free: true
     opencode-free-model-router-20261024: true
@@ -35,6 +36,7 @@ answer_flags:
     opencode-grok-4-7-xhigh: true
     opencode-hy4-preview-high: true
     opencode-iceman-contributor-free: true
+    opencode-inkling-2-small-free-max: true
     opencode-inkling-free-max: true
     opencode-inkling-small-free-max: true
     opencode-kimi-k3-1-pro-max: true

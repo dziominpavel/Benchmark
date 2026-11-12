@@ -244,6 +244,15 @@ models:
     version: 
     added: 2026-10-15
     status: active
+  - id: opencode-ernie-5-5-flash-preview-free-high
+    name: "ERNIE 5.5 Flash Preview Free High"
+    developer: Baidu
+    provider: OpenRouter
+    harness: OpenCode
+    version: 
+    added: 2026-11-11
+    status: active
+    notes: "OpenRouter free tier; reasoning effort High"
   - id: opencode-fledge-alpha-free
     name: "Fledge Alpha Free Max"
     developer: Unknown
@@ -315,6 +324,15 @@ models:
     added: 2026-10-25
     status: archived
     notes: "stealth model; strongest lead is Microsoft MAI (self-identification plus tokenizer match with MAI Thinking 1), not officially confirmed"
+  - id: opencode-inkling-2-small-free-max
+    name: "Inkling 2 Small Free Max"
+    developer: Thinking Machines Lab
+    provider: OpenRouter
+    harness: OpenCode
+    version: free-max
+    added: 2026-11-11
+    status: active
+    notes: "OpenRouter free tier; reasoning effort Max"
   - id: opencode-inkling-free-max
     name: "Inkling Free Max"
     developer: Thinking Machines Lab
