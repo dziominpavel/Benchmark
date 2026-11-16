@@ -305,6 +305,14 @@ models:
     version: 
     added: 2026-09-22
     status: active
+  - id: opencode-hy4-flash-free-high
+    name: "Hy4 Flash Free High"
+    developer: Tencent
+    provider: OpenCode Go
+    harness: OpenCode
+    version: 
+    added: 2026-11-16
+    status: active
   - id: opencode-hy4-preview-high
     name: "Hy4 Preview High"
     developer: Tencent
@@ -391,6 +399,14 @@ models:
     version: 
     added: 2026-10-02
     status: active
+  - id: opencode-ling-3-2-flash-free
+    name: "Ling 3.2 Flash Free"
+    developer: Ant Group
+    provider: OpenRouter
+    harness: OpenCode
+    version: 
+    added: 2026-11-16
+    status: active
   - id: opencode-longcat-2-5-preview-free
     name: "LongCat 2.5 Preview Free"
     developer: Meituan
@@ -464,6 +480,14 @@ models:
     version: 3.8
     released: 2026-08-03
     added: 2026-10-17
+    status: active
+  - id: opencode-qwen4-max
+    name: "Qwen4 Max"
+    developer: Alibaba
+    provider: OpenCode Go
+    harness: OpenCode
+    version: 4
+    added: 2026-11-16
     status: active
   - id: opencode-space-bunny-free-max
     name: "Space Bunny Free Max"

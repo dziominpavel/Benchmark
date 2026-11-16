@@ -34,6 +34,7 @@ answer_flags:
     opencode-gemini-4-argon-high: true
     opencode-glm-5-3-flash-free: true
     opencode-grok-4-7-xhigh: true
+    opencode-hy4-flash-free-high: true
     opencode-hy4-preview-high: true
     opencode-iceman-contributor-free: true
     opencode-inkling-2-small-free-max: true
@@ -44,6 +45,7 @@ answer_flags:
     opencode-laguna-xs-2-1-free: true
     opencode-ling-3-0-flash-fin-free: true
     opencode-ling-3-1-flash-free: true
+    opencode-ling-3-2-flash-free: true
     opencode-longcat-2-5-preview-free: true
     opencode-mimo-v2-5-free: true
     opencode-mimo-v2-6-flash-free: true
@@ -53,5 +55,6 @@ answer_flags:
     opencode-north-mini-code-free-thinking: true
     opencode-qwen3-8-max-0912-xhigh: true
     opencode-qwen3-8-max-xhigh: true
+    opencode-qwen4-max: true
     opencode-space-bunny-free-max: true
     opencode-step-5-preview-free-high: true
